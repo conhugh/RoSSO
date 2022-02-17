@@ -63,18 +63,22 @@ def setEdgeLength(G, A, len):
 
 # TESTING -------------------------------------------------------------------------------------------------
 
-P = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])  # initialize transition prob matrix
-# P = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])  # initialize transition prob matrix
-P = np.matmul(np.diag(1/np.sum(P, axis=1)), P)   # normalize to generate valid prob dist
+# P = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])  # initialize transition prob matrix
+# # P = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])  # initialize transition prob matrix
+# P = np.matmul(np.diag(1/np.sum(P, axis=1)), P)   # normalize to generate valid prob dist
 
-tau = 3  # attack duration
+tau = 2  # attack duration
 
 # plotCapProbs(capProbs)
 
-capProbs = compCPVarP(P, 3, 0, 0)
+# capProbs = compCPVarP(P, 3, 0, 0)
 
 # A = np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]])
-A = np.array([[0, 1, 1, 1, 1, 1], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
+A = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1]])
+P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
+# P0 = initRandP(A)
+print(P0)
+# A = np.array([[0, 1, 1, 1, 1, 1], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
 
 # fig2 = plt.figure()
 # ax2 = plt.plot()
@@ -90,20 +94,26 @@ center.attr["color"] = "blue"
 # center.attr["imagescale"] = True
 # center.attr["image"] = "small robot.png"
 
-intruLoc = GViz.get_node(3)
-intruLoc.attr["color"] = "red"
-intruLoc.attr["fixedsize"] = True
+# intruLoc = GViz.get_node(3)
+# intruLoc.attr["color"] = "red"
+# intruLoc.attr["fixedsize"] = True
 # intruLoc.attr["image"] = "small intruder.png"
 
-e = GViz.get_edge(center, intruLoc)
-e.attr["label"] = "P_03"
+for i in range(A.shape[0]):
+    for j in range(A.shape[1]):
+        if A[i, j] == 1:
+            e = GViz.get_edge(i, j)
+            e.attr["label"] = str(P0[i, j])
+
+# e = GViz.get_edge(center, intruLoc)
+# e.attr["label"] = "P_03"
 # e.attr["color"] = "blue"
 
 setEdgeLength(GViz, A, 2)
 
 GViz.graph_attr["nodesep"] = 0.2
 GViz.graph_attr["len"] = 3
-GViz.write("N6star.dot")
+GViz.write("N3star.dot")
 GViz.layout()
-GViz.draw("N6Star.png")
+GViz.draw("N3Star.png")
 

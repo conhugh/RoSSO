@@ -1,0 +1,27 @@
+digraph "" {
+	graph [len=3,
+		nodesep=0.2
+	];
+	0	[color=blue];
+	0 -> 0	[label=0.0,
+		len=2,
+		weight=1];
+	0 -> 1	[label=0.2,
+		len=2,
+		weight=1];
+	0 -> 2	[label=0.8,
+		len=2,
+		weight=1];
+	1 -> 0	[label=1.0,
+		len=2,
+		weight=1];
+	1 -> 1	[label=0.0,
+		len=2,
+		weight=1];
+	2 -> 0	[label=1.0,
+		len=2,
+		weight=1];
+	2 -> 2	[label=0.0,
+		len=2,
+		weight=1];
+}

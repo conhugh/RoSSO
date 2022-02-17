@@ -24,12 +24,26 @@ def computeFHTProbMats(P, tau):
         F[:, :, i] = np.matmul(P, (F[:, :, i - 1] - np.diag(np.diag(F[:, :, i - 1]))))
     return F
 
+# # Compute first hitting time probability matrices (vectorized) for fixed P matrix (vectorized)
+# def computeFHTProbVecs(Pvec, tau):
+#     Fvec = np.full([Pvec.shape[0], tau], np.NaN)
+#     Fvec[:, 0] = Pvec
+#     for i in range(1, tau):
+#         Fvec[:, i] = np.kron(np.identity(np.sqrt(Pvec.shape[0])), )
+#     return Fvec
+
 
 # Compute capture probabilities for each pair of nodes for fixed P matrix
 def computeCapProbs(P, tau):
     F = computeFHTProbMats(P, tau)
     capProbs = np.sum(F, axis=2)
     return capProbs
+
+# Compute (vectorized) capture probabilities for each pair of nodes for fixed P matrix
+def computeCapProbsVec(P, tau):
+    F = computeCapProbs(P, tau)
+    Fvec = F.flatten('F')
+    return Fvec
 
 def printFHTProbMats(F):
     for i in range(F.shape[2]):
