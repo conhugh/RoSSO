@@ -5,12 +5,6 @@ np.set_printoptions(linewidth=np.inf)
 import math
 from StratComp import *
 
-# # P = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])  # initialize transition prob matrix
-# P = np.array([[0, 1, 1], [1, 0, 0], [1, 0, 0]])  # initialize transition prob matrix
-# P = np.matmul(np.diag(1/np.sum(P, axis=1)), P)   # normalize to generate valid prob dist
-
-# tau = 3  # attack duration
-
 # Computes Jacobians of the first hitting time probability matrices F_k
 def compFkJacs(P, tau):
     n = P.shape[0]  # get number of nodes
@@ -18,20 +12,12 @@ def compFkJacs(P, tau):
     J = np.full([n**2, n**2, tau], np.NaN) # initialize array to store gradients of FHT probability matrices
     J[:, :, 0] = np.identity(n**2) # gradient of F_1 is the identity matrix
 
-    print("P = ")
-    print(P)
     # initialize matrices needed for gradient computations:
     Pbar = np.zeros([n**2, n**2])
     for i in range(n):
         Pbar[i*n:(i + 1)*n, i*(n + 1)] = P[:, i]
 
-    print("Pbar = ")
-    print(Pbar)
-
     B = np.kron(np.identity(n), P) - Pbar
-
-    print("B = ")
-    print(B)
 
     # file = open("variables.txt", "w")
     # file.write("B = \n")
@@ -41,13 +27,7 @@ def compFkJacs(P, tau):
 
     # recursive computating of gradients of FHT probability matrices:
     for i in range(1, tau):
-        print("F_" + str(i) + " = ")
-        print(F[:, :, i - 1])
-        A = np.kron(np.transpose(F[:, :, i - 1]), np.identity(n)) - np.kron(np.diag(np.diag(F[:, :, i - 1])), np.identity(n))
-        print("A_" + str(i + 1) + " = ")
-        print(A)
-
-        J[:, :, i] = np.kron(np.transpose(F[:, :, i - 1]), np.identity(n)) - np.kron(np.diag(np.diag(F[:, :, i - 1])), np.identity(n)) + B*J[:, :, i - 1]
+        J[:, :, i] = np.kron(np.transpose(F[:, :, i - 1]), np.identity(n)) - np.kron(np.diag(np.diag(F[:, :, i - 1])), np.identity(n)) + np.matmul(B, J[:, :, i - 1])
 
         # file.write("F_" + str(i) + " transpose kron I = \n")
         # file.write(np.array2string(np.kron(np.transpose(F[:, :, i - 1]), np.identity(n))) + "\n")
@@ -64,9 +44,6 @@ def compFkJacs(P, tau):
 # Sums Jacobians of FHT probability matrices to get Jacobian of Capture Probability Matrix
 def compCPJac(P, tau):
     J = compFkJacs(P, tau)
-    print("FkJacs = ")
-    for k in range(tau):
-        print(J[4, :, k])
     CPGrad = np.sum(J, axis=2)
     return CPGrad
 
@@ -113,36 +90,19 @@ def gradAscentStep(P, J, F, eps, tau):
     minCapProb = np.min(F)
     Fvec = F.flatten('F')
     mcpLocs = np.argwhere(Fvec == minCapProb)
-    print("P = ")
-    print(P)
-    print("F = ")
-    print(F)
-    print("minCapProb = ")
-    print(minCapProb)
-    print("mcpLocs = ")
-    print(mcpLocs)
-    print(np.argwhere(F == minCapProb))
     # compute corresponding unconstrained gradient ascent steps
     uGradSteps = np.zeros([n**2, mcpLocs.shape[0]])
-    # print("uGradSteps.shape = " + str(uGradSteps.shape))
     for i in range(mcpLocs.shape[0]):
         uGradSteps[:, i] = eps*np.transpose(J[mcpLocs[i], :]).reshape(9)
-        print("J row " + str(mcpLocs[i]) + " =")
-        print(J[mcpLocs[i], :])
+
     # project each onto the subspace of zero-sum n^2-dimensional vectors 
-    
-    print("Grads = ")
-    print(uGradSteps*(1/eps))
-    # print("uGradSteps = ")
-    # print(uGradSteps)
-    zsGradSteps = uGradSteps - (1/n**2)*np.matmul(np.ones([n**2, n**2]), uGradSteps)
-    # print("zsGradSteps = ")
-    # print(zsGradSteps)
+    # [^^ REMOVED FOR NOW, THINK MORE ABOUT THIS]
+
     # compare the min cap probs resulting from each of the above grad steps
     oldPvec = P.flatten('F')
-    mcpOpts = np.full_like(zsGradSteps, np.nan)
+    mcpOpts = np.full_like(uGradSteps, np.nan)
     # take each of the constrained gradient steps under consideration:
-    newPvecs = np.outer(oldPvec, np.ones([1, mcpLocs.shape[0]])) + zsGradSteps
+    newPvecs = np.outer(oldPvec, np.ones([1, mcpLocs.shape[0]])) + uGradSteps
     # reshape each Pvec into a P matrix so that we can compute cap probs:
     newPmats = np.zeros([n, n, mcpLocs.shape[0]])  # [LOOK FOR A WAY TO COMPUTE DIRECTLY IN VEC FORM WITHOUT RESHAPING]
     newPmats[:] = np.nan
@@ -167,25 +127,23 @@ def gradAscentStep(P, J, F, eps, tau):
 
 # Perform gradient ascent to increase min cap prob starting from initial trans prob mat P0
 def gradAscent(P0, A, tau):
-    iterations = 1
+    iterations = 1001
     eps = 0.05
     P = P0
     F = computeCapProbs(P, tau)
     for k in range(iterations):
         J = compCPJac(P, tau)
-        # J = zeroCPJacCols(J, A)
-        print("J = ")
-        print(J)
+        J = zeroCPJacCols(J, A)
         newPF = gradAscentStep(P, J, F, eps, tau)
         P = newPF[:, :, 0]
         F = newPF[:, :, 1]
-        # if k % 50 == 0:
-        #     print("Minimum Capture Probability at iteration " + str(k) + ":")
-        #     print(np.min(F))
-        #     # print("P at iteration " + str(k) + ":")
-        #     # print(P)
-        #     # print("F at iteration " + str(k) + ":")
-        #     # print(F)
+        if k % 50 == 0:
+            print("Minimum Capture Probability at iteration " + str(k) + ":")
+            print(np.min(F))
+            # print("P at iteration " + str(k) + ":")
+            # print(P)
+            # print("F at iteration " + str(k) + ":")
+            # print(F)
     return P, F
 
 
@@ -214,6 +172,7 @@ print("P_diff = ")
 print(Pdiff)
 print("F_diff = ")
 print(Fdiff)
+
 
 
 # print("P0 = ")
@@ -277,3 +236,18 @@ print(Fdiff)
 # # file.write(np.array2string(CPGrad))
 # # file.close()
 
+# CODE REMOVED FROM GRAD STEP FN, NEED TO RECONSIDER:
+# #  after computation of uGradSteps:
+# # # project each onto the subspace of zero-sum n^2-dimensional vectors 
+#     print("Grads = ")
+#     print(uGradSteps*(1/eps))
+#     # print("uGradSteps = ")
+#     # print(uGradSteps)
+#     zsGradSteps = uGradSteps - (1/n**2)*np.matmul(np.ones([n**2, n**2]), uGradSteps)  # [FIX THIS, IT CURRENTLY MAKES THE ENTIRE PVEC ZERO SUM]
+#     # print("zsGradSteps = ")
+#     # print(zsGradSteps)
+#     # compare the min cap probs resulting from each of the above grad steps
+#     oldPvec = P.flatten('F')
+#     mcpOpts = np.full_like(zsGradSteps, np.nan)
+#     # take each of the constrained gradient steps under consideration:
+#     newPvecs = np.outer(oldPvec, np.ones([1, mcpLocs.shape[0]])) + zsGradSteps 
