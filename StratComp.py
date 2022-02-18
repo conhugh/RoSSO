@@ -4,9 +4,8 @@ import numpy as np
 import math
 import random
 
-random.seed(1)
-
 def initRandP(A):
+    # random.seed(1)
     P = np.zeros([A.shape[0], A.shape[1]])
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):

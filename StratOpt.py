@@ -93,7 +93,7 @@ def gradAscentStep(P, J, F, eps, tau):
     # compute corresponding unconstrained gradient ascent steps
     uGradSteps = np.zeros([n**2, mcpLocs.shape[0]])
     for i in range(mcpLocs.shape[0]):
-        uGradSteps[:, i] = eps*np.transpose(J[mcpLocs[i], :]).reshape(9)
+        uGradSteps[:, i] = eps*np.transpose(J[mcpLocs[i], :]).reshape(n**2)
 
     # project each onto the subspace of zero-sum n^2-dimensional vectors 
     # [^^ REMOVED FOR NOW, THINK MORE ABOUT THIS]
@@ -137,7 +137,7 @@ def gradAscent(P0, A, tau):
         newPF = gradAscentStep(P, J, F, eps, tau)
         P = newPF[:, :, 0]
         F = newPF[:, :, 1]
-        if k % 50 == 0:
+        if k % ((iterations - 1)/10) == 0:
             print("Minimum Capture Probability at iteration " + str(k) + ":")
             print(np.min(F))
             # print("P at iteration " + str(k) + ":")
@@ -148,31 +148,33 @@ def gradAscent(P0, A, tau):
 
 
 # TESTING ------------------------------------------------------------------------
-A = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1]])
+# A = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1]])
 # A = np.array([[0, 1, 1], [1, 0, 0], [1, 0, 0]])
-# P0 = initRandP(A)
-P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
+# A = np.array([[0, 1, 1, 1, 1, 1], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
+A = np.array([[1, 1, 1, 1, 1, 1], [1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 1, 0], [1, 0, 0, 0, 0, 1]])
+P0 = initRandP(A)
+# P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
 tau = 3
 
 np.set_printoptions(suppress=True)
 [P, F] = gradAscent(P0, A, tau)
 print("P0 = ")
 print(P0)
-print("F_initial = ")
-F0 = computeCapProbs(P0, tau)
-print(F0)
 print("P_final = ")
 print(P)
-print("F_final = ")
-print(F)
+
+# print("F_initial = ")
+F0 = computeCapProbs(P0, tau)
+# print(F0)
+# print("F_final = ")
+# print(F)
+
 Pdiff = P - P0
 Fdiff = F - F0
-# np.set_printoptions(suppress=False)
 print("P_diff = ")
 print(Pdiff)
 print("F_diff = ")
 print(Fdiff)
-
 
 
 # print("P0 = ")
@@ -236,7 +238,7 @@ print(Fdiff)
 # # file.write(np.array2string(CPGrad))
 # # file.close()
 
-# CODE REMOVED FROM GRAD STEP FN, NEED TO RECONSIDER:
+# CODE REMOVED FROM GRAD STEP FUNCTION, NEED TO RECONSIDER: -------------------------------------------------------------------------
 # #  after computation of uGradSteps:
 # # # project each onto the subspace of zero-sum n^2-dimensional vectors 
 #     print("Grads = ")
