@@ -1,5 +1,4 @@
 # Visualization of the performance of stochastic surveillance strategies
-
 import numpy as np
 import math
 from mpl_toolkits import mplot3d
@@ -75,9 +74,9 @@ tau = 2  # attack duration
 
 # A = np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]])
 A = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1]])
-P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
-# P0 = initRandP(A)
-print(P0)
+# P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
+P0 = initRandP(A)
+# print(P0)
 # A = np.array([[0, 1, 1, 1, 1, 1], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
 
 # fig2 = plt.figure()
