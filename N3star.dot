@@ -3,25 +3,25 @@ digraph "" {
 		nodesep=0.2
 	];
 	0	[color=blue];
-	0 -> 0	[label=0.0,
+	0 -> 0	[label=0.21930035409227325,
 		len=2,
 		weight=1];
-	0 -> 1	[label=0.2,
+	0 -> 1	[label=0.15734875849824884,
 		len=2,
 		weight=1];
-	0 -> 2	[label=0.8,
+	0 -> 2	[label=0.6233508874094779,
 		len=2,
 		weight=1];
-	1 -> 0	[label=1.0,
+	1 -> 0	[label=0.623545066540319,
 		len=2,
 		weight=1];
-	1 -> 1	[label=0.0,
+	1 -> 1	[label=0.37645493345968095,
 		len=2,
 		weight=1];
-	2 -> 0	[label=1.0,
+	2 -> 0	[label=0.15324135067052327,
 		len=2,
 		weight=1];
-	2 -> 2	[label=0.0,
+	2 -> 2	[label=0.8467586493294768,
 		len=2,
 		weight=1];
 }

@@ -5,10 +5,24 @@ from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import networkx as nx
 import pygraphviz as pgv
+from sympy import as_finite_diff
 from StratComp import *
 
+# Plot transition probabilities for each pair of nodes for the given P matrices
+def plotTransProbs2D(PMats, title):
+    n = PMats.shape[0]
+    probs = np.linspace(1, 36, 36)
+    fig = plt.figure()
+    for k in range(PMats.shape[2]):
+        Pvec = PMats[:, : , k].flatten('F')
+        plt.scatter(probs, Pvec)
+    plt.xlabel("Pvec Index")
+    plt.ylabel("Probability")
+    plt.title(title)
+    plt.show()
+                
 # Plot capture probabilities for each pair of nodes for fixed P matrix
-def plotCapProbs(capProbs):
+def plotCapProbs3D(capProbs):
     roboLocs = np.arange(capProbs.shape[0])
     intruLocs = np.arange(capProbs.shape[1])
     X, Y = np.meshgrid(roboLocs, intruLocs)
@@ -68,12 +82,13 @@ def setEdgeLength(G, A, len):
 
 tau = 2  # attack duration
 
-# plotCapProbs(capProbs)
+# plotCapProbs3D(capProbs)
 
 # capProbs = compCPVarP(P, 3, 0, 0)
 
 # A = np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]])
-A = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1]])
+# A = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1]])
+A = np.array([[1, 1, 0, 0, 0, 0], [1, 1, 1, 0, 0, 0], [0, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, 0], [0, 0, 0, 1, 1, 1], [0, 0, 0, 0, 1, 1]])
 # P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
 P0 = initRandP(A)
 # print(P0)
@@ -112,7 +127,7 @@ setEdgeLength(GViz, A, 2)
 
 GViz.graph_attr["nodesep"] = 0.2
 GViz.graph_attr["len"] = 3
-GViz.write("N3star.dot")
+GViz.write("N6line.dot")
 GViz.layout()
-GViz.draw("N3Star.png")
+GViz.draw("N6line.png")
 
