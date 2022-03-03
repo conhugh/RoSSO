@@ -17,7 +17,7 @@ def gradAscentStep(P, J, F, tau, eps):
     minCapProb = np.min(Fvec)
     mcpLocs = np.argwhere(Fvec == minCapProb)
     mcpNum = mcpLocs.shape[0]
-    # compute corresponding unconstrained gradient ascent steps
+    # compute corresponding unconstrained gradient ascent stepsp
     uGradSteps = np.zeros([n**2, mcpNum])
     for i in range(mcpNum):
         uGradSteps[:, i] = eps*J[mcpLocs[i], :].reshape(n**2)
@@ -233,14 +233,22 @@ def RMSProp(P0, A, tau, eps, rho, radius):
     iter = 0  # number of gradient ascent steps taken so far
     P = P0 
     avgP = P  # running avg capture probability matrix, for checking convergence
+    print("initial avgP = ")
+    print(avgP)
     converged = False
     while not converged:
         # get gradients:
         J = compCPJac(P, tau)
         J = zeroCPJacCols(J, A)
         F = computeCapProbs(P, tau)
-        Fvec = F.flatten('F')
+
+        # print status info to terminal:
+        if (iter % 50) == 0:
+            print("Minimum Capture Probability at iteration " + str(iter) + ":")
+            print(np.min(F))
+
         # get indices of minimal capture probabilities in cap prob vector
+        Fvec = F.flatten('F')
         minCapProb = np.min(Fvec)
         mcpLocs = np.argwhere(Fvec == minCapProb)
         mcpNum = mcpLocs.shape[0]
@@ -249,39 +257,29 @@ def RMSProp(P0, A, tau, eps, rho, radius):
         for i in range(mcpNum):
             grads[:, i] = J[mcpLocs[i], :].reshape(n**2)
         uGradStep = np.mean(grads, 1)
-
         r = rho*r + (1 - rho)*(uGradStep*uGradStep)  # accumulate squared gradients
-        deltaP = -eps/(delta + r)*uGradStep  # compute gradient step
+        deltaP = eps/np.sqrt(delta + r)*uGradStep  # compute gradient step
+        if (iter % 50) == 0:
+            print("grads = ")
+            print(grads)
+            print("uGradStep = ")
+            print(uGradStep)
+            print("r = ")
+            print(r)        
+            print("deltaP = ")
+            print(deltaP) 
         newPvec = P.flatten('F') + deltaP # compute new Pvec
         newPmat = newPvec.reshape((n, n), order='F') 
         newPmat = projOntoSimplex(newPmat)
-        # print("r = ")
-        # print(r)
-        # print("deltaP = ")
-        # print(deltaP)
-        # print("newPmat = ")
-        # print(newPmat)
-        # wait = input("Press enter to continue...")
-        newPF = np.full([n, n, 2], np.nan)
-        # return new P matrix and cap prob mat corresponding to (an) optimal step choice
-        newPF[:, :, 0] = newPmat
-        newPF[:, : , 1] = computeCapProbs(newPmat, tau)
-        # print status info to terminal:
-        if (iter % 10) == 0:
-            print("Minimum Capture Probability at iteration " + str(iter) + ":")
-            print(np.min(F))
-            # print("F at iteration " + str(iter) + ":")
-            # print(F)
+        P = newPmat
         # check for convergence, update running avg cap probs and step counter:
-        newAvgP = ((iter)*avgP + P)/(iter + 1)
+        iter = iter + 1
+        newAvgP = ((iter)*avgP + newPmat)/(iter + 1)
         diffAvgP = np.abs(newAvgP - avgP)
         converged = np.amax(diffAvgP) < radius
-        avgF = newAvgP
-        iter = iter + 1
+        avgP = newAvgP
     print("Minimum Capture Probability at iteration " + str(iter - 1) + ":")
     print(np.min(F))
-    # print("Final diffAvgF = ")
-    # print(diffAvgP)
     return P, F
 
 
@@ -300,17 +298,17 @@ def exploreOptima(A, tau, trials):
 
 
 # TESTING ------------------------------------------------------------------------
-# np.set_printoptions(suppress=True)
+np.set_printoptions(suppress=True)
 # # A = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1]])
 # # A = np.array([[0, 1, 1], [1, 0, 0], [1, 0, 0]])
 # # A = np.array([[0, 1, 1, 1, 1, 1], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
-A = np.array([[1, 1, 1, 1, 1, 1], [1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 1, 0], [1, 0, 0, 0, 0, 1]])
-# A = np.array([[1, 1, 0, 0, 0, 0], [1, 1, 1, 0, 0, 0], [0, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, 0], [0, 0, 0, 1, 1, 1], [0, 0, 0, 0, 1, 1]])
+# A = np.array([[1, 1, 1, 1, 1, 1], [1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 1, 0], [1, 0, 0, 0, 0, 1]])
+A = np.array([[1, 1, 0, 0, 0, 0], [1, 1, 1, 0, 0, 0], [0, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, 0], [0, 0, 0, 1, 1, 1], [0, 0, 0, 0, 1, 1]])
 # # A = np.array([[1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0], [0, 1, 0, 1, 0, 0], [0, 0, 1, 0, 1, 0], [0, 0, 0, 1, 0, 1], [0, 0, 0, 0, 1, 1]])
-P0 = initRandP(A)
+# P0 = initRandP(A)
 # # # P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
-tau = 3
-# # trials = 10
+tau = 7
+trials = 10
 
 # [P, F] = gradAscentPConv(P0, A, tau, 0.05, 0.00001)
 # print("P0 = ")
@@ -319,7 +317,7 @@ tau = 3
 # print(P)
 
 
-# [initPMats, optPMats, minCapProbs] = exploreOptima(A, tau, trials)
+[initPMats, optPMats, minCapProbs] = exploreOptima(A, tau, trials)
 
 # for i in range(trials):
 #     print("P0 = ")
@@ -329,23 +327,23 @@ tau = 3
 #     print("Min Cap Prob = ")
 #     print(minCapProbs[i])
 
-# plotTransProbs2D(initPMats, "Initial P Matrices")
+plotTransProbs2D(initPMats, "Initial P Matrices")
 
-# plotTransProbs2D(optPMats, "P Matrices at convergence, with P conv radius 0.00001")
+plotTransProbs2D(optPMats, "P Matrices at convergence, with P conv radius 0.00001")
 
 
 # # [P, F] = gradAscentFixed(P0, A, tau, 0.05, 1000)
 # # [P, F] = gradAscentMCPConv(P0, A, tau, 0.05, 0.0000005)
 # # [P, F] = gradAscentFConv(P0, A, tau, 0.05, 0.00001)
-start_time = time.time()
+# start_time = time.time()
 # [P, F] = gradAscentPConv(P0, A, tau, 0.05, 0.00001)
-[P, F] = RMSProp(P0, A, tau, 0.0001, 0.9, 0.000001)
+# [P, F] = RMSProp(P0, A, tau, 0.01, 0.8, 0.00001)
 
-print("--- Optimization took: %s seconds ---" % (time.time() - start_time))
-print("P0 = ")
-print(P0)
-print("P_final = ")
-print(P)
+# print("--- Optimization took: %s seconds ---" % (time.time() - start_time))
+# print("P0 = ")
+# print(P0)
+# print("P_final = ")
+# print(P)
 
 # # print("F_initial = ")
 # F0 = computeCapProbs(P0, tau)

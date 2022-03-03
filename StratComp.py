@@ -7,8 +7,9 @@ import random
 # Returns: P0, a random transition probability matrix which is valid (i.e. row-stochastic) 
 #              and consistent with the environment graph described by A (see XD-DP-FB_19b.pdf)
 def initRandP(A):
-    random.seed(2)
-    P0 = np.zeros([A.shape[0], A.shape[1]])
+    random.seed(1)
+    # P0 = np.zeros([A.shape[0], A.shape[1]])
+    P0 = np.zeros_like(A, dtype='float64')
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             if A[i, j] != 0:
@@ -110,6 +111,17 @@ def projOntoSimplex(P):
 # print("Capture Probabilities: ")
 # print(capProbs)
 
-# A = np.array([[1, 1, 1, 1, 1, 1], [1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 1, 0], [1, 0, 0, 0, 0, 1]])
-# P = initRandP(A)
-# print(P)
+A = np.array([[1, 1, 1, 1, 1, 1], [1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 1, 0], [1, 0, 0, 0, 0, 1]])
+P = initRandP(A)
+print("P = ")
+print(P)
+deltaP = 0.2*initRandP(np.ones([6, 6]))
+Ptest = P + deltaP
+print("Ptest = ")
+print(Ptest)
+newP = projOntoSimplex(Ptest)
+print("newP = ")
+print(newP)
+
+
+
