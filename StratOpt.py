@@ -2,7 +2,6 @@
 import numpy as np
 import time
 from collections import deque
-np.set_printoptions(linewidth=np.inf)
 import math
 from StratComp import *
 from StratViz import *
@@ -87,7 +86,7 @@ def gradAscentFixed(P0, A, tau, eps, iterations):
         newPF = gradAscentStep(P, J, F, tau, eps)
         P = newPF[:, :, 0]
         F = newPF[:, :, 1]
-        if k % 20 == 0:
+        if k % 100 == 0:
             print("Minimum Capture Probability at iteration " + str(k) + ":")
             print(np.min(F))
     return P, F
@@ -298,77 +297,102 @@ def exploreOptima(A, tau, trials):
 
 
 # TESTING ------------------------------------------------------------------------
-np.set_printoptions(suppress=True)
-# # A = np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1]])
-# # A = np.array([[0, 1, 1], [1, 0, 0], [1, 0, 0]])
-# # A = np.array([[0, 1, 1, 1, 1, 1], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
-# A = np.array([[1, 1, 1, 1, 1, 1], [1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0], [1, 0, 0, 0, 1, 0], [1, 0, 0, 0, 0, 1]])
-A = np.array([[1, 1, 0, 0, 0, 0], [1, 1, 1, 0, 0, 0], [0, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, 0], [0, 0, 0, 1, 1, 1], [0, 0, 0, 0, 1, 1]])
-# # A = np.array([[1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0], [0, 1, 0, 1, 0, 0], [0, 0, 1, 0, 1, 0], [0, 0, 0, 1, 0, 1], [0, 0, 0, 0, 1, 1]])
-# P0 = initRandP(A)
-# # # P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
-tau = 7
-trials = 10
+if __name__ == '__main__':
+    np.set_printoptions(linewidth=np.inf)
+    # np.set_printoptions(suppress=True)
+    A = genStarG(30)
+    P0 = initRandP(A)
+    # print(P0)
+    # P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
+    tau = 3
+    trials = 10
 
-# [P, F] = gradAscentPConv(P0, A, tau, 0.05, 0.00001)
-# print("P0 = ")
-# print(P0)
-# print("P_final = ")
-# print(P)
+    # [P, F] = gradAscentPConv(P0, A, tau, 0.05, 0.00001)
+    # print("P0 = ")
+    # print(P0)
+    # print("P_final = ")
+    # print(P)
+
+    # [initPMats, optPMats, minCapProbs] = exploreOptima(A, tau, trials)
+
+    # for i in range(trials):
+    #     print("P0 = ")
+    #     print(initPMats[:, :, i])
+    #     print("Pfinal = ")
+    #     print(optPMats[:, :, i])
+    #     print("Min Cap Prob = ")
+    #     print(minCapProbs[i])
+
+    # plotTransProbs2D(initPMats, "Initial P Matrices")
+
+    # plotTransProbs2D(optPMats, "P Matrices at convergence, with P conv radius 0.00001")
+
+    # start_time = time.time()
+    # [P, F] = gradAscentFixed(P0, A, tau, 0.05, 1000)
+
+    # print("--- Optimization took: %s seconds ---" % (time.time() - start_time))
+
+    # [P, F] = gradAscentFixed(P0, A, tau, 0.05, 1000)
+    # print("P0 = ")
+    # print(P0)
+    # print("Pfinal = ")
+    # print(P)
+
+    # start_time = time.time()
+    # F = computeCapProbs(P0, tau)
+    # print("--- Cap Prob Computation took: %s seconds ---" % (time.time() - start_time))
+
+    # start_time = time.time()
+    # F = computeFHTProbMats(P0, tau)
+    # print("--- FHT Prob Mat Computation took: %s seconds ---" % (time.time() - start_time))
+
+    start_time = time.time()
+    J = compFkJacs(P0, tau)
+    print("--- Fk Jacobians Computation took: %s seconds ---" % (time.time() - start_time))
+    start_time = time.time()
+
+    start_time = time.time()
+    J = compCPJac(P0, tau)
+    print("--- Jacobian Computation took: %s seconds ---" % (time.time() - start_time))
+    start_time = time.time()
 
 
-[initPMats, optPMats, minCapProbs] = exploreOptima(A, tau, trials)
+    # # [P, F] = gradAscentMCPConv(P0, A, tau, 0.05, 0.0000005)
+    # # [P, F] = gradAscentFConv(P0, A, tau, 0.05, 0.00001)
+    # start_time = time.time()
+    # [P, F] = gradAscentPConv(P0, A, tau, 0.05, 0.00001)
+    # [P, F] = RMSProp(P0, A, tau, 0.01, 0.8, 0.00001)
 
-# for i in range(trials):
-#     print("P0 = ")
-#     print(initPMats[:, :, i])
-#     print("Pfinal = ")
-#     print(optPMats[:, :, i])
-#     print("Min Cap Prob = ")
-#     print(minCapProbs[i])
+    # print("--- Optimization took: %s seconds ---" % (time.time() - start_time))
+    # print("P0 = ")
+    # print(P0)
+    # print("P_final = ")
+    # print(P)
 
-plotTransProbs2D(initPMats, "Initial P Matrices")
+    # # print("F_initial = ")
+    # F0 = computeCapProbs(P0, tau)
+    # # print(F0)
+    # # print("F_final = ")
+    # # print(F)
 
-plotTransProbs2D(optPMats, "P Matrices at convergence, with P conv radius 0.00001")
+    # Pdiff = P - P0
+    # Fdiff = F - F0
+    # print("P_diff = ")
+    # print(Pdiff)
+    # print("F_diff = ")
+    # print(Fdiff)
 
+    # STRAT_OPT_PARAMS = {
+    #     "first": "first entry",
+    #     "sec": "second entry"
+    # }
 
-# # [P, F] = gradAscentFixed(P0, A, tau, 0.05, 1000)
-# # [P, F] = gradAscentMCPConv(P0, A, tau, 0.05, 0.0000005)
-# # [P, F] = gradAscentFConv(P0, A, tau, 0.05, 0.00001)
-# start_time = time.time()
-# [P, F] = gradAscentPConv(P0, A, tau, 0.05, 0.00001)
-# [P, F] = RMSProp(P0, A, tau, 0.01, 0.8, 0.00001)
+    # print(STRAT_OPT_PARAMS)
+    # print(STRAT_OPT_PARAMS["sec"])
+    # print(STRAT_OPT_PARAMS["first"])
 
-# print("--- Optimization took: %s seconds ---" % (time.time() - start_time))
-# print("P0 = ")
-# print(P0)
-# print("P_final = ")
-# print(P)
-
-# # print("F_initial = ")
-# F0 = computeCapProbs(P0, tau)
-# # print(F0)
-# # print("F_final = ")
-# # print(F)
-
-# Pdiff = P - P0
-# Fdiff = F - F0
-# print("P_diff = ")
-# print(Pdiff)
-# print("F_diff = ")
-# print(Fdiff)
-
-# STRAT_OPT_PARAMS = {
-#     "first": "first entry",
-#     "sec": "second entry"
-# }
-
-# print(STRAT_OPT_PARAMS)
-# print(STRAT_OPT_PARAMS["sec"])
-# print(STRAT_OPT_PARAMS["first"])
-
-# K = 2
-# test = np.array([5.1, 3.1, 2.1, 75, 32, 1.8, 3.4, 2.9, 89, 102, 15, 12, 8.4])
-# testK = np.argpartition(test, K)
-# print(testK)
-# print(test[testK[0:K]])
+    # K = 2
+    # test = np.array([5.1, 3.1, 2.1, 75, 32, 1.8, 3.4, 2.9, 89, 102, 15, 12, 8.4])
+    # testK = np.argpartition(test, K)
+    # print(testK)
+    # print(test[testK[0:K]])
