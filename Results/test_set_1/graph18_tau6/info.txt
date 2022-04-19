@@ -1,0 +1,12 @@
+Graph Information:
+Number of nodes (n) = 12
+Attack Duration (tau) = 6
+Optimizer Information:
+Optimizer used = sgd_MAPconv
+Convergence radius = 1e-05
+Moving average window size (numRecPs) = 100
+Max allowed number of iterations (maxIters) = 10000
+Initial Step Sizes (initSteps) = [0.00270403 0.03059425 0.00432708 0.00461748 0.00283586 0.01158697 0.00667424 0.00413614 0.00907077 0.00557342]
+Max element of initial MCP gradients (stepScales) = [0.03698187 0.00326859 0.02311028 0.02165686 0.03526261 0.00863039 0.01498299 0.02417715 0.01102443 0.01794232]
+Number of iterations required = [ 7898. 10001. 10001. 10001. 10001. 10001. 10001. 10001. 10001. 10001.]
+Optimization Times Required (seconds) = [55.18195  72.078384 68.0537   76.47516  73.08146  77.788345 80.77488  78.518135 64.77939  79.44229 ]

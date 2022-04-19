@@ -5,7 +5,6 @@ from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import networkx as nx
 import pygraphviz as pgv
-from sympy import as_finite_diff
 from StratComp import *
 
 # Plot transition probabilities for each pair of nodes for the given P matrices
@@ -73,6 +72,17 @@ def setEdgeLength(G, A, len):
                 edge = G.get_edge(i, j)
                 edge.attr["len"] = len
 
+# Save the environment graph without edge labels:
+def drawEnvGraph(A, graphNum, folderPath):
+    G = genGraph(A)
+    GViz = nx.nx_agraph.to_agraph(G)
+    setEdgeLength(GViz, A, 2)
+    GViz.graph_attr["nodesep"] = 0.5
+    GViz.graph_attr["len"] = 4
+    GViz.write(folderPath + "/A" + str(graphNum) +  ".dot")
+    GViz.layout()
+    GViz.draw(folderPath + "/A" + str(graphNum) +  ".png", prog="sfdp")
+
 
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -86,44 +96,52 @@ if __name__ == '__main__':
 
     # capProbs = compCPVarP(P, 3, 0, 0)
 
-    A = genStarG(9)
+    # A = genStarG(9)
+    A = np.array([[1, 0, 1, 0, 0, 0, 0], [0, 1, 1, 0, 0, 0, 0], [1, 1, 1, 1, 0, 0, 0], [0, 0, 1, 1, 1, 1, 1], [0, 0, 0, 1, 1, 0, 0], [0, 0, 0, 1, 0, 1, 0], [0, 0, 0, 1, 0, 0, 1]])
+    # print(A)
     # P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
     P0 = initRandP(A)
 
-    # fig2 = plt.figure()
-    # ax2 = plt.plot()
-    G = genGraph(A)
-    # nx.draw(G, with_labels=True, font_weight='bold')
-    # plt.show()
 
-    GViz = nx.nx_agraph.to_agraph(G)
 
-    center = GViz.get_node(0)
-    center.attr["color"] = "blue"
-    # center.attr["fixedsize"] = True
-    # center.attr["imagescale"] = True
-    # center.attr["image"] = "small robot.png"
+    # # fig2 = plt.figure()
+    # # ax2 = plt.plot()
+    # G = genGraph(A)
+    # # nx.draw(G, with_labels=True, font_weight='bold')
+    # # plt.show()
 
-    # intruLoc = GViz.get_node(3)
-    # intruLoc.attr["color"] = "red"
-    # intruLoc.attr["fixedsize"] = True
-    # intruLoc.attr["image"] = "small intruder.png"
+    # GViz = nx.nx_agraph.to_agraph(G)
 
-    for i in range(A.shape[0]):
-        for j in range(A.shape[1]):
-            if A[i, j] == 1:
-                e = GViz.get_edge(i, j)
-                e.attr["label"] = str(P0[i, j])
+    # center = GViz.get_node(0)
+    # center.attr["color"] = "blue"
+    # # center.attr["fixedsize"] = True
+    # # center.attr["imagescale"] = True
+    # # center.attr["image"] = "small robot.png"
 
-    # e = GViz.get_edge(center, intruLoc)
-    # e.attr["label"] = "P_03"
-    # e.attr["color"] = "blue"
+    # # intruLoc = GViz.get_node(3)
+    # # intruLoc.attr["color"] = "red"
+    # # intruLoc.attr["fixedsize"] = True
+    # # intruLoc.attr["image"] = "small intruder.png"
 
-    setEdgeLength(GViz, A, 2)
+    # for i in range(A.shape[0]):
+    #     for j in range(A.shape[1]):
+    #         if A[i, j] == 1:
+    #             e = GViz.get_edge(i, j)
+    #             e.attr["xlabel"] = "{:.3f}".format(P0[i, j])
+    #             # e.attr["decorate"] = True
+    #             # e.attr["labelfloat"] = True
+    #             e.attr["fontsize"] = 10.0
 
-    GViz.graph_attr["nodesep"] = 0.2
-    GViz.graph_attr["len"] = 3
-    GViz.write("N9star.dot")
-    GViz.layout()
-    GViz.draw("N9star.png")
+    # # e = GViz.get_edge(center, intruLoc)
+    # # e.attr["label"] = "P_03"
+    # # e.attr["color"] = "blue"
+
+    # setEdgeLength(GViz, A, 2)
+
+    # GViz.graph_attr["nodesep"] = 0.5
+    # GViz.graph_attr["len"] = 4
+    # GViz.write("test_graph.dot")
+    # GViz.layout()
+    # GViz.draw("test_graph.png", prog="sfdp")
+    # # GViz.draw("test_graph.png", prog="neato")
 
