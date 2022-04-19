@@ -299,13 +299,13 @@ def exploreOptima(A, tau, trials):
 # TESTING ------------------------------------------------------------------------
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
-    # np.set_printoptions(suppress=True)
-    A = genStarG(30)
-    P0 = initRandP(A)
+    np.set_printoptions(suppress=True)
+    A = genStarG(10)
+    P0 = initRandPseed(A, 1)
     # print(P0)
     # P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
-    tau = 3
-    trials = 10
+    # trials = 10
+    tau = 5
 
     # [P, F] = gradAscentPConv(P0, A, tau, 0.05, 0.00001)
     # print("P0 = ")
@@ -327,16 +327,15 @@ if __name__ == '__main__':
 
     # plotTransProbs2D(optPMats, "P Matrices at convergence, with P conv radius 0.00001")
 
-    # start_time = time.time()
-    # [P, F] = gradAscentFixed(P0, A, tau, 0.05, 1000)
+    start_time = time.time()
+    [P, F] = gradAscentFixed(P0, A, tau, 0.05, 3000)
+    print("P0 = ")
+    print(P0)
+    print("Pfinal = ")
+    print(P)
 
-    # print("--- Optimization took: %s seconds ---" % (time.time() - start_time))
+    print("--- Optimization took: %s seconds ---" % (time.time() - start_time))
 
-    # [P, F] = gradAscentFixed(P0, A, tau, 0.05, 1000)
-    # print("P0 = ")
-    # print(P0)
-    # print("Pfinal = ")
-    # print(P)
 
     # start_time = time.time()
     # F = computeCapProbs(P0, tau)
@@ -346,16 +345,20 @@ if __name__ == '__main__':
     # F = computeFHTProbMats(P0, tau)
     # print("--- FHT Prob Mat Computation took: %s seconds ---" % (time.time() - start_time))
 
-    start_time = time.time()
-    J = compFkJacs(P0, tau)
-    print("--- Fk Jacobians Computation took: %s seconds ---" % (time.time() - start_time))
-    start_time = time.time()
+    # start_time = time.time()
+    # J = compFkJacs(P0, tau)
+    # print("--- Fk Jacobians Computation took: %s seconds ---" % (time.time() - start_time))
+    # start_time = time.time()
 
-    start_time = time.time()
-    J = compCPJac(P0, tau)
-    print("--- Jacobian Computation took: %s seconds ---" % (time.time() - start_time))
-    start_time = time.time()
+    # start_time = time.time()
+    # J = compCPJac(P0, tau)
+    # print("--- Numpy Jacobian Computation took: %s seconds ---" % (time.time() - start_time))
+    # start_time = time.time()
 
+    # start_time = time.time()
+    # J = compCPJac(P0, tau)
+    # print("--- Numpy Jacobian Computation round 2 took: %s seconds ---" % (time.time() - start_time))
+    # start_time = time.time()
 
     # # [P, F] = gradAscentMCPConv(P0, A, tau, 0.05, 0.0000005)
     # # [P, F] = gradAscentFConv(P0, A, tau, 0.05, 0.00001)

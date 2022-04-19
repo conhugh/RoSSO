@@ -4,8 +4,8 @@ import random
 import numpy as np
 import sys
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # FIX LATER
-sys.path.insert(0, 'C:/Users/conno/anaconda3/envs/research_env/Lib/site-packages/')
+# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # FIX LATER
+# sys.path.insert(0, 'C:/Users/conno/anaconda3/envs/research_env/Lib/site-packages/')
 import tensorflow as tf
 from StratComp import *
 

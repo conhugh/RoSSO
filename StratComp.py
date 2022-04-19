@@ -30,6 +30,33 @@ def initRandP(A):
     P0 = np.matmul(np.diag(1/np.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
     return P0
     
+def initRandPseed(A, s):
+    """
+    Generate a random initial transition probability matrix with seed s.
+
+    The robot's initial transition probability matrix must be row-stochastic 
+    and consistent with the environment graph (described by A) to be valid. 
+    For more information see https://arxiv.org/pdf/2011.07604.pdf.
+
+    Parameters
+    ----------
+    A : numpy.ndarray 
+        Binary adjacency matrix of the environment graph.
+    
+    Returns
+    -------
+    numpy.ndarray
+        Valid, random initial transition probability matrix. 
+    """
+    random.seed(s)
+    P0 = np.zeros_like(A, dtype='float64')
+    for i in range(A.shape[0]):
+        for j in range(A.shape[1]):
+            if A[i, j] != 0:
+                P0[i, j] = random.random()
+    P0 = np.matmul(np.diag(1/np.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
+    return P0
+    
 
 def genStarG(n):
     """
