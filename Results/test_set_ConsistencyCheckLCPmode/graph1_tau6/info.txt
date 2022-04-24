@@ -1,0 +1,13 @@
+Graph Information:
+Number of nodes (n) = 9
+Attack Duration (tau) = 6
+Optimizer Information:
+Optimizer used = sgd_GradConv
+Gradient Mode = lcpNumber of LCPs used, if applicable = 9Convergence radius = 1e-05
+Moving average window size (numRecPs) = 200
+Max allowed number of iterations (maxIters) = 10000
+Initial Step Sizes (initSteps) = [0.01127027 0.01127027 0.01127027 0.01127027 0.01127027]
+Max element of initial MCP gradients (stepScales) = [0.88729054 0.88729054 0.88729054 0.88729054 0.88729054]
+Final MCP achieved = [0.12386734 0.12386734 0.12386734 0.12386734 0.12386734]
+Number of iterations required = [542. 542. 542. 542. 542.]
+Optimization Times Required (seconds) = [4.5534015 3.197369  3.3544817 3.3420172 3.3491447]

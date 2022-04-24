@@ -1,4 +1,5 @@
 # Computation of quantities relevant to optimization of stochastic surveillance strategies
+import os
 import numpy as np
 import math
 import time, timeit
@@ -7,6 +8,7 @@ import jax
 import functools
 from jax import grad, jacfwd, jacrev, jit, devices
 import jax.numpy as jnp
+from StratViz import *
 
 def initRandP(A):
     """
@@ -26,7 +28,6 @@ def initRandP(A):
     numpy.ndarray
         Valid, random initial transition probability matrix. 
     """
-    random.seed(1)
     P0 = jnp.zeros_like(A, dtype='float32')
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
@@ -110,23 +111,6 @@ def genStarG(n):
     A = A.at[:, 0].set(jnp.ones(n))
     return A
 
-
-def genSplitStarG(leftLeaves, rightLeaves, numLineNodes):
-    leftStar = jnp.identity(leftLeaves + 1)
-    leftStar = leftStar.at[leftLeaves, :].set(jnp.ones(leftLeaves + 1))
-    leftStar = leftStar.at[:, leftLeaves].set(jnp.ones(leftLeaves + 1))
-    rightStar = genStarG(rightLeaves + 1)
-    midLine = genLineG(numLineNodes)
-
-    n = leftLeaves + rightLeaves + numLineNodes
-    splitStar = jnp.identity(n)
-    splitStar = splitStar.at[0:(leftLeaves + 1), 0:(leftLeaves + 1)].set(leftStar)
-    splitStar = splitStar.at[leftLeaves:(leftLeaves + numLineNodes), leftLeaves:(leftLeaves + numLineNodes)].set(midLine)
-    splitStar = splitStar.at[(leftLeaves + numLineNodes - 1):n, (leftLeaves + numLineNodes - 1):n].set(rightStar)
-    return splitStar
-    
-
-
 def genLineG(n):
     """
     Generate binary adjacency matrix for a line graph with n nodes.
@@ -146,6 +130,55 @@ def genLineG(n):
     A = A + jnp.diag(jnp.ones(n - 1), -1)
     return A
 
+def genSplitStarG(leftLeaves, rightLeaves, numLineNodes):
+    """
+    Generate binary adjacency matrix for a "split star" graph. 
+
+    The "split star" graph has a line graph with `numLineNodes` nodes, 
+    with one end of the line being connected to an additional `leftLeaves` 
+    leaf nodes, and the other end having `rightLeaves` leaf nodes. 
+
+    Parameters
+    ----------
+    leftLeaves : int 
+        Number of leaf nodes on the left end of the line graph.
+    rightLeaves : int
+        Number of leaf nodes on the right end of the line graph.
+    numLineNodes : int
+        Number of nodes in the connecting line graph (excluding leaves).
+    
+    Returns
+    -------
+    numpy.ndarray
+        Binary adjacency matrix for the split star graph. 
+    """
+    leftStar = jnp.identity(leftLeaves + 1)
+    leftStar = leftStar.at[leftLeaves, :].set(jnp.ones(leftLeaves + 1))
+    leftStar = leftStar.at[:, leftLeaves].set(jnp.ones(leftLeaves + 1))
+    rightStar = genStarG(rightLeaves + 1)
+    midLine = genLineG(numLineNodes)
+
+    n = leftLeaves + rightLeaves + numLineNodes
+    splitStar = jnp.identity(n)
+    splitStar = splitStar.at[0:(leftLeaves + 1), 0:(leftLeaves + 1)].set(leftStar)
+    splitStar = splitStar.at[leftLeaves:(leftLeaves + numLineNodes), leftLeaves:(leftLeaves + numLineNodes)].set(midLine)
+    splitStar = splitStar.at[(leftLeaves + numLineNodes - 1):n, (leftLeaves + numLineNodes - 1):n].set(rightStar)
+    return splitStar
+    
+def genGridG(width, height):
+    n = width*height
+    A = jnp.identity(n)
+    A = A + jnp.diag(jnp.ones(n - 3), 3)
+    A = A + jnp.diag(jnp.ones(n - 3), -3)
+    for k in range(n):
+        if k % height == 0:
+            A = A.at[k, k + 1].set(1)
+        elif k % height == (height - 1):
+            A = A.at[k, k - 1].set(1)
+        else:
+            A = A.at[k, k + 1].set(1)
+            A = A.at[k, k - 1].set(1)
+    return A
 
 def computeFHTProbMats(P, tau):
     """
@@ -280,6 +313,45 @@ def computeMCPJIT(P, F0, tau):
     mcp = jnp.min(F)
     return mcp
 
+@functools.partial(jit, static_argnames=['tau', 'lcpNum'])
+def computeLCPsJIT(P, F0, tau, lcpNum):
+    """
+    Compute Lowest 'lcpNum' Capture Probabilities.
+
+    Parameters
+    ----------
+    P : numpy.ndarray 
+        Transition probability matrix. 
+    F0 : numpy.ndarray 
+        Placeholder to be populated with FHT Probability matrices.
+    tau : int
+        Intruder's attack duration. 
+    lcpNum : int
+        Number of the lowest capture probabilities to compute. 
+    
+    Returns
+    -------
+    numpy.ndarray
+        Set of `lcpNum` lowest capture probabilities. 
+    
+    See Also
+    --------
+    computeCapProbsJIT
+    """
+    F = computeCapProbsJIT(P, F0, tau)
+    n = F.shape[0]
+    Fvec = F.flatten('F')
+    lcps = jnp.sort(Fvec)[0:lcpNum]
+    return lcps
+
+
+def lcpInds(P, F0, tau, lcpNum):
+    F = computeCapProbsJIT(P, F0, tau)
+    n = F.shape[0]
+    Fvec = F.flatten('F')
+    lcpInds = jnp.argsort(Fvec)[0:lcpNum]
+    return lcpInds
+
 def printFHTProbMats(F):
     """
     Print the First Hitting Time Probability matrices nicely. 
@@ -383,6 +455,26 @@ def compMCPGradJIT(P, F0, tau):
     n = P.shape[0]
     G = G.reshape((n**2), order='F')
     return G
+
+# Autodiff version of Lowest Cap Probs Gradient computation:
+compLCPGradsAuto = jacrev(computeLCPsJIT)
+# wrapper function:
+@functools.partial(jit, static_argnames=['tau', 'lcpNum'])
+def compLCPGradsJIT(P, F0, tau, lcpNum):
+    G = compLCPGradsAuto(P, F0, tau, lcpNum)
+    n = P.shape[0]
+    # G = jnp.reshape(G, (lcpNum, n**2), order='F')
+    G = G.reshape((lcpNum, n**2), order='F')
+    return G
+
+# Autodiff version of average Lowest Cap Probs Gradient computation:
+@functools.partial(jit, static_argnames=['tau', 'lcpNum'])
+def compAvgLCPGradJIT(P, F0, tau, lcpNum):
+    G = compLCPGradsAuto(P, F0, tau, lcpNum)
+    n = P.shape[0]
+    G = G.reshape((lcpNum, n**2), order='F')
+    avgG = jnp.mean(G, axis=0)
+    return avgG
 
 # Autodiff version for JIT compiling:
 compCPJacAutoJIT = jacfwd(computeCapProbsJIT)
@@ -521,28 +613,78 @@ def projOntoSimplexJIT(P):
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
 
-    print("Devices available:")
-    print(jax.devices())
+    # print("Devices available:")
+    # print(jax.devices())
 
-    tau = 2 # attack duration
-    A = genStarG(4)
-    P0 = initRandPseed(A, 1)
-    n = P0.shape[0]
+    # tau = 2 # attack duration
+    # A = genStarG(4)
+    # P0 = initRandPseed(A, 1)
+    # n = P0.shape[0]
+    # F0 = jnp.full((n, n, tau), np.NaN)
+
+    tau = 5
+
+    A = genGridG(3, 3)
+    # A = genStarG(10)
+    print(A)
+    cwd = os.getcwd()
+    # drawEnvGraph(A, 1, cwd)
+    n = A.shape[0]
+    P0 = initRandPseed(A, 2)
+    drawTransProbGraph(A, P0, 1, cwd)
+    print("P0 = ")
+    print(P0)
     F0 = jnp.full((n, n, tau), np.NaN)
+    lcpNum = 4
 
-    # FHT = computeFHTProbMatsJIT(P0, F0, tau)
-    start_time = time.time()
-    F1 = computeMCPJIT(P0, F0, tau).block_until_ready()
-    print("MCP computation round 1 took %s seconds ---" %(time.time() - start_time))
-    start_time = time.time()
-    F2 = computeMCPJIT(P0, F0, tau).block_until_ready()
-    print("MCP computation round 2 took %s seconds ---" %(time.time() - start_time))
-    start_time = time.time()
-    J1 = compMCPGradJIT(P0, F0, tau).block_until_ready()
-    print("MCP grad computation round 1 took %s seconds ---" %(time.time() - start_time))
-    start_time = time.time()
-    J2 = compMCPGradJIT(P0, F0, tau).block_until_ready()
-    print("MCP grad computation round 2 took %s seconds ---" %(time.time() - start_time))
+    F = computeCapProbsJIT(P0, F0, tau)
+    Fvec = F.flatten('F')
+    print("Fvec = ")
+    print(Fvec)
+    # FHTs = computeFHTProbMatsJIT(P0, F0, tau)
+    # printFHTProbMats(FHTs)
+    lcps = computeLCPsJIT(P0, F0, tau, lcpNum)
+    lcpIndices = lcpInds(P0, F0, tau, lcpNum)
+    print("lcps = ")
+    print(lcps)
+    print("lcpIndices = ")
+    print(lcpIndices)
+
+    lcpGrads = compLCPGradsJIT(P0, F0, tau, lcpNum)
+    avgLCPGrad = compAvgLCPGradJIT(P0, F0, tau, lcpNum)
+    print("avgLCPGrad = ")
+    print(avgLCPGrad)
+    J = compCPJacJIT(P0, F0, tau)
+    avgFromJ = jnp.zeros(n**2)
+    for k in range(lcpNum):
+        avgFromJ = avgFromJ + J[lcpIndices[k], :]
+    avgFromJ = avgFromJ/lcpNum
+    print("avgFromJ = ")
+    print(avgFromJ)
+    meanDiff = jnp.mean(avgFromJ - avgLCPGrad)
+    print("meanDiff = ")
+    print(meanDiff)
+
+    
+ 
+    # zeroRows, zeroCols = np.where(np.equal(F, np.zeros((n, n))))
+    # print("zeroInds = ")
+    # for i in range(len(zeroRows)):
+    #     print(str(zeroRows[i]) + ", " + str(zeroCols[i]))
+
+    # # FHT = computeFHTProbMatsJIT(P0, F0, tau)
+    # start_time = time.time()
+    # F1 = computeMCPJIT(P0, F0, tau).block_until_ready()
+    # print("MCP computation round 1 took %s seconds ---" %(time.time() - start_time))
+    # start_time = time.time()
+    # F2 = computeMCPJIT(P0, F0, tau).block_until_ready()
+    # print("MCP computation round 2 took %s seconds ---" %(time.time() - start_time))
+    # start_time = time.time()
+    # J1 = compMCPGradJIT(P0, F0, tau).block_until_ready()
+    # print("MCP grad computation round 1 took %s seconds ---" %(time.time() - start_time))
+    # start_time = time.time()
+    # J2 = compMCPGradJIT(P0, F0, tau).block_until_ready()
+    # print("MCP grad computation round 2 took %s seconds ---" %(time.time() - start_time))
 
 
 
@@ -589,9 +731,9 @@ if __name__ == '__main__':
     # print("J by autodiff with JIT = ")
     # print(J)
 
-    n = P0.shape[0]
-    F = computeCapProbs(P0, tau)
-    F = F.reshape((n**2,), order='F')
+    # n = P0.shape[0]
+    # F = computeCapProbs(P0, tau)
+    # F = F.reshape((n**2,), order='F')
     # print("F = ")
     # print(F)
     # mcploc = jnp.argwhere(F == jnp.min(F))
@@ -655,43 +797,43 @@ if __name__ == '__main__':
     # e = Jrow - G
     # print(jnp.dot(e, e))
 
-    start_time = time.time()
-    J = compCPJac(P0, tau)
-    print("--- By-hand Jacobian Computation round 2 took: %s seconds ---" % (time.time() - start_time))
-    start_time = time.time()
+    # start_time = time.time()
+    # J = compCPJac(P0, tau)
+    # print("--- By-hand Jacobian Computation round 2 took: %s seconds ---" % (time.time() - start_time))
+    # start_time = time.time()
 
-    start_time = time.time()
-    J = compCPJacJax(P0, tau)
-    print("--- Automatic Jacobian Computation took: %s seconds ---" % (time.time() - start_time))
-    start_time = time.time()
-
-
-    start = timeit.default_timer()
-    J = compCPJacJax(P0, tau).block_until_ready()
-    print('Automatic Jacobian Computation round 2 took: {} seconds'.format(timeit.default_timer() - start))
+    # start_time = time.time()
+    # J = compCPJacJax(P0, tau)
+    # print("--- Automatic Jacobian Computation took: %s seconds ---" % (time.time() - start_time))
+    # start_time = time.time()
 
 
-    start = timeit.default_timer()
-    P0_gpu = jax.device_put(P0)
-    F0_gpu = jax.device_put(F0)
-    tau_gpu = jax.device_put(tau)
-    print('GPU copying Elapsed time: {} seconds'.format(timeit.default_timer() - start))
+    # start = timeit.default_timer()
+    # J = compCPJacJax(P0, tau).block_until_ready()
+    # print('Automatic Jacobian Computation round 2 took: {} seconds'.format(timeit.default_timer() - start))
 
-    start = timeit.default_timer()
-    F1 = computeMCPJIT(P0, F0, tau).block_until_ready()
-    print('MCP computation warmup Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
-    start = timeit.default_timer()
-    F1 = computeMCPJIT(P0, F0, tau).block_until_ready()
-    print('MCP computation round 1 Elapsed time: {} seconds'.format(timeit.default_timer() - start))
+    # start = timeit.default_timer()
+    # P0_gpu = jax.device_put(P0)
+    # F0_gpu = jax.device_put(F0)
+    # tau_gpu = jax.device_put(tau)
+    # print('GPU copying Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
-    start = timeit.default_timer()
-    J = compMCPGradJIT(P0_gpu, F0_gpu, tau).block_until_ready()
-    print('Rev Mode MCP Grad JIT warmup Elapsed time: {} seconds'.format(timeit.default_timer() - start))
+    # start = timeit.default_timer()
+    # F1 = computeMCPJIT(P0, F0, tau).block_until_ready()
+    # print('MCP computation warmup Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
-    start = timeit.default_timer()
-    J1 = compMCPGradJIT(P0_gpu, F0_gpu, tau).block_until_ready()
-    print('Rev Mode MCP Grad JIT round 1 Elapsed time: {} seconds'.format(timeit.default_timer() - start))
+    # start = timeit.default_timer()
+    # F1 = computeMCPJIT(P0, F0, tau).block_until_ready()
+    # print('MCP computation round 1 Elapsed time: {} seconds'.format(timeit.default_timer() - start))
+
+    # start = timeit.default_timer()
+    # J = compMCPGradJIT(P0_gpu, F0_gpu, tau).block_until_ready()
+    # print('Rev Mode MCP Grad JIT warmup Elapsed time: {} seconds'.format(timeit.default_timer() - start))
+
+    # start = timeit.default_timer()
+    # J1 = compMCPGradJIT(P0_gpu, F0_gpu, tau).block_until_ready()
+    # print('Rev Mode MCP Grad JIT round 1 Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
 
     # deltaP = 0.2*initRandP(np.ones([4, 4]))
