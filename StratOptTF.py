@@ -89,8 +89,6 @@ if __name__ == '__main__':
     A = genStarG(4)
     P0 = initRandP(A)
     tau = 3
-    # print("P0 = ")
-    # print(P0)
 
     # start_time = time.time()
     # [P, F] = gradAscentTF(P0, tau, 0.05, 1000)
@@ -109,24 +107,3 @@ if __name__ == '__main__':
     print("--- Jacobian Computation took: %s seconds ---" % (time.time() - start_time))
     print("Computed Jacobian = ")
     print(J)
-
-    # P0 = tf.convert_to_tensor(P0)
-    # n = tf.shape(P0)[0]
-    # # print(n)
-
-    # print("P0 = ")
-    # print(P0)
-
-    # diag = tf.linalg.diag_part(P0, k=0, padding_value=0)
-    # print("diag = ")
-    # print(diag)
-
-    # Pdiag = tf.linalg.diag(tf.linalg.diag_part(P0, k=0, padding_value=0), k=0, num_rows=n, num_cols=n, padding_value=0)
-    # print("Pdiag = ")
-    # print(Pdiag)
-
-
-    # tf.linalg.diag_part(
-    #     input, name='diag_part', k=0, padding_value=0,
-    #     align='RIGHT_LEFT'
-    # )

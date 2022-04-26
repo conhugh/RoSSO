@@ -68,7 +68,6 @@ def compCPVarP(P, tau, i, j):
 
 # Generate a NetworkX graph from adjacency matrix A
 def genGraph(A):
-    # A = A - np.diag(np.diag(A))
     temp = nx.DiGraph()
     G = nx.from_numpy_matrix(A, create_using=temp)
     return G
@@ -82,118 +81,137 @@ def setEdgeLength(G, A, len):
                 edge.attr["len"] = len
 
 # Save the environment graph without edge labels:
-def drawEnvGraph(A, graphNum, folderPath):
+def drawEnvGraph(A, graphNum, folderPath, save=True):
     G = genGraph(A)
     GViz = nx.nx_agraph.to_agraph(G)
     setEdgeLength(GViz, A, 2)
     GViz.graph_attr["nodesep"] = 0.5
-    GViz.graph_attr["len"] = 4
-    GViz.write(folderPath + "/A" + str(graphNum) +  ".dot")
-    GViz.layout()
-    GViz.draw(folderPath + "/A" + str(graphNum) +  ".png", prog="sfdp")
+    if(save):
+        GViz.write(folderPath + "/A" + str(graphNum) +  ".dot")
+        GViz.layout()
+        GViz.draw(folderPath + "/A" + str(graphNum) +  ".png", prog="sfdp")
+    return GViz
 
 # Save the environment graph with edges labeled with transition probabilities:
-def drawTransProbGraph(A, P, graphNum, folderPath):
-    G = genGraph(A)
-    GViz = nx.nx_agraph.to_agraph(G)
-    setEdgeLength(GViz, A, 2)
-    GViz.graph_attr["nodesep"] = 0.5
-    GViz.graph_attr["len"] = 4
+def drawTransProbGraph(A, P, graphName, Pnum, folderPath, save=True):
+    GViz = drawEnvGraph(A, graphName, folderPath, save=False)
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             if A[i, j] == 1:
                 e = GViz.get_edge(i, j)
                 e.attr["xlabel"] = "{:.3f}".format(P[i, j])
-                # e.attr["decorate"] = True
-                # e.attr["labelfloat"] = True
                 e.attr["fontsize"] = 10.0
-    GViz.write(folderPath + "/A" + str(graphNum) +  ".dot")
-    GViz.layout()
-    GViz.draw(folderPath + "/A" + str(graphNum) +  ".png", prog="sfdp")
+    if(save):
+        GViz.write(folderPath + "/" + graphName + "_P" + str(Pnum) + ".dot")
+        GViz.layout()
+        GViz.draw(folderPath + "/" + graphName + "_P" + str(Pnum) +  ".png", prog="sfdp")
+    return GViz
 
-# Visualize metrics related to the optimization process:
-def visMetrics(test_set_name, overlay=False):
-    cwd = os.getcwd()
-    met_vis_dir = os.path.join(cwd, "Results/test_set_" + test_set_name + "/metrics_visualization")
-    if not os.path.isdir(met_vis_dir):
-        os.mkdir(met_vis_dir)
-    metrics_dir = os.path.join(cwd, "Results/test_set_" + test_set_name + "/metrics")
-    usedFilePaths = []
-    for filename in os.listdir(metrics_dir):
-        i = os.path.join(metrics_dir, filename)
-        if os.path.isfile(i):
-            graphNum, tau, runNum = parseGraphName(filename)
-            if filename.find("iters") != -1:
-                with open(i) as iters:
-                    iters = np.loadtxt(iters, delimiter=',')
-                for filename in os.listdir(metrics_dir):
-                    m = os.path.join(metrics_dir, filename)
-                    if os.path.isfile(m) and (filename.find("iters") == -1) and filename not in usedFilePaths:
-                        mGraphNum, mTau, mRunNum = parseGraphName(filename)
-                        metricName = filename[(filename.find("_", filename.find("tau")) + 1):filename.rfind("_")]
-                        if(mGraphNum == graphNum and mTau == tau and mRunNum == runNum and metricName.find("final") == -1):
-                            usedFilePaths.append(filename)
-                            with open(m) as metric:
-                                metric = np.loadtxt(metric, delimiter = ',')
-                                plt.figure()
-                                plt.xlabel("Iteration Number")
-                                plt.ylabel(metricName)
-                                plot_dir = os.path.join(met_vis_dir, "graph" + graphNum + "_tau" + tau)
-                                if not os.path.isdir(plot_dir):
-                                    os.mkdir(plot_dir)
-                                if not overlay:
-                                    plt.plot(iters, metric, label="Run " + runNum)
-                                    plt.title("Graph " + graphNum + " " + metricName + " Run " + runNum)
-                                    plotpath = os.path.join(plot_dir, metricName + "_" + runNum)
-                                if overlay:
-                                    plt.title("Graph " + graphNum + " " + metricName)
-                                    plotpath = os.path.join(plot_dir, metricName)
-                                    iterFiles, metricFiles = findOverlayFiles(metrics_dir, graphNum, tau, metricName)
-                                    for r in iterFiles.keys():
-                                        with open(iterFiles[r]) as tIters:
-                                            tIters = np.loadtxt(tIters, delimiter=',')
-                                        with open(metricFiles[r]) as metric:
-                                            usedFilePaths.append(metricFiles[r])
-                                            metric = np.loadtxt(metric, delimiter = ',')
-                                        plt.plot(tIters, metric, label="Run " + r)
-                                plt.legend(loc='lower right')
-                                plt.savefig(plotpath, bbox_inches = "tight")
-                                plt.close()
+# Save the environment graph with edges labeled with optimized transition probabilities, 
+# MCP listed, and node pair corresponding to MCP highlighted:
+def drawOptGraphs(A, optPmats, graphName, optPnums, folderPath):
+    for k in range(len(optPmats)):
+        GViz = drawTransProbGraph(A, optPmats[k], graphName, optPnums[k], folderPath, save=False)
+        GViz.layout()
+        GViz.draw(folderPath + "/gviz" + "_opt_P_" + str(optPnums[k]) +  ".png", prog="sfdp")
 
+# Parse graph name (test set subdirectory) to get graph number and tau.
+# Graph name assumed to be in format: "graphX_tauY", returns X, Y
 def parseGraphName(graphName):
-    gName = graphName[0:graphName.find(".csv")]
-    graphNum = gName[(gName.find("graph") + 5):gName.find("_")]
-    tau = gName[(gName.find("tau") + 3):gName.find("_", gName.find("tau"))]
-    runNum = gName[(gName.rfind("_") + 1):len(gName)]
-    return graphNum, tau, runNum
+    graphNum = graphName[(graphName.find("graph") + 5):graphName.find("_")]
+    tau = graphName[(graphName.find("tau") + 3):len(graphName)]
+    return graphNum, tau
 
-def findOverlayFiles(directory, graphNum, tau, metric):
+# Parse metric filename to get run number and metric name.
+# Filename assumed to be in format: "metricName_RunNum.csv"
+def parseMetricName(metricName):
+    mName = metricName[0:metricName.find("_")]
+    runNum = metricName[(metricName.rfind("_") + 1):metricName.find(".csv")]
+    return mName, runNum
+
+# Search through "directory", collecting all files containing data for "metric".
+# Return paths to metric data files, as well as corresponding iteration files.
+def findOverlayFiles(directory, metric):
     iterFilePaths = {}
     metricFilePaths = {}
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
-        tGraphNum, tTau, tRunNum = parseGraphName(filename)
+        tMetric, tRunNum = parseMetricName(filename)
         if os.path.isfile(f) and filename.find("iters") != -1:
-            if(graphNum == tGraphNum and tau == tTau):
-                iterFilePaths[tRunNum] = f
+            iterFilePaths[tRunNum] = f
         if os.path.isfile(f) and (filename.find("iters") == -1):
-            tMetric = filename[(filename.find("_", filename.find("tau")) + 1):filename.rfind("_")]
-            if(graphNum == tGraphNum and tau == tTau and metric == tMetric):
+            if(metric == tMetric):
                 metricFilePaths[tRunNum] = f
     return iterFilePaths, metricFilePaths
+
+
+# Visualize metrics related to the optimization process:
+def visMetrics(test_set_name, overlay=False):
+    cwd = os.getcwd()
+    test_dir = os.path.join(cwd, "Results/test_set_" + test_set_name)
+    for subdir in os.listdir(test_dir):
+        if(subdir.find("graph") != -1):
+            graphName = subdir
+            graphNum, tau = parseGraphName(graphName)
+            graph_dir = os.path.join(test_dir, graphName)
+            metrics_dir = os.path.join(graph_dir, "metrics")
+            met_vis_dir = os.path.join(graph_dir, "metrics_visualization")
+            if not os.path.isdir(met_vis_dir):
+                os.mkdir(met_vis_dir)
+            usedFilePaths = []
+            for filename in os.listdir(metrics_dir):
+                i = os.path.join(metrics_dir, filename)
+                if os.path.isfile(i):
+                    if filename.find("iters") != -1:
+                        _, runNum = parseMetricName(filename)
+                        with open(i) as iters:
+                            iters = np.loadtxt(iters, delimiter=',')
+                        for filename in os.listdir(metrics_dir):
+                            m = os.path.join(metrics_dir, filename)
+                            if os.path.isfile(m) and (filename.find("iters") == -1) and filename not in usedFilePaths:
+                                metricName, mRunNum = parseMetricName(filename)
+                                if(mRunNum == runNum and metricName.find("final") == -1):
+                                    usedFilePaths.append(filename)
+                                    with open(m) as metric:
+                                        metric = np.loadtxt(metric, delimiter = ',')
+                                        plt.figure()
+                                        plt.xlabel("Iteration Number")
+                                        plt.ylabel(metricName)
+                                        if not overlay:
+                                            plt.plot(iters, metric, label="Run " + runNum)
+                                            plt.title(graphName + " " + metricName + " Run " + runNum)
+                                            plotpath = os.path.join(met_vis_dir, metricName + "_" + runNum)
+                                        if overlay:
+                                            plt.title(graphName + " " + metricName)
+                                            plotpath = os.path.join(met_vis_dir, metricName)
+                                            iterFiles, metricFiles = findOverlayFiles(metrics_dir, metricName)
+                                            for r in iterFiles.keys():
+                                                with open(iterFiles[r]) as tIters:
+                                                    tIters = np.loadtxt(tIters, delimiter=',')
+                                                with open(metricFiles[r]) as metric:
+                                                    usedFilePaths.append(metricFiles[r])
+                                                    metric = np.loadtxt(metric, delimiter = ',')
+                                                plt.plot(tIters, metric, label="Run " + r)
+                                        plt.legend(loc='lower right')
+                                        plt.savefig(plotpath, bbox_inches = "tight")
+                                        plt.close()
+
 
 
 # Visualize initial and optimized P matrices: 
 def visResults(test_set_name):
     cwd = os.getcwd()
     test_dir = os.path.join(cwd, "Results/test_set_" + test_set_name)
-    res_vis_dir = os.path.join(test_dir, "results_visualization")
-    if not os.path.isdir(res_vis_dir):
-        os.mkdir(res_vis_dir)
+    # res_vis_dir = os.path.join(test_dir, "results_visualization")
+    # if not os.path.isdir(res_vis_dir):
+    #     os.mkdir(res_vis_dir)
     for subdir in os.listdir(test_dir):
         if(subdir.find("graph") != -1):
             graph_name = subdir
-            graph_dir = os.path.join(test_dir, subdir)
+            graph_dir = os.path.join(test_dir, graph_name)
+            res_vis_dir = os.path.join(graph_dir, "results_visualization")
+            if not os.path.isdir(res_vis_dir):
+                os.mkdir(res_vis_dir)
             initPMats = [] 
             optPMats = []
             initRunNums = []
@@ -201,6 +219,9 @@ def visResults(test_set_name):
             for filename in os.listdir(graph_dir):
                 runNum = filename[filename.rfind("_") + 1:filename.find(".csv")]
                 f = os.path.join(graph_dir, filename)
+                if(filename.find("A.csv") != -1):
+                    with open(f) as A:
+                        A = np.loadtxt(A, delimiter = ',')
                 if(filename.find("init_P") != -1):
                     with open(f) as initP:
                         initP = np.loadtxt(initP, delimiter = ',')
@@ -211,15 +232,18 @@ def visResults(test_set_name):
                         optP = np.loadtxt(optP, delimiter = ',')
                         optPMats.append(optP)
                         optRunNums.append(runNum)
-            plotpath = os.path.join(res_vis_dir, graph_name)
+            plotpath = os.path.join(res_vis_dir, "P_plot2D")
             plotTransProbs2D(initPMats, optPMats, initRunNums, optRunNums, graph_name, plotpath)
+            drawOptGraphs(A, optPMats, graph_name, optRunNums, res_vis_dir)
+            
 
             
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-
-    visMetrics("GridGraphTestingLongRunMCP", overlay=True)
-    visResults("GridGraphTestingLongRunMCP")
+    
+    test_set_name = "StratVizTesting"
+    visMetrics(test_set_name, overlay=True)
+    visResults(test_set_name)
 
 
     # P = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])  # initialize transition prob matrix

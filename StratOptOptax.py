@@ -167,13 +167,13 @@ def sgd_MAPconv(P0, F0, tau, cols, eps0, radius, numRecPs, maxIters):
     return P, F, iter
 
 # Initialize parameters of the model + optimizer.
-def sgd_GradConv(P0, F0, tau, cols, eps0, radius, numRecPdiffs, maxIters, gradMode="mcp", lcpNum=1):
+# def sgd_GradConv(P0, F0, tau, cols, eps0, radius, numRecPdiffs, maxIters, gradMode="mcp", lcpNum=1):
+def sgd_GradConv(P0, F0, tau, cols, opt_params):
     n = P0.shape[0]
     P = P0 
-    optimizer = optax.sgd(eps0, momentum=0.99, nesterov=True)
+    optimizer = optax.sgd(opt_params["eps0"], momentum=0.99, nesterov=True)
     opt_state = optimizer.init(P)
     recentPdiffs = deque()  # queue storing recent P matrices, for checking convergence
-
 
     ubPupdate = jnp.full((n, n), 0.01)
     lbPupdate = jnp.full((n, n), -0.01)
@@ -192,10 +192,10 @@ def sgd_GradConv(P0, F0, tau, cols, eps0, radius, numRecPdiffs, maxIters, gradMo
     while not converged:
         # print("iteration number: " + str(iter))
         # take gradient ascent step:
-        if gradMode == "mcp":
+        if opt_params["gradMode"] == "mcp":
             grad = compMCPGradJIT(P, F0, tau).block_until_ready()
         else:
-            grad = compAvgLCPGradJIT(P, F0, tau, lcpNum).block_until_ready()
+            grad = compAvgLCPGradJIT(P, F0, tau, opt_params["lcpNum"]).block_until_ready()
         
         grad = zeroGradColsJIT(grad, cols).block_until_ready()
         grad = -1*grad  # negate so that the optimizer does gradient ascent
@@ -224,9 +224,9 @@ def sgd_GradConv(P0, F0, tau, cols, eps0, radius, numRecPdiffs, maxIters, gradMo
         # update queue of recent P matrices:
         recentPdiffs.append(absPdiffSum)
         # compute updated moving average of P matrices:
-        if iter > numRecPdiffs:
+        if iter > opt_params["numRecPdiffs"]:
             oldestPdiff = recentPdiffs.popleft() 
-            newMAPdiff = (oldMAPdiff*numRecPdiffs - oldestPdiff + absPdiffSum)/numRecPdiffs
+            newMAPdiff = (oldMAPdiff*opt_params["numRecPdiffs"] - oldestPdiff + absPdiffSum)/opt_params["numRecPdiffs"]
         else:
             newMAPdiff = np.mean(recentPdiffs)
         
@@ -250,10 +250,10 @@ def sgd_GradConv(P0, F0, tau, cols, eps0, radius, numRecPdiffs, maxIters, gradMo
         #     opt_state = optimizer.init(P)
 
         # check for element-wise convergence, update moving average absPdiffSum and iteration counter:
-        # if(iter > numRecPdiffs):
-        #     converged = newMAPdiff < radius
+        if(iter > opt_params["numRecPdiffs"]):
+            converged = newMAPdiff < opt_params["radius"]
         oldMAPdiff = newMAPdiff
-        if iter == maxIters:
+        if iter == opt_params["maxIters"]:
             converged = True
         iter = iter + 1
     F = computeCapProbsJIT(P, F0, tau).block_until_ready()
@@ -266,14 +266,11 @@ def sgd_GradConv(P0, F0, tau, cols, eps0, radius, numRecPdiffs, maxIters, gradMo
     return P, F, trackedVals
 
 # Explore optima for the given graph and attack duration:
-def exploreGraphOptima(A, tau, testSetNum, graphNum, numInitPs, gradMode):
+def exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode):
     n = A.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
     cols = getZeroCols(A)
     initPs = initRandPs(A, numInitPs)
-    # initPs = jnp.zeros((A.shape[0], A.shape[1], numInitPs),  dtype='float32')
-    # for k in range(numInitPs):
-    #     initPs = initPs.at[:, : , k].set(initRandPseed(A, 1))
 
     initSteps = np.zeros(numInitPs, dtype='float32')
     stepScales = np.zeros(numInitPs, dtype='float32')
@@ -281,30 +278,26 @@ def exploreGraphOptima(A, tau, testSetNum, graphNum, numInitPs, gradMode):
     convTimes = np.zeros(numInitPs, dtype='float32')
     finalMCPs = np.zeros(numInitPs, dtype='float32')
 
-    rad = 0.00001
-    numRecPs = 200
-    maxIters = 20000
-    lcpNum = int(np.ceil((n**2)/10))
-    # lcpNum = 4
-    print("lcpNum = " + str(lcpNum))
+    opt_params = {
+        "radius" : 0.00001,
+        "numRecPdiffs" : 200,
+        "eps0" : None,
+        "maxIters" : 20000,
+        "gradMode" : gradMode,
+        "lcpNum" : int(np.ceil((n**2)/10)),
+    }
 
-    # Create directory for saving the optimization results:
+    print("lcpNum = " + str(opt_params["lcpNum"]))
+
+    # Create directory for saving theb results for the given graph:
     project_dir = os.getcwd()
-    results_dir = os.path.join(project_dir, "Results/test_set_" + str(testSetNum))
-
+    results_dir = os.path.join(project_dir, "Results/test_set_" + str(testSetName))
     if not os.path.isdir(results_dir):
         os.mkdir(results_dir)
-    
     graph_name = "graph" + str(graphNum) + "_tau" + str(tau)
     graph_dir = os.path.join(results_dir, graph_name)
     if not os.path.isdir(graph_dir):
         os.mkdir(graph_dir)
-
-    # Save the env graph binary adjacency matrix:
-    bin_adj_path = os.path.join(graph_dir, "A.csv")
-    np.savetxt(bin_adj_path, A, delimiter=',')
-    # Save a drawing of the env graph:
-    drawEnvGraph(A, graphNum, graph_dir)
 
     # Run the optimization algorithm:
     for k in range(numInitPs):
@@ -313,54 +306,54 @@ def exploreGraphOptima(A, tau, testSetNum, graphNum, numInitPs, gradMode):
         if gradMode == "mcp":
             initGrad = compMCPGradJIT(P0, F0, tau)  
         else:
-            initGrad = compAvgLCPGradJIT(P0, F0, tau, lcpNum)  
+            initGrad = compAvgLCPGradJIT(P0, F0, tau, opt_params["lcpNum"])  
         initGradZ = zeroGradColsJIT(initGrad, cols)
 
-        # TO BE REPLACED BY setStepSize function: ----------
+        # TO BE REPLACED BY setStepSize function: ----------------------------
         stepScale = np.max(initGradZ)
         stepScales[k] = stepScale
         eps0 = 0.01/stepScale
-        # --------------------------------------------------
+        opt_params["eps0"] = eps0
         initSteps[k] = eps0
+        # --------------------------------------------------------------------
         start_time = time.time()
-        P, F, trackedVals = sgd_GradConv(P0, F0, tau, cols, eps0, rad, numRecPs, maxIters, gradMode)
+        # P, F, trackedVals = sgd_GradConv(P0, F0, tau, cols, eps0, rad, numRecPs, maxIters, gradMode)
+        P, F, trackedVals = sgd_GradConv(P0, F0, tau, cols, opt_params)
         convIters[k] = trackedVals["finalIters"][0]
         convTime = time.time() - start_time
         convTimes[k] = convTime
         finalMCPs[k] = trackedVals["finalMCP"][0]
-        print("--- Convergence took: %s seconds ---" % (convTime))
-        # Save initial and final P matrices:
-        init_P_name = "init_P_" + str(k + 1) + ".csv"
-        init_P_path = os.path.join(graph_dir, init_P_name)
-        np.savetxt(init_P_path, P0, delimiter=',')
-        opt_P_name = "opt_P_" + str(k + 1) + ".csv"
-        opt_P_path = os.path.join(graph_dir, opt_P_name)
-        np.savetxt(opt_P_path, P, delimiter=',')
-        metrics_dir = os.path.join(results_dir, "metrics")
+        print("--- Optimization took: %s seconds ---" % (convTime))
+        # Save initial and optimized P matrices:
+        np.savetxt(graph_dir + "/init_P_" + str(k + 1) + ".csv", P0, delimiter=',')
+        np.savetxt(graph_dir + "/opt_P_" + str(k + 1) + ".csv", P, delimiter=',')
+        metrics_dir = os.path.join(graph_dir, "metrics")
         if not os.path.isdir(metrics_dir):
             os.mkdir(metrics_dir)
         for metric in trackedVals.keys():
             if metric.find("final") == -1:
-                np.savetxt(metrics_dir + "/" + graph_name + "_" + metric + "_" + str(k + 1) + ".csv", trackedVals[metric], delimiter=',')
-        # np.savetxt(metrics_dir + "/" + graph_name + "_iters_" + str(k + 1) + ".csv", PdiffIters, delimiter=',')
-        # np.savetxt(metrics_dir + "/" + graph_name + "_PdiffMaxElts_"+ str(k + 1) + ".csv", PdiffMaxElts, delimiter=',')
-        # np.savetxt(metrics_dir + "/" + graph_name + "_PdiffSums_"+ str(k + 1) + ".csv", PdiffSums, delimiter=',')
-        # np.savetxt(metrics_dir + "/" + graph_name + "_mcpInds_"+ str(k + 1) + ".csv", mcpInds, delimiter=',')
+                np.savetxt(metrics_dir + "/" + metric + "_" + str(k + 1) + ".csv", trackedVals[metric], delimiter=',')
 
-
-    # Save information about graph and the optimization algorithm used:
+    # Save the env graph binary adjacency matrix:
+    np.savetxt(graph_dir + "/A.csv", A, delimiter=',')
+    # Save a drawing of the env graph:
+    drawEnvGraph(A, graphNum, graph_dir)
+    # Generate unique graph code:
+    graph_code = genGraphCode(A)
+    # Write info file with graph and optimization algorithm info:
     info_path = os.path.join(graph_dir, "info.txt")
     with open(info_path, 'w') as info:
         info.write("Graph Information:\n")
         info.write("Number of nodes (n) = " + str(n) + "\n")
         info.write("Attack Duration (tau) = " + str(tau) + "\n")
+        info.write("Graph Code = " + graph_code + "\n")
         info.write("Optimizer Information:\n")
         info.write("Optimizer used = sgd_GradConv\n")
-        info.write("Gradient Mode = " + gradMode + "\n")
-        info.write("Number of LCPs used, if applicable = " + str(lcpNum) + "\n")
-        info.write("Convergence radius = " + str(rad) + "\n")
-        info.write("Moving average window size (numRecPs) = " + str(numRecPs) + "\n")
-        info.write("Max allowed number of iterations (maxIters) = " + str(maxIters) + "\n")
+        info.write("Gradient Mode = " + opt_params["gradMode"] + "\n")
+        info.write("Number of LCPs used, if applicable = " + str(opt_params["lcpNum"]) + "\n")
+        info.write("Convergence radius = " + str(opt_params["radius"]) + "\n")
+        info.write("Moving average window size (numRecPs) = " + str(opt_params["numRecPdiffs"]) + "\n")
+        info.write("Max allowed number of iterations (maxIters) = " + str(opt_params["maxIters"]) + "\n")
         info.write("Initial Step Sizes (initSteps) = " + str(initSteps) + "\n")
         info.write("Max element of initial MCP gradients (stepScales) = " + str(stepScales) + "\n")
         info.write("Final MCP achieved = " + str(finalMCPs) + "\n")
@@ -395,17 +388,9 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
     np.set_printoptions(suppress=True)
 
-    # A = genStarG(6)
-    # A = genLineG(10)
-
-    # A1 = jnp.array([[1, 0, 1, 0, 0, 0, 0], [0, 1, 1, 0, 0, 0, 0], [1, 1, 1, 1, 0, 0, 0], [0, 0, 1, 1, 1, 1, 1], [0, 0, 0, 1, 1, 0, 0], [0, 0, 0, 1, 0, 1, 0], [0, 0, 0, 1, 0, 0, 1]])  
-    # A2 = genSplitStarG(2, 3, 2)
-    # # print(A2)
-    
     # leftLeavesR = np.arange(3, 6)
     # rightLeavesR = np.arange(2, 5)
     # midLineLenR = np.arange(2, 5)
-
     leftLeavesR = np.array([5])
     rightLeavesR = np.array([4])
     midLineLenR = np.array([4])
@@ -425,14 +410,14 @@ if __name__ == '__main__':
     # agmRatio = jnp.max(agms)/jnp.min(agms)
     # print("max/min agm ratio = " + str(agmRatio))
 
-    testSetNum = "GridGraphTestingLongRunMCP"
+    testSetName = "StratVizTesting"
     project_dir = os.getcwd()
-    results_dir = os.path.join(project_dir, "Results/test_set_" + str(testSetNum))
+    results_dir = os.path.join(project_dir, "Results/test_set_" + str(testSetName))
     if os.path.isdir(results_dir):
         input("WARNING! The test set directory already exists, press enter to continue and overwrite data.")
 
     graphNum = 1
-    numInitPs = 5
+    numInitPs = 3
     # for i in range(len(midLineLenR)):
     #     for j in range(len(rightLeavesR)):
     #         for k in range(len(leftLeavesR)):
@@ -441,7 +426,7 @@ if __name__ == '__main__':
     #         for k in range(2, 3):
     for i in range(1):
         for j in range(1):
-            for k in range(3, 4):
+            for k in range(2, 4):
                 print("-------- Working on Graph Number " + str(graphNum) + "----------")
                 # A = genSplitStarG(leftLeavesR[k], rightLeavesR[j], midLineLenR[i])
                 # A = genStarG(6)
@@ -452,8 +437,8 @@ if __name__ == '__main__':
                 # tau2 = 4
                 # tau1 = midLineLenR[i] + 1 
                 # tau2 = midLineLenR[i] + 3
-                exploreGraphOptima(A, tau1, testSetNum, graphNum, numInitPs, gradMode="mcp")
-                exploreGraphOptima(A, tau2, testSetNum, graphNum, numInitPs, gradMode="mcp")
+                exploreGraphOptima(A, tau1, testSetName, graphNum, numInitPs, gradMode="mcp")
+                exploreGraphOptima(A, tau2, testSetName, graphNum, numInitPs, gradMode="mcp")
                 graphNum = graphNum+ 1
 
 

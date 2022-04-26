@@ -91,6 +91,16 @@ def initRandPs(A, num):
         initPs = initPs.at[:, : , k].set(initRandPseed(A, k))
     return initPs
 
+def genGraphCode(A):
+    bin_string = ""
+    for i in range(A.shape[0] - 1):
+        for j in range(i + 1, A.shape[1]):
+            bin_string = bin_string + str(int(A[i, j]))
+    graphNum = int(bin_string, base=2)
+    graphCode = str(A.shape[0]) + "_" + str(graphNum)
+    return graphCode
+
+
 
 def genStarG(n):
     """
@@ -168,8 +178,8 @@ def genSplitStarG(leftLeaves, rightLeaves, numLineNodes):
 def genGridG(width, height):
     n = width*height
     A = jnp.identity(n)
-    A = A + jnp.diag(jnp.ones(n - 3), 3)
-    A = A + jnp.diag(jnp.ones(n - 3), -3)
+    A = A + jnp.diag(jnp.ones(n - height), height)
+    A = A + jnp.diag(jnp.ones(n - height), -height)
     for k in range(n):
         if k % height == 0:
             A = A.at[k, k + 1].set(1)
@@ -179,6 +189,13 @@ def genGridG(width, height):
             A = A.at[k, k + 1].set(1)
             A = A.at[k, k - 1].set(1)
     return A
+
+def genCycleG(n):
+    A = genLineG(n)
+    A = A.at[0, n - 1].set(1)
+    A = A.at[n - 1, 0].set(1)
+    return A
+
 
 def computeFHTProbMats(P, tau):
     """
@@ -624,46 +641,50 @@ if __name__ == '__main__':
 
     tau = 5
 
-    A = genGridG(3, 3)
+    # A = genGridG(3, 2)
+    A = genCycleG(20)
     # A = genStarG(10)
-    print(A)
+    print("20-node cycle graph:")
+    genGraphCode(A)
+
     cwd = os.getcwd()
     # drawEnvGraph(A, 1, cwd)
     n = A.shape[0]
-    P0 = initRandPseed(A, 2)
-    drawTransProbGraph(A, P0, 1, cwd)
-    print("P0 = ")
-    print(P0)
-    F0 = jnp.full((n, n, tau), np.NaN)
-    lcpNum = 4
+    # P0 = initRandPseed(A, 2)
+    # drawTransProbGraph(A, P0, "graph1_tau5", 0, cwd)
 
-    F = computeCapProbsJIT(P0, F0, tau)
-    Fvec = F.flatten('F')
-    print("Fvec = ")
-    print(Fvec)
-    # FHTs = computeFHTProbMatsJIT(P0, F0, tau)
-    # printFHTProbMats(FHTs)
-    lcps = computeLCPsJIT(P0, F0, tau, lcpNum)
-    lcpIndices = lcpInds(P0, F0, tau, lcpNum)
-    print("lcps = ")
-    print(lcps)
-    print("lcpIndices = ")
-    print(lcpIndices)
+    # print("P0 = ")
+    # print(P0)
+    # F0 = jnp.full((n, n, tau), np.NaN)
+    # lcpNum = 4
 
-    lcpGrads = compLCPGradsJIT(P0, F0, tau, lcpNum)
-    avgLCPGrad = compAvgLCPGradJIT(P0, F0, tau, lcpNum)
-    print("avgLCPGrad = ")
-    print(avgLCPGrad)
-    J = compCPJacJIT(P0, F0, tau)
-    avgFromJ = jnp.zeros(n**2)
-    for k in range(lcpNum):
-        avgFromJ = avgFromJ + J[lcpIndices[k], :]
-    avgFromJ = avgFromJ/lcpNum
-    print("avgFromJ = ")
-    print(avgFromJ)
-    meanDiff = jnp.mean(avgFromJ - avgLCPGrad)
-    print("meanDiff = ")
-    print(meanDiff)
+    # F = computeCapProbsJIT(P0, F0, tau)
+    # Fvec = F.flatten('F')
+    # print("Fvec = ")
+    # print(Fvec)
+    # # FHTs = computeFHTProbMatsJIT(P0, F0, tau)
+    # # printFHTProbMats(FHTs)
+    # lcps = computeLCPsJIT(P0, F0, tau, lcpNum)
+    # lcpIndices = lcpInds(P0, F0, tau, lcpNum)
+    # print("lcps = ")
+    # print(lcps)
+    # print("lcpIndices = ")
+    # print(lcpIndices)
+
+    # lcpGrads = compLCPGradsJIT(P0, F0, tau, lcpNum)
+    # avgLCPGrad = compAvgLCPGradJIT(P0, F0, tau, lcpNum)
+    # print("avgLCPGrad = ")
+    # print(avgLCPGrad)
+    # J = compCPJacJIT(P0, F0, tau)
+    # avgFromJ = jnp.zeros(n**2)
+    # for k in range(lcpNum):
+    #     avgFromJ = avgFromJ + J[lcpIndices[k], :]
+    # avgFromJ = avgFromJ/lcpNum
+    # print("avgFromJ = ")
+    # print(avgFromJ)
+    # meanDiff = jnp.mean(avgFromJ - avgLCPGrad)
+    # print("meanDiff = ")
+    # print(meanDiff)
 
     
  
