@@ -267,7 +267,7 @@ def sgd_GradConv(P0, F0, tau, cols, opt_params):
     return P, F, trackedVals
 
 # Explore optima for the given graph and attack duration:
-def exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode):
+def exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode, save=True):
     n = A.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
     cols = getZeroCols(A)
@@ -290,15 +290,16 @@ def exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode):
 
     print("lcpNum = " + str(opt_params["lcpNum"]))
 
-    # Create directory for saving theb results for the given graph:
-    project_dir = os.getcwd()
-    results_dir = os.path.join(project_dir, "Results/test_set_" + str(testSetName))
-    if not os.path.isdir(results_dir):
-        os.mkdir(results_dir)
-    graph_name = "graph" + str(graphNum) + "_tau" + str(tau)
-    graph_dir = os.path.join(results_dir, graph_name)
-    if not os.path.isdir(graph_dir):
-        os.mkdir(graph_dir)
+    if(save):
+        # Create directory for saving the results for the given graph:
+        project_dir = os.getcwd()
+        results_dir = os.path.join(project_dir, "Results/test_set_" + str(testSetName))
+        if not os.path.isdir(results_dir):
+            os.mkdir(results_dir)
+        graph_name = "graph" + str(graphNum) + "_tau" + str(tau)
+        graph_dir = os.path.join(results_dir, graph_name)
+        if not os.path.isdir(graph_dir):
+            os.mkdir(graph_dir)
 
     # Run the optimization algorithm:
     for k in range(numInitPs):
@@ -325,42 +326,44 @@ def exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode):
         convTimes[k] = convTime
         finalMCPs[k] = trackedVals["finalMCP"][0]
         print("--- Optimization took: %s seconds ---" % (convTime))
-        # Save initial and optimized P matrices:
-        np.savetxt(graph_dir + "/init_P_" + str(k + 1) + ".csv", P0, delimiter=',')
-        np.savetxt(graph_dir + "/opt_P_" + str(k + 1) + ".csv", P, delimiter=',')
-        metrics_dir = os.path.join(graph_dir, "metrics")
-        if not os.path.isdir(metrics_dir):
-            os.mkdir(metrics_dir)
-        for metric in trackedVals.keys():
-            if metric.find("final") == -1:
-                np.savetxt(metrics_dir + "/" + metric + "_" + str(k + 1) + ".csv", trackedVals[metric], delimiter=',')
+        if(save):
+            # Save initial and optimized P matrices:
+            np.savetxt(graph_dir + "/init_P_" + str(k + 1) + ".csv", P0, delimiter=',')
+            np.savetxt(graph_dir + "/opt_P_" + str(k + 1) + ".csv", P, delimiter=',')
+            metrics_dir = os.path.join(graph_dir, "metrics")
+            if not os.path.isdir(metrics_dir):
+                os.mkdir(metrics_dir)
+            for metric in trackedVals.keys():
+                if metric.find("final") == -1:
+                    np.savetxt(metrics_dir + "/" + metric + "_" + str(k + 1) + ".csv", trackedVals[metric], delimiter=',')
 
-    # Save the env graph binary adjacency matrix:
-    np.savetxt(graph_dir + "/A.csv", A, delimiter=',')
-    # Save a drawing of the env graph:
-    drawEnvGraph(A, graphNum, graph_dir)
-    # Generate unique graph code:
-    graph_code = genGraphCode(A)
-    # Write info file with graph and optimization algorithm info:
-    info_path = os.path.join(graph_dir, "info.txt")
-    with open(info_path, 'w') as info:
-        info.write("Graph Information:\n")
-        info.write("Number of nodes (n) = " + str(n) + "\n")
-        info.write("Attack Duration (tau) = " + str(tau) + "\n")
-        info.write("Graph Code = " + graph_code + "\n")
-        info.write("Optimizer Information:\n")
-        info.write("Optimizer used = sgd_GradConv\n")
-        info.write("Gradient Mode = " + opt_params["gradMode"] + "\n")
-        info.write("Number of LCPs used, if applicable = " + str(opt_params["lcpNum"]) + "\n")
-        info.write("Convergence radius = " + str(opt_params["radius"]) + "\n")
-        info.write("Moving average window size (numRecPs) = " + str(opt_params["numRecPdiffs"]) + "\n")
-        info.write("Max allowed number of iterations (maxIters) = " + str(opt_params["maxIters"]) + "\n")
-        info.write("Initial Step Sizes (initSteps) = " + str(initSteps) + "\n")
-        info.write("Max element of initial MCP gradients (stepScales) = " + str(stepScales) + "\n")
-        info.write("Final MCP achieved = " + str(finalMCPs) + "\n")
-        info.write("Number of iterations required = " + str(convIters) + "\n")
-        info.write("Optimization Times Required (seconds) = " + str(convTimes) + "\n")
-    info.close()
+    if(save):
+        # Save the env graph binary adjacency matrix:
+        np.savetxt(graph_dir + "/A.csv", A, delimiter=',')
+        # Save a drawing of the env graph:
+        drawEnvGraph(A, graphNum, graph_dir)
+        # Generate unique graph code:
+        graph_code = genGraphCode(A)
+        # Write info file with graph and optimization algorithm info:
+        info_path = os.path.join(graph_dir, "info.txt")
+        with open(info_path, 'w') as info:
+            info.write("Graph Information:\n")
+            info.write("Number of nodes (n) = " + str(n) + "\n")
+            info.write("Attack Duration (tau) = " + str(tau) + "\n")
+            info.write("Graph Code = " + graph_code + "\n")
+            info.write("Optimizer Information:\n")
+            info.write("Optimizer used = sgd_GradConv\n")
+            info.write("Gradient Mode = " + opt_params["gradMode"] + "\n")
+            info.write("Number of LCPs used, if applicable = " + str(opt_params["lcpNum"]) + "\n")
+            info.write("Convergence radius = " + str(opt_params["radius"]) + "\n")
+            info.write("Moving average window size (numRecPs) = " + str(opt_params["numRecPdiffs"]) + "\n")
+            info.write("Max allowed number of iterations (maxIters) = " + str(opt_params["maxIters"]) + "\n")
+            info.write("Initial Step Sizes (initSteps) = " + str(initSteps) + "\n")
+            info.write("Max element of initial MCP gradients (stepScales) = " + str(stepScales) + "\n")
+            info.write("Final MCP achieved = " + str(finalMCPs) + "\n")
+            info.write("Number of iterations required = " + str(convIters) + "\n")
+            info.write("Optimization Times Required (seconds) = " + str(convTimes) + "\n")
+        info.close()
 
 
 def setStepSize(A, tau, eps0, numInitPs):
@@ -411,7 +414,7 @@ if __name__ == '__main__':
     # agmRatio = jnp.max(agms)/jnp.min(agms)
     # print("max/min agm ratio = " + str(agmRatio))
 
-    testSetName = "ColabTesting"
+    testSetName = "ColabTesting2"
     project_dir = os.getcwd()
     results_dir = os.path.join(project_dir, "Results/test_set_" + str(testSetName))
     if os.path.isdir(results_dir):
@@ -427,13 +430,13 @@ if __name__ == '__main__':
     #         for k in range(2, 3):
     for i in range(1):
         for j in range(1):
-            for k in range(2, 4):
+            for k in range(8, 9):
                 print("-------- Working on Graph Number " + str(graphNum) + "----------")
                 # A = genSplitStarG(leftLeavesR[k], rightLeavesR[j], midLineLenR[i])
                 # A = genStarG(6)
-                A = genGridG(3, k)
-                tau1 = k + 1
-                tau2 = k + 3
+                A = genGridG(k, k+1)
+                tau1 = 2*(k - 1) + 1
+                tau2 = 2*(k - 1) + 3
                 # tau1 = 2
                 # tau2 = 4
                 # tau1 = midLineLenR[i] + 1 
