@@ -241,7 +241,7 @@ def visResults(test_set_name):
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
     
-    test_set_name = "StratVizTesting"
+    test_set_name = "ColabTesting"
     visMetrics(test_set_name, overlay=True)
     visResults(test_set_name)
 

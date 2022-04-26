@@ -3,7 +3,7 @@ import os
 import numpy as np
 import math
 import time, timeit
-import random
+from jax import random
 import jax
 import functools
 from jax import grad, jacfwd, jacrev, jit, devices
@@ -28,15 +28,16 @@ def initRandP(A):
     numpy.ndarray
         Valid, random initial transition probability matrix. 
     """
+    key = jax.random.PRNGKey(1)
     P0 = jnp.zeros_like(A, dtype='float32')
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             if A[i, j] != 0:
-                P0 = P0.at[i, j].set(random.random())
+                P0 = P0.at[i, j].set(jax.random.uniform(key))
     P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
     return P0
     
-def initRandPseed(A, s):
+def initRandPkey(A, key):
     """
     Generate a random initial transition probability matrix with seed s.
 
@@ -56,15 +57,40 @@ def initRandPseed(A, s):
     numpy.ndarray
         Valid, random initial transition probability matrix. 
     """
-    random.seed(s)
-    P0 = jnp.zeros_like(A, dtype='float32')
-    for i in range(A.shape[0]):
-        for j in range(A.shape[1]):
-            if A[i, j] != 0:
-                P0 = P0.at[i, j].set(random.random())
+    A_shape = jnp.shape(A)
+    P0 = jax.random.uniform(key, A_shape)
+    P0 = A*P0
     P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
     return P0
 
+def initRandPtest(A, key):
+    A_shape = jnp.shape(A)
+    start_time = time.time()
+    P0 = jax.random.uniform(key, A_shape)
+    P0 = A*P0
+    print("P0 initial creation took %s seconds" % str(time.time() - start_time))
+    # print(P0)
+    start_time = time.time()
+    P0 = projOntoSimplexJIT(P0)
+    # P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
+    # print("P0 row normalization took %s seconds" % str(time.time() - start_time))
+    print("P0 simplex projection took %s seconds" % str(time.time() - start_time))
+    return P0
+
+def initRandProwtest(A, key):
+    A_shape = jnp.shape(A)
+    start_time = time.time()
+    P0 = jax.random.uniform(key, A_shape)
+    P0 = A*P0
+    print("P0 initial creation took %s seconds" % str(time.time() - start_time))
+    # print(P0)
+    start_time = time.time()
+    for i in range(A_shape[0]):
+        P0 = P0.at[i, :].set(projRowOntoSimplexJIT(P0[i, :]))
+    # P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
+    # print("P0 row normalization took %s seconds" % str(time.time() - start_time))
+    print("P0 simplex projection took %s seconds" % str(time.time() - start_time))
+    return P0
 
 def initRandPs(A, num):
     """
@@ -86,10 +112,24 @@ def initRandPs(A, num):
     --------
     initRandPseed
     """
+    key = jax.random.PRNGKey(0)
     initPs = jnp.zeros((A.shape[0], A.shape[1], num),  dtype='float32')
     for k in range(num):
-        initPs = initPs.at[:, : , k].set(initRandPseed(A, k))
+        key, subkey = jax.random.split(key)
+        initPs = initPs.at[:, : , k].set(initRandPkey(A, subkey))
     return initPs
+
+def initRandPsRowTest(A, num):
+    key = jax.random.PRNGKey(0)
+    initPs_row = jnp.zeros((A.shape[0], A.shape[1], num),  dtype='float32')
+    initPs_orig = jnp.zeros((A.shape[0], A.shape[1], num),  dtype='float32')
+    for k in range(num):
+        key, subkey = jax.random.split(key)
+        initPs_row = initPs_row.at[:, : , k].set(initRandProwtest(A, subkey))
+        initPs_orig = initPs_orig.at[:, : , k].set(initRandPtest(A, subkey))
+    return initPs_row, initPs_orig
+
+
 
 def genGraphCode(A):
     bin_string = ""
@@ -626,6 +666,41 @@ def projOntoSimplexJIT(P):
             newP = newP.at[i, sortMapping[i, j]].set(newX[i, j])
     return newP
 
+@jit
+def projRowOntoSimplexJIT(row):
+    """
+    Project rows of the Transition Probability Matrix `P` onto the probability simplex.
+
+    To ensure gradient-based updates to the Transition Probability Matrix maintain
+    row-stochasticity, the rows of the updated Transition Probability Matrix are projected 
+    onto the nearest point on the probability n-simplex, where `n` is the number of
+    columns of `P`.  For further explanation, see [LINK TO DOCUMENT ON GITHUB], and 
+    for more about the projection algorithm used, see https://arxiv.org/abs/1309.1541.
+
+    Parameters
+    ----------
+    P : numpy.ndarray 
+        Transition Probability Matrix after gradient update, potentially invalid. 
+    
+    Returns
+    -------
+    numpy.ndarray
+        Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
+    """
+    n = len(row)
+    sortMapping = jnp.flip(jnp.argsort(row))
+    X = jnp.full_like(row, np.nan)
+    for j in range (n):
+        X = X.at[j].set(row[sortMapping[j]])
+    Xtmp = jnp.matmul(jnp.cumsum(X) - 1, jnp.diag(1/jnp.arange(1, n + 1)))
+    rhoVal = jnp.sum(X > Xtmp) - 1
+    lambdaVal = -Xtmp[rhoVal]
+    newX = jnp.maximum(X + lambdaVal, jnp.zeros((n)))
+    newRow = jnp.full_like(row, np.nan)
+    for j in range(n):
+        newRow = newRow.at[sortMapping[j]].set(newX[j])
+    return newRow
+
 # TESTING -----------------------------------------------------------------------------------------
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
@@ -635,21 +710,80 @@ if __name__ == '__main__':
 
     # tau = 2 # attack duration
     # A = genStarG(4)
-    # P0 = initRandPseed(A, 1)
-    # n = P0.shape[0]
+    # # P0 = initRandPseed(A, 1)
+    # n = A.shape[0]
     # F0 = jnp.full((n, n, tau), np.NaN)
 
-    tau = 5
+    # A = genGridG(3, 4)
+    # numInitPs = 3
+    # print("REGULAR VS ROW PROJECTION:")
+    # initPs_row, initPs_orig= initRandPsRowTest(A, numInitPs)
 
-    # A = genGridG(3, 2)
-    A = genCycleG(20)
-    # A = genStarG(10)
-    print("20-node cycle graph:")
-    genGraphCode(A)
+    # check = jnp.sum(initPs_row - initPs_orig)
+    # print("check = ")
+    # print(check)
+    # print("initPs_row = ")
+    # print(initPs_row[:, :, 0])
+    # print("initPs_orig = ")
+    # print(initPs_orig[:, :, 0])
 
-    cwd = os.getcwd()
-    # drawEnvGraph(A, 1, cwd)
-    n = A.shape[0]
+    graphNum = 1
+    numInitPs = 10
+    for i in range(1):
+        for j in range(1):
+            for k in range(20, 21):
+                print("-------- Working on Graph Number " + str(graphNum) + "----------")
+                # A = genSplitStarG(leftLeavesR[k], rightLeavesR[j], midLineLenR[i])
+                # A = genStarG(6)
+                start_time = time.time()
+                A = genGridG(k, k+1)
+                print("Generating bin adj mat took %s seconds" % str(time.time() - start_time))
+                n = A.shape[0]
+                tau1 = 2*(k - 1) + 1
+                F0 = jnp.full((n, n, tau1), np.NaN)
+                start_time = time.time()
+                initPs = initRandPs(A, numInitPs)
+                print("Generating initial P mats took %s seconds" % str(time.time() - start_time))
+                for pNum in range(numInitPs):
+                    print("----------------------------------------------------")
+                    start_time = time.time()
+                    grad1 = compMCPGradJIT(initPs[:, :, pNum], F0, tau1)
+                    print("grad computation 1 took %s seconds" % str(time.time() - start_time))
+                    start_time = time.time()
+                    grad2 = compMCPGradJIT(initPs[:, :, pNum], F0, tau1)
+                    print("grad computation 2 took %s seconds" % str(time.time() - start_time))
+                    start_time = time.time()
+                    grad3 = compMCPGradJIT(initPs[:, :, pNum], F0, tau1)
+                    print("grad computation 3 took %s seconds" % str(time.time() - start_time))
+                    start_time = time.time()
+                    grad4 = compMCPGradJIT(initPs[:, :, pNum], F0, tau1)
+                    print("grad computation 4 took %s seconds" % str(time.time() - start_time))
+                    print("----------------------------------------------------")
+                tau2 = 2*(k - 1) + 3
+                print("Working with new tau value ---------------------------")
+                for pNum in range(numInitPs):
+                    print("----------------------------------------------------")
+                    start_time = time.time()
+                    grad1 = compMCPGradJIT(initPs[:, :, pNum], F0, tau1)
+                    print("grad computation 1 took %s seconds" % str(time.time() - start_time))
+                    start_time = time.time()
+                    grad2 = compMCPGradJIT(initPs[:, :, pNum], F0, tau1)
+                    print("grad computation 2 took %s seconds" % str(time.time() - start_time))
+                    start_time = time.time()
+                    grad3 = compMCPGradJIT(initPs[:, :, pNum], F0, tau1)
+                    print("grad computation 3 took %s seconds" % str(time.time() - start_time))
+                    start_time = time.time()
+                    grad4 = compMCPGradJIT(initPs[:, :, pNum], F0, tau1)
+                    print("grad computation 4 took %s seconds" % str(time.time() - start_time))
+                    print("----------------------------------------------------")
+                
+
+
+
+
+    # cwd = os.getcwd()
+    # # drawEnvGraph(A, 1, cwd)
+    # n = A.shape[0]
     # P0 = initRandPseed(A, 2)
     # drawTransProbGraph(A, P0, "graph1_tau5", 0, cwd)
 
