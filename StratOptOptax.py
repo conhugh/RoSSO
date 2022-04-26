@@ -410,7 +410,7 @@ if __name__ == '__main__':
     # agmRatio = jnp.max(agms)/jnp.min(agms)
     # print("max/min agm ratio = " + str(agmRatio))
 
-    testSetName = "StratVizTesting"
+    testSetName = "ColabTesting"
     project_dir = os.getcwd()
     results_dir = os.path.join(project_dir, "Results/test_set_" + str(testSetName))
     if os.path.isdir(results_dir):
