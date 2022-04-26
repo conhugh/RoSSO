@@ -169,6 +169,7 @@ def sgd_MAPconv(P0, F0, tau, cols, eps0, radius, numRecPs, maxIters):
 # Initialize parameters of the model + optimizer.
 # def sgd_GradConv(P0, F0, tau, cols, eps0, radius, numRecPdiffs, maxIters, gradMode="mcp", lcpNum=1):
 def sgd_GradConv(P0, F0, tau, cols, opt_params):
+    check_time = time.time()
     n = P0.shape[0]
     P = P0 
     optimizer = optax.sgd(opt_params["eps0"], momentum=0.99, nesterov=True)
@@ -201,7 +202,7 @@ def sgd_GradConv(P0, F0, tau, cols, opt_params):
         grad = -1*grad  # negate so that the optimizer does gradient ascent
         grad = grad.reshape((n, n), order='F').block_until_ready()
         if(iter % 200 == 0):
-            print("------ iteration number " + str(iter) + " -------")
+            print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time) + "-------")
             print("grad 1-norm = ")
             print(jnp.sum(grad))
             print("grad largest element = ")
