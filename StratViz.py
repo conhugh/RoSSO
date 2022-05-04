@@ -29,6 +29,39 @@ def plotTransProbs2D(initPMats, optPMats, initRunNums, optRunNums, title, path):
     plt.savefig(path)
     plt.close()
 
+# Plot transition probabilities for each pair of nodes for the given P matrices,
+# averaged across the results of each optimization for varying initial P
+# Takes a list of initial and optimized P matrices
+def plotOptTransProbs2D(optPMats, folderpath):
+    n = optPMats[0].shape[0]
+    probs = np.linspace(1, n**2, n**2)
+    avgOptPmat = np.mean(optPMats, axis=0)
+    stddevOptPmat = np.std(optPMats, axis=0)
+    stddevpercOptPmat = 100*np.std(optPMats, axis=0)/np.mean(optPMats, axis=0)
+    avgOptPvec = avgOptPmat.flatten('F')
+    stddevOptPvec = stddevOptPmat.flatten('F')
+    stddevpercOptPvec = stddevpercOptPmat.flatten('F')
+    plt.figure()
+    plt.scatter(probs, avgOptPvec, marker=".")
+    plt.xlabel("Pvec Index")
+    plt.ylabel("Avg Optimized Transition Probability")
+    plt.title("Avg Optimized Transition Probabilies")
+    plt.savefig(folderpath + "/avgOptP")
+    plt.close()
+    plt.figure()
+    plt.scatter(probs, stddevOptPvec, marker=".")
+    plt.xlabel("Pvec Index")
+    plt.ylabel("Std Dev of Optimized Transition Probability")
+    plt.title("Std Dev of Optimized Transition Probabilies")
+    plt.savefig(folderpath + "/stddevOptP")
+    plt.close()
+    plt.figure()
+    plt.scatter(probs, stddevpercOptPvec, marker=".")
+    plt.xlabel("Pvec Index")
+    plt.ylabel("(Std Dev/Avg) of Optimized Transition Probability (%)")
+    plt.title("Std Dev of Optimized Transition Probabilies")
+    plt.savefig(folderpath + "/stddevpercOptP")
+    plt.close()
 
 # Plot capture probabilities for each pair of nodes for fixed P matrix
 def plotCapProbs3D(capProbs):
@@ -93,7 +126,7 @@ def drawEnvGraph(A, graphNum, folderPath, save=True):
     return GViz
 
 # Save the environment graph with edges labeled with transition probabilities:
-def drawTransProbGraph(A, P, graphName, Pnum, folderPath, save=True):
+def drawTransProbGraph(A, P, graphName, folderPath, Pnum=None, save=True):
     GViz = drawEnvGraph(A, graphName, folderPath, save=False)
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
@@ -111,9 +144,39 @@ def drawTransProbGraph(A, P, graphName, Pnum, folderPath, save=True):
 # MCP listed, and node pair corresponding to MCP highlighted:
 def drawOptGraphs(A, optPmats, graphName, optPnums, folderPath):
     for k in range(len(optPmats)):
-        GViz = drawTransProbGraph(A, optPmats[k], graphName, optPnums[k], folderPath, save=False)
+        GViz = drawTransProbGraph(A, optPmats[k], graphName, folderPath, optPnums[k], save=False)
         GViz.layout()
         GViz.draw(folderPath + "/gviz" + "_opt_P_" + str(optPnums[k]) +  ".png", prog="sfdp")
+
+# Save the environment graph with edges labeled with average optimized transition probabilities, 
+# MCP listed, and node pair corresponding to MCP highlighted:
+def drawAvgOptGraph(A, avgOptPmat, folderPath):
+    GViz = drawTransProbGraph(A, avgOptPmat, None, folderPath, save=False)
+    GViz.layout()
+    GViz.draw(folderPath + "/gviz" + "_avg_opt_P" + ".png", prog="sfdp")
+
+# Save the environment graph with edges labeled with average optimized transition probabilities, 
+# edge line weights set proportional to trans probs, MCP listed, and node pair corresponding to 
+# MCP highlighted:
+def drawAvgOptGraphWeighted(A, avgOptPmat, folderPath):
+    GViz = drawEnvGraph(A, None, folderPath, save=False)
+    for i in range(A.shape[0]):
+        for j in range(A.shape[1]):
+            if A[i, j] == 1:
+                e = GViz.get_edge(i, j)
+                e.attr["xlabel"] = "{:.3f}".format(avgOptPmat[i, j])
+                e.attr["fontsize"] = 10.0
+                e.attr["penwidth"] = str(10*avgOptPmat[i, j])
+                gscale = int(255 - np.around(255*avgOptPmat[i, j]))
+                hex_gscale = hex(gscale)
+                hex_gscale = hex_gscale[2:]
+                if len(hex_gscale) == 1:
+                    hex_gscale = "0" + hex_gscale
+                e.attr["color"] = "#" + hex_gscale + hex_gscale + hex_gscale
+                if avgOptPmat[i, j] == 0:
+                    GViz.delete_edge(i, j)
+    GViz.layout()
+    GViz.draw(folderPath + "/gviz" + "_avg_opt_P_linewt" + ".png", prog="sfdp")
 
 # Parse graph name (test set subdirectory) to get graph number and tau.
 # Graph name assumed to be in format: "graphX_tauY", returns X, Y
@@ -192,7 +255,8 @@ def visMetrics(test_set_name, overlay=False):
                                                     usedFilePaths.append(metricFiles[r])
                                                     metric = np.loadtxt(metric, delimiter = ',')
                                                 plt.plot(tIters, metric, label="Run " + r)
-                                        plt.legend(loc='lower right')
+                                        if metricName != "Pdiffs" and metricName != "AbsPdiffs":
+                                            plt.legend(loc='lower right')
                                         plt.savefig(plotpath, bbox_inches = "tight")
                                         plt.close()
 
@@ -202,9 +266,7 @@ def visMetrics(test_set_name, overlay=False):
 def visResults(test_set_name):
     cwd = os.getcwd()
     test_dir = os.path.join(cwd, "Results/test_set_" + test_set_name)
-    # res_vis_dir = os.path.join(test_dir, "results_visualization")
-    # if not os.path.isdir(res_vis_dir):
-    #     os.mkdir(res_vis_dir)
+    gcount = 0
     for subdir in os.listdir(test_dir):
         if(subdir.find("graph") != -1):
             graph_name = subdir
@@ -234,16 +296,85 @@ def visResults(test_set_name):
                         optRunNums.append(runNum)
             plotpath = os.path.join(res_vis_dir, "P_plot2D")
             plotTransProbs2D(initPMats, optPMats, initRunNums, optRunNums, graph_name, plotpath)
+            plotOptTransProbs2D(optPMats, res_vis_dir)
+            avgOptPMat = np.mean(optPMats, axis=0)
+            drawAvgOptGraphWeighted(A, avgOptPMat, res_vis_dir)
             drawOptGraphs(A, optPMats, graph_name, optRunNums, res_vis_dir)
+            gcount = gcount + 1
+            print("Number of graphs processed: " + str(gcount)) 
             
+def visMCPs(test_set_name):
+    cwd = os.getcwd()
+    test_dir = os.path.join(cwd, "Results/test_set_" + test_set_name)
+    graphNums = []
+    taus = []
+    mcpAvgs = []
+    mcpStdDevs = []
+    mcpStdDevPercents = []
+    gcount = 0
+    for subdir in os.listdir(test_dir):
+        if(subdir.find("graph") != -1):
+            graph_name = subdir
+            graphNum, tau = parseGraphName(graph_name)
+            graphNums.append(graphNum)
+            taus.append(tau)
+            graph_dir = os.path.join(test_dir, graph_name)
+            info_filepath = os.path.join(graph_dir, "info.txt")
+            with open(info_filepath) as info:
+                line = True
+                while line:
+                    line = info.readline()
+                    if(line.find("Final MCP achieved") != -1):
+                        mcpString = line[line.find("[") + 1:line.find("]")]
+                        mcps = mcpString.split()
+                        mcps = list(map(float, mcps))
+                        mcpAvgs.append(np.mean(mcps))
+                        mcpStdDevs.append(np.std(mcps))
+                        mcpStdDevPercents.append(100*(np.std(mcps)/np.mean(mcps)))
+            gcount = gcount + 1
+            print("Number of graphs processed: " + str(gcount)) 
+    graphNums = list(map(int, graphNums))
+    taus = list(map(int, taus))
+    plt.figure()
+    plt.scatter(graphNums, mcpAvgs)
+    plt.xlabel("Graph Number")
+    plt.ylabel("Average Optimized MCP")
+    plt.savefig(test_dir + "/avgMCPs")
+    plt.close()
+    plt.figure()
+    plt.scatter(graphNums, mcpStdDevs)
+    plt.xlabel("Graph Number")
+    plt.ylabel("Std Deviation of Optimized MCPs")
+    plt.savefig(test_dir + "/stddevMCPs")
+    plt.close()
+    plt.figure()
+    plt.scatter(graphNums, mcpStdDevPercents)
+    plt.xlabel("Graph Number")
+    plt.ylabel("(Std Deviation/Avg) of Optimized MCPs (%)")
+    plt.savefig(test_dir + "/stddevpercMCPs")
+    plt.close()
+
 
             
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
     
-    test_set_name = "ColabTesting"
-    visMetrics(test_set_name, overlay=True)
+    test_set_name = "2"
+    # visMetrics(test_set_name, overlay=True)
     visResults(test_set_name)
+    # visMCPs(test_set_name)
+
+    # gscale = int(np.around(255*0.01))
+    # hex_gscale = hex(gscale)
+    # print(hex_gscale)
+
+    # x = np.array([0, 1, 2, 3])
+    # y = np.array([[0, 0, 0], [1, 2, 1], [2, 4, 1], [3, 6, 0]])
+    # print(y.shape)
+
+    # plt.figure()
+    # plt.plot(x, y)
+    # plt.savefig("testfig", bbox_inches = "tight")
 
 
     # P = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])  # initialize transition prob matrix
