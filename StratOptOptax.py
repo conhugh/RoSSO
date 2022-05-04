@@ -53,118 +53,14 @@ def test_optimizer(P0, F0, tau, cols, eps0, iters):
 
 
 # Initialize parameters of the model + optimizer.
-def sgd_Pconv(P0, F0, tau, cols, eps0, radius):
-    n = P0.shape[0]
-    P = P0 
-    avgP = P  # running avg capture probability matrix, for checking convergence
-
-    start_learning_rate = eps0
-    optimizer = optax.sgd(start_learning_rate, momentum=0.99, nesterov=True)
-    opt_state = optimizer.init(P)
-
-    iter = 0  # number of gradient ascent steps taken so far
-    converged = False
-    while not converged:
-        # print("iteration number: " + str(iter))
-        # take gradient ascent step:
-        grads = compMCPGradJIT(P, F0, tau).block_until_ready()
-        grads = -1*grads  # negate so that the optimizer does gradient ascent
-        # print("--- Getting grad took: %s seconds ---" % (time.time() - start_time))
-        # start_time = time.time()
-        updates, opt_state = optimizer.update(grads, opt_state)
-        # print("--- Getting update and state took: %s seconds ---" % (time.time() - start_time))
-        # start_time = time.time()
-        P = optax.apply_updates(P, updates).block_until_ready()
-        # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
-        # start_time = time.time()
-        P = projOntoSimplexJIT(P).block_until_ready()
-        # print status info to terminal:
-        if (iter % 100) == 0:
-            F = computeCapProbsJIT(P, F0, tau).block_until_ready()
-            print("Minimum Capture Probability at iteration " + str(iter) + ":")
-            print(jnp.min(F))
-            # print("P at iteration " + str(iter) + ":")
-            # print(P)
-            # print("F at iteration " + str(iter) + ":")
-            # print(F)
-        # check for convergence, update running avg cap probs and step counter:
-        # start_time = time.time()
-        newAvgP = ((iter)*avgP + P)/(iter + 1)
-        diffAvgP = jnp.abs(newAvgP - avgP)
-        converged = jnp.amax(diffAvgP) < radius
-        avgP = newAvgP
-        iter = iter + 1
-    print("Initial P = ")
-    print(P0)
-    print("For eps0 = " + str(eps0) + ", P at iteration " + str(iter) + ":")
-    print(P)
-    F = computeCapProbsJIT(P, F0, tau).block_until_ready()
-    print("Minimum Capture Probability at iteration " + str(iter) + ":")
-    print(jnp.min(F))
-    return P, F
-
-
-# Initialize parameters of the model + optimizer.
-def sgd_MAPconv(P0, F0, tau, cols, eps0, radius, numRecPs, maxIters):
-    n = P0.shape[0]
-    P = P0 
-    optimizer = optax.sgd(eps0, momentum=0.99, nesterov=True)
-    opt_state = optimizer.init(P)
-    recentPs = deque()  # queue storing recent P matrices, for checking convergence
-    recentPs.append(P)  
-    # compute moving average of recent P matrices before adding new one:
-    oldMAP = np.mean(recentPs, axis=0) 
-    iter = 0  # number of gradient ascent steps taken so far
-    converged = False
-    while not converged:
-        # print("iteration number: " + str(iter))
-        # take gradient ascent step:
-        grads = compMCPGradJIT(P, F0, tau).block_until_ready()
-        grads = -1*grads  # negate so that the optimizer does gradient ascent
-        updates, opt_state = optimizer.update(grads, opt_state)
-        P = optax.apply_updates(P, updates).block_until_ready()
-        P = projOntoSimplexJIT(P).block_until_ready()
-        # print status info to terminal:
-        # if (iter % 100) == 0:
-        #     F = computeCapProbsJIT(P, F0, tau).block_until_ready()
-        #     print("Minimum Capture Probability at iteration " + str(iter) + ":")
-        #     print(jnp.min(F))
-        # check for convergence, update running avg P matrices and step counter:
-        # start_time = time.time()
-        # update queue of recent P matrices:
-        recentPs.append(P)
-        # compute updated moving average of P matrices:
-        if iter > numRecPs:
-            oldestP = recentPs.popleft() 
-            newMAP = (oldMAP*numRecPs - oldestP + P)/numRecPs
-        else:
-            newMAP = np.mean(recentPs, axis=0)
-        # compute change in moving average of P matrices:
-        diffMAP = np.abs(newMAP - oldMAP)
-        # check for element-wise convergence, update moving average P matrix and iteration counter:
-        converged = jnp.max(diffMAP) < radius
-        oldMAP = newMAP
-        if iter == maxIters:
-            converged = True
-        iter = iter + 1
-    # print("Initial P = ")
-    # print(P0)
-    # print("For eps0 = " + str(eps0) + ", P at iteration " + str(iter) + ":")
-    # print(P)
-    F = computeCapProbsJIT(P, F0, tau).block_until_ready()
-    print("Minimum Capture Probability at iteration " + str(iter) + ":")
-    print(jnp.min(F))
-    return P, F, iter
-
-# Initialize parameters of the model + optimizer.
 def sgd_GradConv(P0, A, F0, tau, opt_params):
     check_time = time.time()
     n = P0.shape[0]
     P = P0 
     Q = P0
-    optimizer = optax.sgd(opt_params["eps0"], momentum=0.99, nesterov=True)
+    optimizer = optax.sgd(opt_params["eps"], momentum=0.99, nesterov=True)
     opt_state = optimizer.init(P0)
-    recentPdiffs = deque()  # queue storing recent P matrices, for checking convergence
+    recPdiffSums = deque()  # queue storing recent P matrices, for checking convergence
 
     ubPupdate = jnp.full((n, n), 0.01)
     lbPupdate = jnp.full((n, n), -0.01)
@@ -198,7 +94,7 @@ def sgd_GradConv(P0, A, F0, tau, opt_params):
         updates = jnp.minimum(updates, ubPupdate)
         updates = jnp.maximum(updates, lbPupdate)
 
-        # apply update to P matrix:
+        # apply update to P matrix and compute Pdiff matrix:
         if opt_params["gradMode"] == "mcp_parametrization":
             oldP = getPfromParam(Q, A)
             Q = optax.apply_updates(Q, updates).block_until_ready()
@@ -207,19 +103,17 @@ def sgd_GradConv(P0, A, F0, tau, opt_params):
             oldP = P
             P = optax.apply_updates(P, updates).block_until_ready()
             P = projOntoSimplexJIT(P).block_until_ready()
-
         Pdiff = P - oldP
-        absPdiffSum = jnp.sum(jnp.abs(Pdiff))
 
-        # check for convergence, update running avg absPdiffSum and step counter:
-        # update queue of recent P matrices:
-        recentPdiffs.append(absPdiffSum)
-        # compute updated moving average of P matrices:
+        # Compute sum of abs val of elements of Pdiff and update queue of recent PdiffSums:
+        absPdiffSum = jnp.sum(jnp.abs(Pdiff))
+        recPdiffSums.append(absPdiffSum)
+        # compute updated moving average of recent Pdiffsums:
         if iter > opt_params["numRecPdiffs"]:
-            oldestPdiff = recentPdiffs.popleft() 
-            newMAPdiff = (oldMAPdiff*opt_params["numRecPdiffs"] - oldestPdiff + absPdiffSum)/opt_params["numRecPdiffs"]
+            oldestPdiffSum = recPdiffSums.popleft() 
+            newMAPdiffSum = (oldMAPdiffSum*opt_params["numRecPdiffs"] - oldestPdiffSum + absPdiffSum)/opt_params["numRecPdiffs"]
         else:
-            newMAPdiff = np.mean(recentPdiffs)
+            newMAPdiffSum = np.mean(recPdiffSums)
         
         # track metrics of interest:
         if(iter % 10 == 0):
@@ -227,14 +121,7 @@ def sgd_GradConv(P0, A, F0, tau, opt_params):
             trackedVals["Pdiffs"].append(Pdiff.flatten('F'))
             trackedVals["AbsPdiffs"].append(jnp.abs(Pdiff).flatten('F'))
             trackedVals["PdiffSums"].append(jnp.sum(jnp.abs(Pdiff)))
-            if(jnp.abs(jnp.max(Pdiff)) > jnp.abs(jnp.min(Pdiff))):
-                trackedVals["PdiffMaxElts"].append(jnp.max(Pdiff))
-            else:
-                trackedVals["PdiffMaxElts"].append(jnp.min(Pdiff))
-
-            if opt_params["gradMode"] == "mcp_parametrization":
-                P = getPfromParam(Q, A)
-
+            trackedVals["PdiffMaxElts"].append(jnp.max(jnp.abs(Pdiff)))
             F = computeCapProbsJIT(P, F0, tau).block_until_ready()
             F = F.reshape((n**2), order='F')
             trackedVals["mcpInds"].append(jnp.argmin(F))
@@ -246,22 +133,21 @@ def sgd_GradConv(P0, A, F0, tau, opt_params):
                 print("PdiffSum = " + str(jnp.sum(jnp.abs(Pdiff))))
                 print("mcp = " + str(jnp.min(F)))
 
-
         # if(iter % 2000 == 0):
         #     # cut the step size in half
-        #     eps0 = eps0/2
-        #     optimizer = optax.sgd(eps0, momentum=0.99, nesterov=True)
+        #     eps = eps/2
+        #     optimizer = optax.sgd(eps, momentum=0.99, nesterov=True)
         #     opt_state = optimizer.init(P)
 
         # check for element-wise convergence, update moving average absPdiffSum and iteration counter:
         if(iter > opt_params["numRecPdiffs"]):
-            converged = newMAPdiff < opt_params["radius"]
-        oldMAPdiff = newMAPdiff
+            converged = newMAPdiffSum < opt_params["radius"]
+        oldMAPdiffSum = newMAPdiffSum
         if iter == opt_params["maxIters"]:
             converged = True
         iter = iter + 1
 
-    # -----------------convergence or max iteration count reached----------------------------    
+    # convergence or max iteration count reached...
     if opt_params["gradMode"] == "mcp_parametrization":
         P = getPfromParam(Q, A)
 
@@ -279,8 +165,8 @@ def exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode, save=
     F0 = jnp.full((n, n, tau), np.NaN)
     initPs = initRandPs(A, numInitPs)
 
-    initSteps = np.zeros(numInitPs, dtype='float32')
-    stepScales = np.zeros(numInitPs, dtype='float32')
+    learningRates = np.zeros(numInitPs, dtype='float32')
+    lrScales = np.zeros(numInitPs, dtype='float32')
     convIters = np.zeros(numInitPs, dtype='float32')
     convTimes = np.zeros(numInitPs, dtype='float32')
     finalMCPs = np.zeros(numInitPs, dtype='float32')
@@ -288,7 +174,7 @@ def exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode, save=
     opt_params = {
         "radius" : 0.01,
         "numRecPdiffs" : 200,
-        "eps0" : None,
+        "eps" : None,
         "maxIters" : 20000,
         "gradMode" : gradMode,
         "lcpNum" : int(np.ceil((n**2)/10))
@@ -311,27 +197,20 @@ def exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode, save=
     for k in range(numInitPs):
         print("Optimizing with initial P matrix number " + str(k + 1) + "...")
         P0 = initPs[:, :, k]
-        if gradMode == "mcp_projection":
-            initGrad = compMCPGradJIT(P0, A, F0, tau)  
-        elif gradMode == "mcp_parametrization":
-            initGrad = compLossGrad(P0, A, F0, tau)  
-        else:
-            initGrad = compAvgLCPGradJIT(P0, A, F0, tau, opt_params["lcpNum"])  
-
-        # TO BE REPLACED BY setStepSize function: ----------------------------
-        stepScale = np.max(initGrad)
-        stepScales[k] = stepScale
-        eps0 = 0.01/stepScale
-        opt_params["eps0"] = eps0
-        initSteps[k] = eps0
+        eps, lrScale = setLearningRate(P0, A, F0, tau, opt_params["lcpNum"], 0.01, gradMode)
+        lrScales[k] = lrScale
+        opt_params["eps"] = eps
+        learningRates[k] = eps
         # --------------------------------------------------------------------
         start_time = time.time()
         P, F, trackedVals = sgd_GradConv(P0, A, F0, tau, opt_params)
-        convIters[k] = trackedVals["finalIters"][0]
         convTime = time.time() - start_time
-        convTimes[k] = convTime
-        finalMCPs[k] = trackedVals["finalMCP"][0]
         print("--- Optimization took: %s seconds ---" % (convTime))
+        # --------------------------------------------------------------------
+        convTimes[k] = convTime
+        convIters[k] = trackedVals["finalIters"][0]
+        finalMCPs[k] = trackedVals["finalMCP"][0]
+        
         if(save):
             # Save initial and optimized P matrices:
             np.savetxt(graph_dir + "/init_P_" + str(k + 1) + ".csv", P0, delimiter=',')
@@ -364,31 +243,24 @@ def exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode, save=
             info.write("Convergence radius = " + str(opt_params["radius"]) + "\n")
             info.write("Moving average window size (numRecPs) = " + str(opt_params["numRecPdiffs"]) + "\n")
             info.write("Max allowed number of iterations (maxIters) = " + str(opt_params["maxIters"]) + "\n")
-            info.write("Initial Step Sizes (initSteps) = " + str(initSteps) + "\n")
-            info.write("Max element of initial MCP gradients (stepScales) = " + str(stepScales) + "\n")
+            info.write("Learning Rates (eps) = " + str(learningRates) + "\n")
+            info.write("Max element of initial MCP gradients (lrScales) = " + str(lrScales) + "\n")
             info.write("Final MCP achieved = " + str(finalMCPs) + "\n")
             info.write("Number of iterations required = " + str(convIters) + "\n")
             info.write("Optimization Times Required (seconds) = " + str(convTimes) + "\n")
         info.close()
 
 
-def setStepSize(A, tau, eps0, numInitPs):
-    absGradSums = jnp.zeros(numInitPs)
-    absGradMaxs = jnp.zeros(numInitPs)
-    initPs = initRandPs(A, numInitPs)
-    n = A.shape[0]
-    F0 = jnp.full((n, n, tau), np.NaN)
-    for k in range(numInitPs):
-        P0 = initPs[:, :, k]
-        initMCPGrad = compMCPGradJIT(P0, F0, tau)  
-        absGradSums = absGradSums.at[k].set(jnp.sum(jnp.abs(initMCPGrad)))
-        absGradMaxs = absGradMaxs.at[k].set(jnp.max(jnp.abs(initMCPGrad)))
-    meanGradSum = jnp.mean(absGradSums)
-    meanGradMax = jnp.mean(absGradMaxs)
-    # stepSize = eps0 + 10*(0.1 - meanGradSum)
-    # stepSize = eps0 - 0.01*(jnp.log10(meanGradSum/10))
-    stepSize = -eps0/jnp.log10(meanGradSum)
-    return stepSize, meanGradSum, meanGradMax, absGradMaxs
+def setLearningRate(P0, A, F0, tau, lcpNum, eps0, gradMode):
+    if gradMode == "mcp_projection":
+        initGrad = compMCPGradJIT(P0, A, F0, tau)  
+    elif gradMode == "mcp_parametrization":
+        initGrad = compLossGrad(P0, A, F0, tau)  
+    else:
+        initGrad = compAvgLCPGradJIT(P0, A, F0, tau, lcpNum)  
+    lrScale = jnp.max(initGrad)
+    eps = eps0/lrScale
+    return eps, lrScale
 
 
 # TESTING ------------------------------------------------------------------------
@@ -400,41 +272,41 @@ if __name__ == '__main__':
     rightLeavesR = np.arange(2, 5)
     midLineLenR = np.arange(2, 5)
 
-    testSetName = "test_set_2"
+    testSetName = "temp"
     project_dir = os.getcwd()
     results_dir = os.path.join(project_dir, "Results/test_set_" + str(testSetName))
     if os.path.isdir(results_dir):
         input("WARNING! The test set directory already exists, press enter to continue and overwrite data.")
 
 
-    # test_graphs = []
-    # test_graphs.append(genGridG(3, 3))
+    test_graphs = []
+    test_graphs.append(genGridG(3, 3))
     # # test_graphs.append(genGridG(3, 3))
     # test_graphs.append(genStarG(6))
     # # test_graphs.append(genStarG(6))
     # # test_taus = [4, 6, 2, 4]
-    # test_taus = [4, 4]
+    test_taus = [4]
     graphNum = 1
     numInitPs = 10
     test_start_time = time.time()
-    for i in range(len(midLineLenR)):
-        for j in range(len(rightLeavesR)):
-            for k in range(len(leftLeavesR)):
-    # for i in range(1):
-    #     for j in range(1):
-    #         for k in range(len(test_graphs)):
+    # for i in range(len(midLineLenR)):
+    #     for j in range(len(rightLeavesR)):
+    #         for k in range(len(leftLeavesR)):
+    for i in range(1):
+        for j in range(1):
+            for k in range(len(test_graphs)):
                 print("-------- Working on Graph Number " + str(graphNum) + "----------")
-                A = genSplitStarG(leftLeavesR[k], rightLeavesR[j], midLineLenR[i])
+                # A = genSplitStarG(leftLeavesR[k], rightLeavesR[j], midLineLenR[i])
                 # A = genStarG(6)
                 # A = genGridG(k, k+1)
-                # A = test_graphs[k]
-                # tau = test_taus[k]
-                tau1 = midLineLenR[i] + 1 
-                tau2 = midLineLenR[i] + 3
-                exploreGraphOptima(A, tau1, testSetName, graphNum, numInitPs, gradMode="mcp_parametrization")
-                exploreGraphOptima(A, tau2, testSetName, graphNum, numInitPs, gradMode="mcp_parametrization")
+                A = test_graphs[k]
+                tau = test_taus[k]
+                # tau1 = midLineLenR[i] + 1 
+                # tau2 = midLineLenR[i] + 3
+                exploreGraphOptima(A, tau, testSetName, graphNum, numInitPs, gradMode="mcp_parametrization")
+                # exploreGraphOptima(A, tau2, testSetName, graphNum, numInitPs, gradMode="mcp_parametrization")
                 graphNum = graphNum + 1
-    print("Running test_set_2 took " + str(time.time() - test_start_time) + " seconds to complete.")
+    print("Running test_set_" + test_set_name + " took " + str(time.time() - test_start_time) + " seconds to complete.")
     # Visualization:
     visMetrics(testSetName, overlay=True)
     visResults(testSetName)

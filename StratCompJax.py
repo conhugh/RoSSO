@@ -4,7 +4,6 @@ import numpy as np
 import math
 import time, timeit
 import jax
-from jax import random
 import functools
 from jax import grad, jacfwd, jacrev, jit, devices, lax
 import jax.numpy as jnp
@@ -28,12 +27,12 @@ def initRandP(A):
     numpy.ndarray
         Valid, random initial transition probability matrix. 
     """
-    key = random.PRNGKey(1)
+    key = jax.random.PRNGKey(1)
     P0 = jnp.zeros_like(A, dtype='float32')
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             if A[i, j] != 0:
-                P0 = P0.at[i, j].set(random.uniform(key))
+                P0 = P0.at[i, j].set(jax.random.uniform(key))
     P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
     return P0
     
@@ -58,7 +57,7 @@ def initRandPkey(A, key):
         Valid, random initial transition probability matrix. 
     """
     A_shape = jnp.shape(A)
-    P0 = random.uniform(key, A_shape)
+    P0 = jax.random.uniform(key, A_shape)
     P0 = A*P0
     P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
     return P0
@@ -84,10 +83,10 @@ def initRandPs(A, num):
     --------
     initRandPseed
     """
-    key = random.PRNGKey(0)
+    key = jax.random.PRNGKey(0)
     initPs = jnp.zeros((A.shape[0], A.shape[1], num),  dtype='float32')
     for k in range(num):
-        key, subkey = random.split(key)
+        key, subkey = jax.random.split(key)
         initPs = initPs.at[:, : , k].set(initRandPkey(A, subkey))
     return initPs
 
@@ -605,10 +604,10 @@ if __name__ == '__main__':
     # print(jax.devices())
 
 
-    key = random.PRNGKey(1)
+    key = jax.random.PRNGKey(1)
     print(type(key))
     print(key)
-    newkey, subkey = random.split(key)
+    newkey, subkey = jax.random.split(key)
     print(type(newkey))
     print(type(subkey))
     print(newkey)
@@ -634,8 +633,8 @@ if __name__ == '__main__':
     # n = A_shape[0]
     # initPs = jnp.full((n, n, numInitPs), np.NaN)
     # for k in range(numInitPs):
-    #     key = random.PRNGKey(k)
-    #     P0 = random.uniform(key, A_shape)
+    #     key = jax.random.PRNGKey(k)
+    #     P0 = jax.random.uniform(key, A_shape)
     #     initPs = initPs.at[:, :, k].set(P0)
 
     # for k in range(numInitPs):
