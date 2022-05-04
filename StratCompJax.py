@@ -119,7 +119,7 @@ def genGraphCode(A):
 
 def genStarG(n):
     """
-    Generate binary adjacency matrix for a star graph with n nodes.
+    Generate binary adjacency matrix for a star graph with `n` nodes.
 
     Parameters
     ----------
@@ -129,7 +129,7 @@ def genStarG(n):
     Returns
     -------
     numpy.ndarray
-        Binary adjacency matrix for the star graph with n nodes. 
+        Binary adjacency matrix for the star graph with `n` nodes. 
     """
     A = jnp.identity(n)
     A = A.at[0, :].set(jnp.ones(n))
@@ -138,7 +138,7 @@ def genStarG(n):
 
 def genLineG(n):
     """
-    Generate binary adjacency matrix for a line graph with n nodes.
+    Generate binary adjacency matrix for a line graph with `n` nodes.
 
     Parameters
     ----------
@@ -148,7 +148,7 @@ def genLineG(n):
     Returns
     -------
     numpy.ndarray
-        Binary adjacency matrix for the line graph with n nodes. 
+        Binary adjacency matrix for the line graph with `n` nodes. 
     """
     A = jnp.identity(n)
     A = A + jnp.diag(jnp.ones(n - 1), 1)
@@ -222,7 +222,7 @@ def genGridG(width, height):
 
 def genCycleG(n):
     """
-    Generate binary adjacency matrix for a cycle graph. 
+    Generate binary adjacency matrix for a cycle graph with `n` nodes. 
 
     Parameters
     ----------

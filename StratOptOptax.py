@@ -399,10 +399,6 @@ if __name__ == '__main__':
     leftLeavesR = np.arange(3, 6)
     rightLeavesR = np.arange(2, 5)
     midLineLenR = np.arange(2, 5)
-    # leftLeavesR = np.array([5])
-    # rightLeavesR = np.array([4])
-    # midLineLenR = np.array([4])
-
 
     testSetName = "test_set_2"
     project_dir = os.getcwd()
@@ -410,8 +406,7 @@ if __name__ == '__main__':
     if os.path.isdir(results_dir):
         input("WARNING! The test set directory already exists, press enter to continue and overwrite data.")
 
-    graphNum = 1
-    numInitPs = 10
+
     # test_graphs = []
     # test_graphs.append(genGridG(3, 3))
     # # test_graphs.append(genGridG(3, 3))
@@ -419,13 +414,12 @@ if __name__ == '__main__':
     # # test_graphs.append(genStarG(6))
     # # test_taus = [4, 6, 2, 4]
     # test_taus = [4, 4]
+    graphNum = 1
+    numInitPs = 10
     test_start_time = time.time()
     for i in range(len(midLineLenR)):
         for j in range(len(rightLeavesR)):
             for k in range(len(leftLeavesR)):
-    # for i in range(2, 3):
-    #     for j in range(2, 3):
-    #         for k in range(2, 3):
     # for i in range(1):
     #     for j in range(1):
     #         for k in range(len(test_graphs)):
@@ -435,8 +429,6 @@ if __name__ == '__main__':
                 # A = genGridG(k, k+1)
                 # A = test_graphs[k]
                 # tau = test_taus[k]
-                # tau1 = 2
-                # tau2 = 4
                 tau1 = midLineLenR[i] + 1 
                 tau2 = midLineLenR[i] + 3
                 exploreGraphOptima(A, tau1, testSetName, graphNum, numInitPs, gradMode="mcp_parametrization")
