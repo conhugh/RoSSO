@@ -1,0 +1,37 @@
+---------- Graph Information ----------
+Number of nodes (n) = 6
+Graph Name = complete_N6
+Attack Duration (tau) = 2
+Graph Code = N6_65535
+
+---------- Optimizer Information ----------
+Optimizer used = adagrad
+
+Optimizer Parameters from Test Specification:
+{
+    "optimizer_name": "adagrad",
+    "grad_mode": "MCP_parametrization",
+    "num_init_Ps": 15,
+    "conv_test_mode": "P_update",
+    "conv_radius": 0.002,
+    "conv_window_size": 200,
+    "P_update_elt_bound": 0.5,
+    "nominal_learning_rate": 0.005,
+    "use_momentum": true,
+    "mom_decay_rate": 0.99,
+    "use_nesterov": true,
+    "max_iters": 5000,
+    "use_P_update_bound_schedule": false,
+    "use_learning_rate_schedule": false,
+    "use_num_LCPs_schedule": false,
+    "num_LCPs": 4,
+    "iters_per_printout": 200,
+    "iters_per_trackvals": 10
+}
+
+Optimizer Parameters computed during testing:
+Scaled Learning Rates = [0.00416572 0.00590992 0.0043422  0.00487852 0.00451912 0.00472974 0.00471937 0.00481099 0.00574994 0.00488806 0.00532423 0.00449407 0.00408448 0.00427753 0.00437246]
+Max absolute-value elements of initial MCP gradients = [1.2002718 0.8460354 1.1514894 1.0249002 1.106411  1.0571404 1.0594636 1.0392874 0.8695746 1.0229002 0.9391031 1.112577  1.2241459 1.168899  1.1435204]
+Final MCPs achieved = [0.28906488 0.28124553 0.281387   0.29574358 0.2808965  0.2918657  0.2842307  0.28223795 0.2991472  0.28306907 0.28500926 0.2766257  0.2733533  0.26940247 0.28902507]
+Number of iterations required = [2945, 5001, 3106, 3570, 3998, 3224, 2989, 3530, 5001, 3406, 4506, 3015, 2382, 2605, 2627]
+Optimization Times Required (seconds) = [10.795104026794434, 17.039573431015015, 10.87888765335083, 12.582773923873901, 14.382001399993896, 12.08755350112915, 10.813599586486816, 12.743436813354492, 17.775107622146606, 12.405493021011353, 16.278456926345825, 10.646409034729004, 8.517500162124634, 9.459719896316528, 9.615445375442505]

@@ -1,0 +1,37 @@
+---------- Graph Information ----------
+Number of nodes (n) = 6
+Graph Name = complete_N6
+Attack Duration (tau) = 2
+Graph Code = N6_65535
+
+---------- Optimizer Information ----------
+Optimizer used = sgd
+
+Optimizer Parameters from Test Specification:
+{
+    "optimizer_name": "sgd",
+    "grad_mode": "MCP_parametrization",
+    "num_init_Ps": 5,
+    "conv_test_mode": "P_update",
+    "conv_radius": 0.002,
+    "conv_window_size": 200,
+    "P_update_elt_bound": 0.5,
+    "nominal_learning_rate": 0.01,
+    "use_momentum": true,
+    "mom_decay_rate": 0.99,
+    "use_nesterov": true,
+    "max_iters": 5000,
+    "use_P_update_bound_schedule": false,
+    "use_learning_rate_schedule": false,
+    "use_num_LCPs_schedule": false,
+    "num_LCPs": 4,
+    "iters_per_printout": 200,
+    "iters_per_trackvals": 10
+}
+
+Optimizer Parameters computed during testing:
+Scaled Learning Rates = [0.00833145 0.01181984 0.00868441 0.00975705 0.00903823]
+Max absolute-value elements of initial MCP gradients = [1.2002718 0.8460354 1.1514894 1.0249002 1.106411 ]
+Final MCPs achieved = [0.30474412 0.33241245 0.33235723 0.33249038 0.33232555]
+Number of iterations required = [5001, 5001, 5001, 5001, 5001]
+Optimization Times Required (seconds) = [15.5322425365448, 14.326144695281982, 14.419317960739136, 14.840171098709106, 14.112946271896362]
