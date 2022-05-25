@@ -4,7 +4,6 @@ import numpy as np
 import math
 import time, timeit
 import jax
-from jax import random
 import functools
 from jax import grad, jacfwd, jacrev, jit, devices, lax
 import jax.numpy as jnp
@@ -28,12 +27,12 @@ def initRandP(A):
     numpy.ndarray
         Valid, random initial transition probability matrix. 
     """
-    key = random.PRNGKey(1)
+    key = jax.random.PRNGKey(1)
     P0 = jnp.zeros_like(A, dtype='float32')
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             if A[i, j] != 0:
-                P0 = P0.at[i, j].set(random.uniform(key))
+                P0 = P0.at[i, j].set(jax.random.uniform(key))
     P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
     return P0
     
@@ -58,39 +57,11 @@ def initRandPkey(A, key):
         Valid, random initial transition probability matrix. 
     """
     A_shape = jnp.shape(A)
-    P0 = random.uniform(key, A_shape)
+    P0 = jax.random.uniform(key, A_shape)
     P0 = A*P0
     P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
     return P0
 
-def initRandPtest(A, key):
-    A_shape = jnp.shape(A)
-    start_time = time.time()
-    P0 = random.uniform(key, A_shape)
-    P0 = A*P0
-    print("P0 initial creation took %s seconds" % str(time.time() - start_time))
-    # print(P0)
-    start_time = time.time()
-    P0 = projOntoSimplexJIT(P0)
-    # P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
-    # print("P0 row normalization took %s seconds" % str(time.time() - start_time))
-    print("P0 simplex projection took %s seconds" % str(time.time() - start_time))
-    return P0
-
-def initRandProwtest(A, key):
-    A_shape = jnp.shape(A)
-    start_time = time.time()
-    P0 = random.uniform(key, A_shape)
-    P0 = A*P0
-    print("P0 initial creation took %s seconds" % str(time.time() - start_time))
-    # print(P0)
-    start_time = time.time()
-    for i in range(A_shape[0]):
-        P0 = P0.at[i, :].set(projRowOntoSimplexJIT(P0[i, :]))
-    # P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
-    # print("P0 row normalization took %s seconds" % str(time.time() - start_time))
-    print("P0 simplex projection took %s seconds" % str(time.time() - start_time))
-    return P0
 
 def initRandPs(A, num):
     """
@@ -112,25 +83,29 @@ def initRandPs(A, num):
     --------
     initRandPseed
     """
-    key = random.PRNGKey(0)
+    key = jax.random.PRNGKey(0)
     initPs = jnp.zeros((A.shape[0], A.shape[1], num),  dtype='float32')
     for k in range(num):
-        key, subkey = random.split(key)
+        key, subkey = jax.random.split(key)
         initPs = initPs.at[:, : , k].set(initRandPkey(A, subkey))
     return initPs
 
-def initRandPsRowTest(A, num):
-    key = random.PRNGKey(0)
-    initPs_row = jnp.zeros((A.shape[0], A.shape[1], num),  dtype='float32')
-    initPs_orig = jnp.zeros((A.shape[0], A.shape[1], num),  dtype='float32')
-    for k in range(num):
-        key, subkey = random.split(key)
-        initPs_row = initPs_row.at[:, : , k].set(initRandProwtest(A, subkey))
-        initPs_orig = initPs_orig.at[:, : , k].set(initRandPtest(A, subkey))
-    return initPs_row, initPs_orig
-
 
 def genGraphCode(A):
+    """
+    Generate a unique code representing the environment graph.
+
+    Parameters
+    ----------
+    A : numpy.ndarray 
+        Binary adjacency matrix of the environment graph.
+
+    Returns
+    -------
+    String
+        Unique encoding of the binary adjacency matrix.
+    
+    """
     bin_string = ""
     for i in range(A.shape[0] - 1):
         for j in range(i + 1, A.shape[1]):
@@ -143,17 +118,17 @@ def genGraphCode(A):
 
 def genStarG(n):
     """
-    Generate binary adjacency matrix for a star graph with n nodes.
+    Generate binary adjacency matrix for a star graph with `n` nodes.
 
     Parameters
     ----------
     n : int 
         Number of nodes in the star graph.
-    
+
     Returns
     -------
     numpy.ndarray
-        Binary adjacency matrix for the star graph with n nodes. 
+        Binary adjacency matrix for the star graph with `n` nodes. 
     """
     A = jnp.identity(n)
     A = A.at[0, :].set(jnp.ones(n))
@@ -162,7 +137,7 @@ def genStarG(n):
 
 def genLineG(n):
     """
-    Generate binary adjacency matrix for a line graph with n nodes.
+    Generate binary adjacency matrix for a line graph with `n` nodes.
 
     Parameters
     ----------
@@ -172,7 +147,7 @@ def genLineG(n):
     Returns
     -------
     numpy.ndarray
-        Binary adjacency matrix for the line graph with n nodes. 
+        Binary adjacency matrix for the line graph with `n` nodes. 
     """
     A = jnp.identity(n)
     A = A + jnp.diag(jnp.ones(n - 1), 1)
@@ -246,7 +221,7 @@ def genGridG(width, height):
 
 def genCycleG(n):
     """
-    Generate binary adjacency matrix for a cycle graph. 
+    Generate binary adjacency matrix for a cycle graph with `n` nodes. 
 
     Parameters
     ----------
@@ -263,33 +238,6 @@ def genCycleG(n):
     A = A.at[n - 1, 0].set(1)
     return A
 
-
-def computeFHTProbMats(P, tau):
-    """
-    Compute First Hitting Time Probability matrices.
-
-    To compute the Capture Probability Matrix, we must sum the First 
-    Hitting Time Probability matrices from 1 up to `tau` time steps. 
-    For more information see https://arxiv.org/pdf/2011.07604.pdf.
-
-    Parameters
-    ----------
-    P : numpy.ndarray 
-        Transition probability matrix. 
-    tau : int
-        Intruder's attack duration. 
-    
-    Returns
-    -------
-    numpy.ndarray
-        Array of `tau` distinct First Hitting Time Probability matrices. 
-    """
-    n = P.shape[0]
-    F = jnp.full((n, n, tau), np.NaN)
-    F = F.at[:, :, 0].set(P)
-    for i in range(1, tau):
-        F = F.at[:, :, i].set(jnp.matmul(P, (F[:, :, i - 1] - jnp.diag(jnp.diag(F[:, :, i - 1])))))
-    return F
 
 @functools.partial(jit, static_argnames=['tau'])
 def computeFHTProbMatsJIT(P, F0, tau):
@@ -319,29 +267,6 @@ def computeFHTProbMatsJIT(P, F0, tau):
         F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
     return F0
 
-def computeCapProbs(P, tau):
-    """
-    Compute Capture Probability Matrix.
-
-    Parameters
-    ----------
-    P : numpy.ndarray 
-        Transition probability matrix. 
-    tau : int
-        Intruder's attack duration. 
-    
-    Returns
-    -------
-    numpy.ndarray
-        Capture Probability matrix. 
-    
-    See Also
-    --------
-    computeFHTProbMats
-    """
-    F = computeFHTProbMats(P, tau)
-    capProbs = jnp.sum(F, axis=2)
-    return capProbs
 
 @functools.partial(jit, static_argnames=['tau'])
 def computeCapProbsJIT(P, F0, tau):
@@ -370,6 +295,7 @@ def computeCapProbsJIT(P, F0, tau):
     capProbs = jnp.sum(F, axis=2)
     return capProbs
 
+
 @functools.partial(jit, static_argnames=['tau'])
 def computeMCPJIT(P, F0, tau):
     """
@@ -396,6 +322,7 @@ def computeMCPJIT(P, F0, tau):
     F = computeCapProbsJIT(P, F0, tau)
     mcp = jnp.min(F)
     return mcp
+    
 
 @functools.partial(jit, static_argnames=['tau', 'lcpNum'])
 def computeLCPsJIT(P, F0, tau, lcpNum):
@@ -423,96 +350,9 @@ def computeLCPsJIT(P, F0, tau, lcpNum):
     computeCapProbsJIT
     """
     F = computeCapProbsJIT(P, F0, tau)
-    n = F.shape[0]
     Fvec = F.flatten('F')
     lcps = jnp.sort(Fvec)[0:lcpNum]
     return lcps
-
-
-def printFHTProbMats(F):
-    """
-    Print the First Hitting Time Probability matrices nicely. 
-
-    Parameters
-    ----------
-    F : numpy.ndarray 
-        Array of First Hitting Time Probability matrices. 
-    """
-    for i in range(F.shape[2]):
-        print("F_" + str(i + 1) + " = " + "\n" + str(F[:, :, i]))
-
-
-
-def compFkJacs(P, tau):
-    """
-    Compute Jacobians of First Hitting Time Probability matrices.
-
-    To compute the Jacobian of the Capture Probability Matrix entries 
-    with respect to the Transition Probability Matrix entries, we sum
-    the Jacobians of the `tau` distinct First Hitting Time Probability 
-    Matrices with respect to the Transition Probability Matrix entries.
-    For more information see [LINK TO DOCUMENT ON GITHUB].
-
-    Parameters
-    ----------
-    P : numpy.ndarray 
-        Transition probability matrix. 
-    tau : int
-        Intruder's attack duration. 
-    
-    Returns
-    -------
-    numpy.ndarray
-        Array of Jacobians of the First Hitting Time Probability matrices. 
-    
-    See Also
-    --------
-    compCPJac
-    """
-    n = P.shape[0]  
-    F = computeFHTProbMats(P, tau) 
-    J = jnp.full([n**2, n**2, tau], np.NaN) # initialize array to store Jacobians of FHT probability matrices
-    J = J.at[:, :, 0].set(jnp.identity(n**2)) # Jacobian of F_1 is the identity matrix
-
-    # generate matrices needed for intermediary steps in computation of Jacobians:
-    Pbar = jnp.zeros([n**2, n**2])
-    for i in range(n):
-        Pbar = Pbar.at[i*n:(i + 1)*n, i*(n + 1)].set(P[:, i])
-    B = jnp.kron(jnp.identity(n), P) - Pbar
-
-    # recursive computation of Jacobians of FHT probability matrices:
-    for i in range(1, tau):
-        J = J.at[:, :, i].set(jnp.kron(jnp.transpose(F[:, :, i - 1]), jnp.identity(n)) - jnp.kron(jnp.diag(jnp.diag(F[:, :, i - 1])), jnp.identity(n)) + jnp.matmul(B, J[:, :, i - 1]))
-
-    return J
-
-
-def compCPJac(P, tau):
-    """
-    Compute Jacobian of Capture Probability Matrix entries.
-
-    Sum Jacobians of FHT probability matrices to get Jacobian of Capture
-    Probability Matrix entries w.r.t. the Transition Probability Matrix entries.
-
-    Parameters
-    ----------
-    P : numpy.ndarray 
-        Transition probability matrix. 
-    tau : int
-        Intruder's attack duration. 
-    
-    Returns
-    -------
-    numpy.ndarray
-        Jacobian of the Capture Probability Matrix entries. 
-
-    See Also
-    --------
-    compFkJacs
-    """
-    J = compFkJacs(P, tau)
-    CPGrad = jnp.sum(J, axis=2)
-    return CPGrad
 
 
 # Autodiff version of Min Cap Prob Gradient computation:
@@ -601,42 +441,6 @@ def projOntoSimplexJIT(P):
             newP = newP.at[i, sortMapping[i, j]].set(newX[i, j])
     return newP
 
-
-def projOntoSimplex(P):
-    """
-    Project rows of the Transition Probability Matrix `P` onto the probability simplex.
-
-    To ensure gradient-based updates to the Transition Probability Matrix maintain
-    row-stochasticity, the rows of the updated Transition Probability Matrix are projected 
-    onto the nearest point on the probability n-simplex, where `n` is the number of
-    columns of `P`.  For further explanation, see [LINK TO DOCUMENT ON GITHUB], and 
-    for more about the projection algorithm used, see https://arxiv.org/abs/1309.1541.
-
-    Parameters
-    ----------
-    P : numpy.ndarray 
-        Transition Probability Matrix after gradient update, potentially invalid. 
-    
-    Returns
-    -------
-    numpy.ndarray
-        Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
-    """
-    n = P.shape[0]
-    sortMapping = jnp.fliplr(jnp.argsort(P, axis=1))
-    X = jnp.full_like(P, np.nan)
-    for i  in range (n):
-        for j in range (n):
-            X = X.at[i, j].set(P[i, sortMapping[i, j]])
-    Xtmp = jnp.matmul(jnp.cumsum(X, axis=1) - 1, jnp.diag(1/jnp.arange(1, n + 1)))
-    rhoVals = jnp.sum(X > Xtmp, axis=1) - 1
-    lambdaVals = -Xtmp[jnp.arange(n), rhoVals]
-    newX = jnp.maximum(X + jnp.outer(lambdaVals, jnp.ones(n)), jnp.zeros([n, n]))
-    newP = jnp.full_like(P, np.nan)
-    for i in range(n):
-        for j in range(n):
-            newP = newP.at[i, sortMapping[i, j]].set(newX[i, j])
-    return newP
 
 @jit
 def projRowOntoSimplexJIT(row):
@@ -800,10 +604,10 @@ if __name__ == '__main__':
     # print(jax.devices())
 
 
-    key = random.PRNGKey(1)
+    key = jax.random.PRNGKey(1)
     print(type(key))
     print(key)
-    newkey, subkey = random.split(key)
+    newkey, subkey = jax.random.split(key)
     print(type(newkey))
     print(type(subkey))
     print(newkey)
@@ -829,8 +633,8 @@ if __name__ == '__main__':
     # n = A_shape[0]
     # initPs = jnp.full((n, n, numInitPs), np.NaN)
     # for k in range(numInitPs):
-    #     key = random.PRNGKey(k)
-    #     P0 = random.uniform(key, A_shape)
+    #     key = jax.random.PRNGKey(k)
+    #     P0 = jax.random.uniform(key, A_shape)
     #     initPs = initPs.at[:, :, k].set(P0)
 
     # for k in range(numInitPs):
