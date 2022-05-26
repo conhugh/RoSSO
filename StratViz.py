@@ -31,8 +31,8 @@ def plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, ti
         opt_P_vec = opt_P_mats[opt_sort_inds[k]].flatten('F')
         init_num = init_run_nums[init_sort_inds[k]]
         opt_num = opt_run_nums[opt_sort_inds[k]]
-        plt.scatter(probs, init_P_vec, marker=".", color="C" + str(init_num), label="Run " + str(init_num))
-        plt.scatter(probs, opt_P_vec, marker="*", color="C" + str(opt_num))
+        plt.scatter(probs, init_P_vec, marker=".", s=16, color="C" + str(init_num), label="Run " + str(init_num))
+        plt.scatter(probs, opt_P_vec, marker=".", s=120, color="C" + str(opt_num))
     plt.xlabel("Pvec Index")
     plt.ylabel("Probability")
     plt.title(title)
@@ -665,13 +665,13 @@ def plot_optimizer_comparison_retro(test_set_name):
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
     
-    test_set_name = "Tau_Study_4x3Grid1"
+    test_set_name = "Complete_Graph_Testing4"
     # visualize_metrics(test_set_name, overlay=True)
     visualize_results(test_set_name)
     visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
     visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
     visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
-    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=10, plot_best_fit=True)
+    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=10, plot_best_fit=True)
     # plot_optimizer_comparison_retro(test_set_name)
 
     # import_testing()

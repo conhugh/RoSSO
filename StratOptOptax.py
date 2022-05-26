@@ -633,8 +633,8 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
     np.set_printoptions(suppress=True)
 
-    test_set_name = "Tau_Study_4x3Grid2"
-    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/tau_study_gridgraphs_v1.json")
+    test_set_name = "Complete_Graph_Testing4"
+    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/complete_graph_test_spec_v2.json")
 
     test_start_time = time.time()
     run_test_set(test_set_name, test_spec)
