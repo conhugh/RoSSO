@@ -1,15 +1,14 @@
 # Computation of quantities relevant to optimization of stochastic surveillance strategies
-import os
+from unittest import TextTestResult
 import numpy as np
-import math
-import time, timeit
+import time
 import jax
 import functools
-from jax import grad, jacfwd, jacrev, jit, devices, lax
+from jax import jacrev, jit
 import jax.numpy as jnp
-from StratViz import *
+# from StratViz import *
 
-def initRandP(A):
+def init_rand_P(A):
     """
     Generate a random initial transition probability matrix.
 
@@ -24,7 +23,7 @@ def initRandP(A):
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Valid, random initial transition probability matrix. 
     """
     key = jax.random.PRNGKey(1)
@@ -36,7 +35,7 @@ def initRandP(A):
     P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
     return P0
     
-def initRandPkey(A, key):
+def init_rand_P_key(A, key):
     """
     Generate a random initial transition probability matrix using PRNG key `key`.
 
@@ -53,7 +52,7 @@ def initRandPkey(A, key):
 
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Valid, random initial transition probability matrix. 
     """
     A_shape = jnp.shape(A)
@@ -63,7 +62,7 @@ def initRandPkey(A, key):
     return P0
 
 
-def initRandPs(A, num):
+def init_rand_Ps(A, num):
     """
     Generate a set of `num` random initial transition probability matrices.
 
@@ -76,24 +75,61 @@ def initRandPs(A, num):
 
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Set of `num` unique, valid, random initial transition probability matrices. 
     
     See Also
     --------
-    initRandPseed
+    init_rand_P_key
     """
     key = jax.random.PRNGKey(0)
     initPs = jnp.zeros((A.shape[0], A.shape[1], num),  dtype='float32')
     for k in range(num):
         key, subkey = jax.random.split(key)
-        initPs = initPs.at[:, : , k].set(initRandPkey(A, subkey))
+        initPs = initPs.at[:, : , k].set(init_rand_P_key(A, subkey))
     return initPs
 
+#     Returns
+#     -------
+#     String
+#         Unique encoding of the binary adjacency matrix.
+    
+#     """
+#     bin_string = "1"  # leading 1 added to avoid issues with decimal conversion in decoding
+#     for i in range(A.shape[0] - 1):
+#         for j in range(i + 1, A.shape[1]):
+#             bin_string = bin_string + str(int(A[i, j]))
+#     graph_num = int(bin_string, base=2)
+#     graph_code = "N" + str(A.shape[0]) + "_" + str(graph_num)
+#     return graph_code
 
-def genGraphCode(A):
+def gen_graph_code(A):
     """
     Generate a unique code representing the environment graph.
+
+    Parameters
+    ----------
+    A : jaxlib.xla_extension.DeviceArray 
+        Binary adjacency matrix of the environment graph.
+
+    Returns
+    -------
+    String
+        Unique encoding of the binary adjacency matrix.
+    
+    """
+    bin_string = "1"  # leading 1 added to avoid issues with decimal conversion in decoding
+    for i in range(jnp.shape(A)[0] - 1):
+        for j in range(i + 1, jnp.shape(A)[1]):
+            bin_string = bin_string + str(int(A[i, j]))
+    graph_num = int(bin_string, base=2)
+    graph_code = "N" + str(A.shape[0]) + "_" + str(graph_num)
+    return graph_code
+
+
+def gen_graph_hexcode(A):
+    """
+    Generate a unique hexadecimal code representing the environment graph.
 
     Parameters
     ----------
@@ -103,20 +139,72 @@ def genGraphCode(A):
     Returns
     -------
     String
-        Unique encoding of the binary adjacency matrix.
-    
+        Unique hexadecimal encoding of the binary adjacency matrix.
+
     """
-    bin_string = ""
+    bin_string = "1" # leading 1 added to avoid issues with decimal conversion in decoding
     for i in range(A.shape[0] - 1):
         for j in range(i + 1, A.shape[1]):
             bin_string = bin_string + str(int(A[i, j]))
-    graphNum = int(bin_string, base=2)
-    graphCode = str(A.shape[0]) + "_" + str(graphNum)
-    return graphCode
+    graph_num = int(bin_string, base=2)
+    graph_hex = hex(graph_num)
+    graph_code = "N" + str(A.shape[0]) + "_" + str(graph_hex).lstrip("0x")
+    return graph_code
 
 
+def graph_decode(graph_code):
+    """
+    Generate binary adjacency matrix of environment graph from graph code.
 
-def genStarG(n):
+    Parameters
+    ----------
+    graph_code : String
+        Unique encoding of the binary adjacency matrix. 
+
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Binary adjacency matrix of the environment graph.
+    
+    """
+    n = int(graph_code[1:graph_code.find("_")])
+    U_dec = int(graph_code[(graph_code.find("_") + 1):])
+    U_bin = bin(U_dec)
+    U_bin_list = list(U_bin[(U_bin.find("b") + 2):]) # skip leading 1 in binary string
+    U_bin_list = [int(x) for x in U_bin_list] 
+    inds = jnp.triu_indices(n, 1)
+    U = jnp.zeros((n, n))
+    U = U.at[inds].set(U_bin_list)
+    A = U + jnp.transpose(U) + jnp.identity(n)
+    return A
+
+def graph_diam(A):
+    """
+    Compute diameter of graph described by binary adjacency matrix `A`.
+
+    Parameters
+    ----------
+    A : jaxlib.xla_extension.DeviceArray
+        Binary adjacency matrix of the environment graph.
+
+    Returns
+    -------
+    int
+        Diameter of the environment graph.
+    
+    """
+    n = jnp.shape(A)[0]
+    if jnp.all(A != 0):
+        return 1
+    A_ = A
+    for i in range(2, n):
+        A_ = jnp.matmul(A, A_)
+        if jnp.all(A_ != 0):
+            return i
+    return np.NaN
+
+
+def gen_star_G(n):
     """
     Generate binary adjacency matrix for a star graph with `n` nodes.
 
@@ -127,15 +215,16 @@ def genStarG(n):
 
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the star graph with `n` nodes. 
     """
+    graph_name = "star_N" + str(n)
     A = jnp.identity(n)
     A = A.at[0, :].set(jnp.ones(n))
     A = A.at[:, 0].set(jnp.ones(n))
-    return A
+    return A, graph_name
 
-def genLineG(n):
+def gen_line_G(n):
     """
     Generate binary adjacency matrix for a line graph with `n` nodes.
 
@@ -146,50 +235,52 @@ def genLineG(n):
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the line graph with `n` nodes. 
     """
+    graph_name = "line_N" + str(n)
     A = jnp.identity(n)
     A = A + jnp.diag(jnp.ones(n - 1), 1)
     A = A + jnp.diag(jnp.ones(n - 1), -1)
-    return A
+    return A, graph_name
 
-def genSplitStarG(leftLeaves, rightLeaves, numLineNodes):
+def gen_split_star_G(left_leaves, right_leaves, num_line_nodes):
     """
     Generate binary adjacency matrix for a "split star" graph. 
 
-    The "split star" graph has a line graph with `numLineNodes` nodes, 
-    with one end of the line being connected to an additional `leftLeaves` 
-    leaf nodes, and the other end having `rightLeaves` leaf nodes. 
+    The "split star" graph has a line graph with `num_line_nodes` nodes, 
+    with one end of the line being connected to an additional `left_leaves` 
+    leaf nodes, and the other end having `right_leaves` leaf nodes. 
 
     Parameters
     ----------
-    leftLeaves : int 
+    left_leaves : int 
         Number of leaf nodes on the left end of the line graph.
-    rightLeaves : int
+    right_leaves : int
         Number of leaf nodes on the right end of the line graph.
-    numLineNodes : int
+    num_line_nodes : int
         Number of nodes in the connecting line graph (excluding leaves).
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the split star graph. 
     """
-    leftStar = jnp.identity(leftLeaves + 1)
-    leftStar = leftStar.at[leftLeaves, :].set(jnp.ones(leftLeaves + 1))
-    leftStar = leftStar.at[:, leftLeaves].set(jnp.ones(leftLeaves + 1))
-    rightStar = genStarG(rightLeaves + 1)
-    midLine = genLineG(numLineNodes)
+    graph_name = "splitstar_L" + str(left_leaves) + "_R" + str(right_leaves) + "_M" + str(num_line_nodes)
+    left_star = jnp.identity(left_leaves + 1)
+    left_star = left_star.at[left_leaves, :].set(jnp.ones(left_leaves + 1))
+    left_star = left_star.at[:, left_leaves].set(jnp.ones(left_leaves + 1))
+    right_star, _ = gen_star_G(right_leaves + 1)
+    mid_line, _ = gen_line_G(num_line_nodes)
 
-    n = leftLeaves + rightLeaves + numLineNodes
-    splitStar = jnp.identity(n)
-    splitStar = splitStar.at[0:(leftLeaves + 1), 0:(leftLeaves + 1)].set(leftStar)
-    splitStar = splitStar.at[leftLeaves:(leftLeaves + numLineNodes), leftLeaves:(leftLeaves + numLineNodes)].set(midLine)
-    splitStar = splitStar.at[(leftLeaves + numLineNodes - 1):n, (leftLeaves + numLineNodes - 1):n].set(rightStar)
-    return splitStar
+    n = left_leaves + right_leaves + num_line_nodes
+    split_star = jnp.identity(n)
+    split_star = split_star.at[0:(left_leaves + 1), 0:(left_leaves + 1)].set(left_star)
+    split_star = split_star.at[left_leaves:(left_leaves + num_line_nodes), left_leaves:(left_leaves + num_line_nodes)].set(mid_line)
+    split_star = split_star.at[(left_leaves + num_line_nodes - 1):n, (left_leaves + num_line_nodes - 1):n].set(right_star)
+    return split_star, graph_name
     
-def genGridG(width, height):
+def gen_grid_G(width, height):
     """
     Generate binary adjacency matrix for a grid graph. 
 
@@ -202,9 +293,10 @@ def genGridG(width, height):
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the grid graph. 
     """
+    graph_name = "grid_W" + str(width) + "_H" + str(height)
     n = width*height
     A = jnp.identity(n)
     A = A + jnp.diag(jnp.ones(n - height), height)
@@ -217,9 +309,9 @@ def genGridG(width, height):
         else:
             A = A.at[k, k + 1].set(1)
             A = A.at[k, k - 1].set(1)
-    return A
+    return A, graph_name
 
-def genCycleG(n):
+def gen_cycle_G(n):
     """
     Generate binary adjacency matrix for a cycle graph with `n` nodes. 
 
@@ -230,17 +322,58 @@ def genCycleG(n):
 
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the cycle graph. 
     """
-    A = genLineG(n)
+    graph_name = "cycle_N" + str(n)
+    A, _ = gen_line_G(n)
     A = A.at[0, n - 1].set(1)
     A = A.at[n - 1, 0].set(1)
+    return A, graph_name
+
+def gen_complete_G(n):
+    """
+    Generate binary adjacency matrix for a complete graph with `n` nodes. 
+
+    Parameters
+    ----------
+    n: int 
+        Number of nodes in the complete graph.
+
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Binary adjacency matrix for the complete graph. 
+    """
+    graph_name = "complete_N" + str(n)
+    A = jnp.ones((n, n))
+    return A, graph_name
+
+def gen_complete_bipartite_G(left_nodes, right_nodes):
+    """
+    Generate binary adjacency matrix for a complete bipartite graph. 
+
+    Parameters
+    ----------
+    left_nodes: int 
+        Number of nodes one one side of the the complete bipartite graph.
+    right_nodes: int 
+        Number of nodes one the other side of the the complete bipartite graph.
+
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Binary adjacency matrix for the complete bipartite graph. 
+    """
+    graph_name = "completebipartite_L" + str(left_nodes) + "_R" + str(right_nodes)
+    n = left_nodes + right_nodes
+    A = jnp.identity(n)
+    A = A.at[:left_nodes, left_nodes:].set(jnp.ones((left_nodes, right_nodes)))
+    A = A.at[left_nodes:, :left_nodes].set(jnp.ones((right_nodes, left_nodes)))
     return A
 
-
 @functools.partial(jit, static_argnames=['tau'])
-def computeFHTProbMatsJIT(P, F0, tau):
+def compute_FHT_probs(P, F0, tau):
     """
     Compute First Hitting Time (FHT) Probability matrices.
 
@@ -269,7 +402,7 @@ def computeFHTProbMatsJIT(P, F0, tau):
 
 
 @functools.partial(jit, static_argnames=['tau'])
-def computeCapProbsJIT(P, F0, tau):
+def compute_cap_probs(P, F0, tau):
     """
     Compute Capture Probability Matrix.
 
@@ -289,15 +422,15 @@ def computeCapProbsJIT(P, F0, tau):
     
     See Also
     --------
-    computeFHTProbMatsJIT
+    compute_FHT_probs
     """
-    F = computeFHTProbMatsJIT(P, F0, tau)
-    capProbs = jnp.sum(F, axis=2)
-    return capProbs
+    F = compute_FHT_probs(P, F0, tau)
+    cap_probs = jnp.sum(F, axis=2)
+    return cap_probs
 
 
 @functools.partial(jit, static_argnames=['tau'])
-def computeMCPJIT(P, F0, tau):
+def compute_MCP(P, F0, tau):
     """
     Compute Minimum Capture Probability.
 
@@ -317,17 +450,17 @@ def computeMCPJIT(P, F0, tau):
     
     See Also
     --------
-    computeCapProbsJIT
+    compute_cap_probs
     """
-    F = computeCapProbsJIT(P, F0, tau)
+    F = compute_cap_probs(P, F0, tau)
     mcp = jnp.min(F)
     return mcp
     
 
-@functools.partial(jit, static_argnames=['tau', 'lcpNum'])
-def computeLCPsJIT(P, F0, tau, lcpNum):
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
+def compute_LCPs(P, F0, tau, num_LCPs):
     """
-    Compute Lowest `lcpNum` Capture Probabilities.
+    Compute Lowest `num_LCPs` Capture Probabilities.
 
     Parameters
     ----------
@@ -337,75 +470,112 @@ def computeLCPsJIT(P, F0, tau, lcpNum):
         Placeholder to be populated with FHT Probability matrices.
     tau : int
         Intruder's attack duration. 
-    lcpNum : int
+    num_LCPs : int
         Number of the lowest capture probabilities to compute. 
     
     Returns
     -------
     numpy.ndarray
-        Set of `lcpNum` lowest capture probabilities. 
+        Set of `num_LCPs` lowest capture probabilities. 
     
     See Also
     --------
-    computeCapProbsJIT
+    compute_cap_probs
     """
-    F = computeCapProbsJIT(P, F0, tau)
-    Fvec = F.flatten('F')
-    lcps = jnp.sort(Fvec)[0:lcpNum]
+    F = compute_cap_probs(P, F0, tau)
+    F_vec = F.flatten('F')
+    lcps = jnp.sort(F_vec)[0:num_LCPs]
     return lcps
 
 
 # Autodiff version of Min Cap Prob Gradient computation:
-compMCPGradAuto = jacrev(computeMCPJIT)
+_comp_MCP_grad = jacrev(compute_MCP)
 # wrapper function:
 @functools.partial(jit, static_argnames=['tau'])
-def compMCPGradJIT(P, A, F0, tau):
-    G = compMCPGradAuto(P, F0, tau)
+def comp_MCP_grad(P, A, F0, tau):
+    G = _comp_MCP_grad(P, F0, tau)
     G = G*A
     return G
 
 # Autodiff version of Lowest Cap Probs Gradient computation:
-compLCPGradsAuto = jacrev(computeLCPsJIT)
+_comp_LCP_grads = jacrev(compute_LCPs)
 # wrapper function:
-@functools.partial(jit, static_argnames=['tau', 'lcpNum'])
-def compLCPGradsJIT(P, A, F0, tau, lcpNum):
-    G = compLCPGradsAuto(P, F0, tau, lcpNum)
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
+def comp_LCP_grads(P, A, F0, tau, num_LCPs):
+    G = _comp_LCP_grads(P, F0, tau, num_LCPs)
     G = G*A
     return G
 
 # Autodiff version of average Lowest Cap Probs Gradient computation:
-@functools.partial(jit, static_argnames=['tau', 'lcpNum'])
-def compAvgLCPGradJIT(P, A, F0, tau, lcpNum):
-    G = compLCPGradsAuto(P, F0, tau, lcpNum)
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
+def comp_avg_LCP_grad(P, A, F0, tau, num_LCPs):
+    G = _comp_LCP_grads(P, F0, tau, num_LCPs)
     G = G*A
-    avgG = jnp.mean(G, axis=0)
-    return avgG
+    G_avg = jnp.mean(G, axis=0)
+    return G_avg
 
 # Parametrization of the P matrix
 @functools.partial(jit, static_argnames=['tau'])
-def getPfromParam(Q, A):
+def comp_P_param(Q, A):
     P = Q*A
     P = jnp.maximum(jnp.zeros_like(P), P) # apply component-wise ReLU
     P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize to generate valid prob dist
     return P
 
+# Parametrization of the P matrix
+@functools.partial(jit, static_argnames=['tau'])
+def comp_P_param_abs(Q, A):
+    P = Q*A
+    P = jnp.abs(P) # apply component-wise absolute-value
+    P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize to generate valid prob dist
+    return P
+
 # Loss function with constraints included in parametrization
 @functools.partial(jit, static_argnames=['tau'])
-def loss(Q, A, F0, tau):
-    P = getPfromParam(Q, A)
-    mcp = computeMCPJIT(P, F0, tau)
+def loss_MCP(Q, A, F0, tau):
+    P = comp_P_param(Q, A)
+    mcp = compute_MCP(P, F0, tau)
+    return mcp
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['tau'])
+def loss_MCP_abs(Q, A, F0, tau):
+    P = comp_P_param_abs(Q, A)
+    mcp = compute_MCP(P, F0, tau)
     return mcp
 
 # Autodiff parametrized loss function
-compLossGradAuto = jacrev(loss)
+_comp_MCP_grad_param = jacrev(loss_MCP)
 @functools.partial(jit, static_argnames=['tau'])
-def compLossGrad(Q, A, F0, tau):
-    G = compLossGradAuto(Q, A, F0, tau) 
-    return G
+def comp_MCP_grad_param(Q, A, F0, tau):
+    grad = _comp_MCP_grad_param(Q, A, F0, tau) 
+    return grad
+
+# Autodiff parametrized loss function
+_comp_MCP_grad_param_abs = jacrev(loss_MCP_abs)
+@functools.partial(jit, static_argnames=['tau'])
+def comp_MCP_grad_param_abs(Q, A, F0, tau):
+    grad = _comp_MCP_grad_param_abs(Q, A, F0, tau) 
+    return grad
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
+def loss_LCP(Q, A, F0, tau, num_LCPs):
+    P = comp_P_param(Q, A)
+    lcps = compute_LCPs(P, F0, tau, num_LCPs)
+    return lcps
+
+# Autodiff parametrized loss function
+_comp_LCP_grads_param = jacrev(loss_LCP)
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
+def comp_avg_LCP_grad_param(Q, A, F0, tau, num_LCPs):
+    J = _comp_LCP_grads_param(Q, A, F0, tau, num_LCPs) 
+    grad = jnp.mean(J, axis=0)
+    return grad
     
 
 @jit
-def projOntoSimplexJIT(P):
+def proj_onto_simplex(P):
     """
     Project rows of the Transition Probability Matrix `P` onto the probability simplex.
 
@@ -426,24 +596,24 @@ def projOntoSimplexJIT(P):
         Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
     """
     n = P.shape[0]
-    sortMapping = jnp.fliplr(jnp.argsort(P, axis=1))
+    sort_map = jnp.fliplr(jnp.argsort(P, axis=1))
     X = jnp.full_like(P, np.nan)
     for i  in range (n):
         for j in range (n):
-            X = X.at[i, j].set(P[i, sortMapping[i, j]])
-    Xtmp = jnp.matmul(jnp.cumsum(X, axis=1) - 1, jnp.diag(1/jnp.arange(1, n + 1)))
-    rhoVals = jnp.sum(X > Xtmp, axis=1) - 1
-    lambdaVals = -Xtmp[jnp.arange(n), rhoVals]
-    newX = jnp.maximum(X + jnp.outer(lambdaVals, jnp.ones(n)), jnp.zeros([n, n]))
-    newP = jnp.full_like(P, np.nan)
+            X = X.at[i, j].set(P[i, sort_map[i, j]])
+    X_tmp = jnp.matmul(jnp.cumsum(X, axis=1) - 1, jnp.diag(1/jnp.arange(1, n + 1)))
+    rho_vals = jnp.sum(X > X_tmp, axis=1) - 1
+    lambda_vals = -X_tmp[jnp.arange(n), rho_vals]
+    X_new = jnp.maximum(X + jnp.outer(lambda_vals, jnp.ones(n)), jnp.zeros([n, n]))
+    P_new = jnp.full_like(P, np.nan)
     for i in range(n):
         for j in range(n):
-            newP = newP.at[i, sortMapping[i, j]].set(newX[i, j])
-    return newP
+            P_new = P_new.at[i, sort_map[i, j]].set(X_new[i, j])
+    return P_new
 
 
 @jit
-def projRowOntoSimplexJIT(row):
+def proj_row_onto_simplex(row):
     """
     Project rows of the Transition Probability Matrix `P` onto the probability simplex.
 
@@ -464,21 +634,21 @@ def projRowOntoSimplexJIT(row):
         Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
     """
     n = len(row)
-    sortMapping = jnp.flip(jnp.argsort(row))
+    sort_map = jnp.flip(jnp.argsort(row))
     X = jnp.full_like(row, np.nan)
     for j in range (n):
-        X = X.at[j].set(row[sortMapping[j]])
-    Xtmp = jnp.matmul(jnp.cumsum(X) - 1, jnp.diag(1/jnp.arange(1, n + 1)))
-    rhoVal = jnp.sum(X > Xtmp) - 1
-    lambdaVal = -Xtmp[rhoVal]
-    newX = jnp.maximum(X + lambdaVal, jnp.zeros((n)))
-    newRow = jnp.full_like(row, np.nan)
+        X = X.at[j].set(row[sort_map[j]])
+    X_tmp = jnp.matmul(jnp.cumsum(X) - 1, jnp.diag(1/jnp.arange(1, n + 1)))
+    rho = jnp.sum(X > X_tmp) - 1
+    lambda_ = -X_tmp[rho]
+    X_new = jnp.maximum(X + lambda_, jnp.zeros((n)))
+    new_row = jnp.full_like(row, np.nan)
     for j in range(n):
-        newRow = newRow.at[sortMapping[j]].set(newX[j])
-    return newRow
+        new_row = new_row.at[sort_map[j]].set(X_new[j])
+    return new_row
 
 
-def projRowOntoSimplexTest(row):
+def proj_row_onto_simplex_test(row):
     """
     Project rows of the Transition Probability Matrix `P` onto the probability simplex.
 
@@ -521,9 +691,9 @@ def projRowOntoSimplexTest(row):
             v.append(yn)
             rho = rho + (yn - rho)/(len(v))
     # ELEMENT ELIMINATION LOOP:
-    lenChange = True
-    while lenChange:
-        cardV = len(v)
+    len_change = True
+    while len_change:
+        v_len = len(v)
         k = 0
         while k < len(v):
             if v[k] <= rho:
@@ -531,15 +701,15 @@ def projRowOntoSimplexTest(row):
                 rho = rho + (rho - y)/(len(v))
             else:
                 k = k + 1
-        if cardV == len(v):
-            lenChange = False
+        if v_len == len(v):
+            len_change = False
     tau = rho
     # PROJECTION:
     row = jnp.maximum(row - tau, jnp.zeros(jnp.shape(row)))
     return row
 
 # @jit
-# def projRowOntoSimplexMichelot(row):
+# def proj_row_onto_simplex_michelot(row):
 #     """
 #     Project rows of the Transition Probability Matrix `P` onto the probability simplex.
 
@@ -566,9 +736,9 @@ def projRowOntoSimplexTest(row):
 #     print(len(v))
 #     rho = (jnp.sum(row) - 1)/len(row)
 #     # ELEMENT ELIMINATION LOOP:
-#     lenChange = True
-#     while lenChange:
-#         cardV = len(v)
+#     len_change = True
+#     while len_change:
+#         v_len = len(v)
 #         k = 0
 #         # while k < len(v):
 #         #     lax.cond(v[k] <= rho, lambda v, k : jnp.delete(v, k), lambda k : k + 1, v, k)
@@ -578,22 +748,94 @@ def projRowOntoSimplexTest(row):
 #         #     # else:
 #         #     #     k = k + 1
 #         # rho = (jnp.sum(v) - 1)/(len(v))
-#         v, rho = elimElts(v, rho)
-#         if cardV == len(v):
-#             lenChange = False
+#         v, rho = elim_elts(v, rho)
+#         if v_len == len(v):
+#             len_change = False
 #     tau = rho
 #     # PROJECTION:
 #     row = jnp.maximum(row - tau, jnp.zeros(jnp.shape(row)))
 #     return row
 
 # @jit
-# def elimElts(v, rho):
-#     rhoVals = jnp.full_like(v, rho)
+# def elim_elts(v, rho):
+#     rho_vals = jnp.full_like(v, rho)
     
-#     delInds = jnp.argwhere(v <= rhoVals)
-#     newV = jnp.delete(v, delInds)
-#     newRho = (jnp.sum(newV) - 1)/(len(newV))
-#     return newV, newRho
+#     del_inds = jnp.argwhere(v <= rho_vals)
+#     v_new = jnp.delete(v, del_inds)
+#     rho_new = (jnp.sum(v_new) - 1)/(len(v_new))
+#     return v_new, rho_new
+
+
+def get_closest_sym_strat_grid(P_ref, P_comp, gridrows, gridcols, sym_index=None):
+    if(gridrows == gridcols):
+        P_syms = jnp.stack([P_comp, sq_grid_rot90(P_comp, gridrows, gridcols), grid_rot180(P_comp), \
+                sq_grid_rot270(P_comp, gridrows, gridcols), grid_row_reflect(P_comp, gridrows, gridcols), \
+                grid_col_reflect(P_comp, gridrows, gridcols), sq_grid_transpose(P_comp, gridrows, gridcols), \
+                sq_grid_antitranspose(P_comp, gridrows, gridcols)
+                ])
+        sum_sq_diffs = jnp.full(8, np.Inf)
+    else:
+        P_syms = jnp.stack([P_comp, grid_rot180(P_comp), grid_row_reflect(P_comp, gridrows, gridcols), \
+                                grid_col_reflect(P_comp, gridrows, gridcols)])
+        sum_sq_diffs = jnp.full(4, np.Inf)
+
+    if sym_index is not None:
+        P_closest = jnp.reshape(P_syms[sym_index, :, :], (gridrows*gridcols, gridrows*gridcols))
+    else:
+        for k in range(jnp.shape(P_syms)[0]):
+            sum_sq_diffs = sum_sq_diffs.at[k].set(jnp.sum((P_syms[k, :, :] - P_ref)**2))
+        sym_index = jnp.argwhere(sum_sq_diffs == jnp.min(sum_sq_diffs))
+        P_closest = jnp.reshape(P_syms[sym_index, :, :], (gridrows*gridcols, gridrows*gridcols))
+    return P_closest, sym_index
+
+def grid_row_reflect(M, gridrows, gridcols):
+    grid_perm = jnp.flipud(jnp.identity(gridrows)) # antidiagonal permutation matrix
+    block = jnp.identity(gridcols)
+    M_perm = jnp.kron(grid_perm, block)
+    M = jnp.matmul(M_perm, M)
+    M = jnp.matmul(M, jnp.transpose(M_perm))
+    return M
+
+def grid_col_reflect(M, gridrows, gridcols):
+    grid_perm = jnp.flipud(jnp.identity(gridrows)) # antidiagonal permutation matrix
+    block = jnp.identity(gridcols)
+    M_perm = jnp.kron(block, grid_perm)
+    M = jnp.matmul(jnp.transpose(M_perm), M)
+    M = jnp.matmul(M, M_perm)
+    return M
+
+def grid_rot180(M):  
+    M = jnp.fliplr(M)
+    M = jnp.flipud(M)
+    return M
+
+def sq_grid_transpose(M, gridrows, gridcols):
+    n = gridrows*gridcols
+    M_reflect = jnp.full((n, n), np.NaN)
+    identity_map = jnp.stack([jnp.outer(jnp.arange(n, dtype=int), jnp.ones(n, dtype=int)), \
+                                jnp.outer(jnp.ones(n, dtype=int), jnp.arange(n, dtype=int))])
+    node_map = jnp.flipud(jnp.arange(0, n).reshape(gridrows, gridcols))
+    ref_map = jnp.flipud(jnp.transpose(node_map)).flatten()
+    reflect_map = jnp.stack([jnp.outer(ref_map, jnp.ones(n, dtype=int)), \
+                                jnp.outer(jnp.ones(n, dtype=int), ref_map)])
+    M_reflect = M_reflect.at[identity_map[0, :, :], identity_map[1, :, :]].set(M[reflect_map[0, :, :], reflect_map[1, :, :]])
+    return M_reflect
+
+def sq_grid_antitranspose(M, gridrows, gridcols):
+    M = sq_grid_transpose(M, gridrows, gridcols)
+    M = grid_rot180(M)
+    return M
+
+def sq_grid_rot90(M, gridrows, gridcols):
+    M = sq_grid_transpose(M, gridrows, gridcols)
+    M = grid_row_reflect(M, gridrows, gridcols)
+    return M
+
+def sq_grid_rot270(M, gridrows, gridcols):
+    M = grid_row_reflect(M, gridrows, gridcols)
+    M = sq_grid_transpose(M, gridrows, gridcols)
+    return M
+
 
 
 # TESTING -----------------------------------------------------------------------------------------
@@ -603,83 +845,97 @@ if __name__ == '__main__':
     # print("Devices available:")
     # print(jax.devices())
 
+    gridw = 3
+    gridh = 4
+    A0, _ = gen_grid_G(gridw, gridh)
+    # print("A = ")
+    # print(np.asarray(A0))
 
-    key = jax.random.PRNGKey(1)
-    print(type(key))
-    print(key)
-    newkey, subkey = jax.random.split(key)
-    print(type(newkey))
-    print(type(subkey))
-    print(newkey)
-    print(subkey)
+    # P0 = init_rand_Ps(A0, 1)
+    trange = np.arange((gridw*gridh)**2)
+    P0 = jnp.asarray(trange)
+    n = int(jnp.sqrt(jnp.shape(P0)[0]))
+    P0 = P0.reshape((n, n))
+
+    P_ref = grid_rot180(P0)
+    P_match = get_closest_sym_strat_grid(P_ref, P0, gridw, gridh)
+
+    print("P_ref = ")
+    print(np.asarray(P_ref))
+    print("P_match = ")
+    print(np.asarray(P_match))
+
+    # print("P0 = ")
+    # print(np.asarray(P0))
+
+    # draw_env_graph(A0, "gridgraphA0", os.getcwd())
+    # # draw_avg_opt_graph(A, P0, 3, os.getcwd() + "/grid1")
+    # draw_trans_prob_graph(A0, P0, "grid", P_num=0, folder_path=os.getcwd())
 
 
-    # A = genStarG(6)
-    # cols = getZeroCols(A)
+    # A = gen_star_G(6)
     # n = A.shape[0]
-    # P0 = initRandP(A)
-    # randP = initRandP(A) + jnp.full_like(A, 0.1)
+    # P0 = init_rand_P(A)
+    # randP = init_rand_P(A) + jnp.full_like(A, 0.1)
     # tau = 4
     # F0 = jnp.full((n, n, tau), np.NaN)
     # P = P0
-    # colCompTimes = []
-    # AcompTimes = []
-    # lcpNum = 4
+    # num_LCPs = 4
 
-    # numInitPs = 2
+    # num_init_Ps = 2
     # print("ALGORITHM COMPARISON:")
 
     # A_shape = jnp.shape(A)
     # n = A_shape[0]
-    # initPs = jnp.full((n, n, numInitPs), np.NaN)
-    # for k in range(numInitPs):
+    # init_Ps = jnp.full((n, n, num_init_Ps), np.NaN)
+    # for k in range(num_init_Ps):
     #     key = jax.random.PRNGKey(k)
     #     P0 = jax.random.uniform(key, A_shape)
-    #     initPs = initPs.at[:, :, k].set(P0)
+    #     init_Ps = init_Ps.at[:, :, k].set(P0)
 
-    # for k in range(numInitPs):
+    # for k in range(num_init_Ps):
     #     print("---------------------------------------------------------------")
-    #     P0 = initPs[:, :, k]
+    #     P0 = init_Ps[:, :, k]
     #     # print("P0 = ")
     #     # print(P0)
-    #     projPOrig1 = jnp.zeros(A_shape)
+    #     proj_P_orig1 = jnp.zeros(A_shape)
     #     start_time = time.time()
     #     for i in range(jnp.shape(P0)[0]):
     #         row = P0[i, :]
-    #         projPOrig1 = projPOrig1.at[i, :].set(projRowOntoSimplexJIT(row))
+    #         proj_P_orig1 = proj_P_orig1.at[i, :].set(proj_row_onto_simplex(row))
     #     print("Original row-wise jitted projection algorithm took %s seconds" % str(time.time() - start_time))
-    #     # print("projPOrig1 = ")
-    #     # print(projPOrig1)
+    #     # print("proj_P_orig1 = ")
+    #     # print(proj_P_orig1)
 
     #     start_time = time.time()
-    #     projPOrig2 = projOntoSimplexJIT(P0)
+    #     proj_P_orig2 = proj_onto_simplex(P0)
     #     print("Original full-matrix jitted projection algorithm took %s seconds" % str(time.time() - start_time))
-    #     # print("projPOrig2 = ")
-    #     # print(projPOrig2)
+    #     # print("proj_P_orig2 = ")
+    #     # print(proj_P_orig2)
 
-    #     projPTest = jnp.zeros(A_shape)
+    #     proj_P_test = jnp.zeros(A_shape)
     #     start_time = time.time()
     #     for i in range(jnp.shape(P0)[0]):
     #         row = P0[i, :]
-    #         projPTest = projPTest.at[i, :].set(projRowOntoSimplexTest(row))
+    #         proj_P_test = proj_P_test.at[i, :].set(proj_row_onto_simplex_test(row))
     #     print("New projection algorithm took %s seconds" % str(time.time() - start_time))
-    #     # print("projPTest = ")
-    #     # print(projPTest)
+    #     # print("proj_P_test = ")
+    #     # print(proj_P_test)
 
-    #     # projPMichelotTest = jnp.zeros(A_shape)
+    #     # proj_P_michelot_test = jnp.zeros(A_shape)
     #     # start_time = time.time()
     #     # for i in range(jnp.shape(P0)[0]):
     #     #     row = P0[i, :]
-    #     #     projPMichelotTest = projPTest.at[i, :].set(projRowOntoSimplexMichelot(row))
+    #     #     proj_P_michelot_test = proj_P_test.at[i, :].set(proj_row_onto_simplex_michelot(row))
     #     # print("Michelot jitted projection algorithm took %s seconds" % str(time.time() - start_time))
-    #     # print("projPTest = ")
-    #     # print(projPTest)
+    #     # print("proj_P_test = ")
+    #     # print(proj_P_test)
 
-    #     check1 = jnp.sum(projPOrig1 - projPTest)
+    #     check1 = jnp.sum(proj_P_orig1 - proj_P_test)
     #     print("check1 = " + str(check1))
-    #     check2 = jnp.sum(projPOrig2 - projPTest)
+    #     check2 = jnp.sum(proj_P_orig2 - proj_P_test)
     #     print("check2 = " + str(check2))
-    #     # check3 = jnp.sum(projPMichelotTest - projPTest)
+    #     # check3 = jnp.sum(proj_P_michelot_test - proj_P_test)
     #     # print("check3 = " + str(check3))
     #     print("---------------------------------------------------------------")
 
@@ -691,19 +947,19 @@ if __name__ == '__main__':
     # print('GPU copying Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
     # start = timeit.default_timer()
-    # F1 = computeMCPJIT(P0, F0, tau).block_until_ready()
+    # F1 = compute_MCP(P0, F0, tau).block_until_ready()
     # print('MCP computation warmup Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
     # start = timeit.default_timer()
-    # F1 = computeMCPJIT(P0, F0, tau).block_until_ready()
+    # F1 = compute_MCP(P0, F0, tau).block_until_ready()
     # print('MCP computation round 1 Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
     # start = timeit.default_timer()
-    # J = compMCPGradJIT(P0_gpu, F0_gpu, tau).block_until_ready()
+    # J = comp_MCP_grad(P0_gpu, F0_gpu, tau).block_until_ready()
     # print('Rev Mode MCP Grad JIT warmup Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
     # start = timeit.default_timer()
-    # J1 = compMCPGradJIT(P0_gpu, F0_gpu, tau).block_until_ready()
+    # J1 = comp_MCP_grad(P0_gpu, F0_gpu, tau).block_until_ready()
     # print('Rev Mode MCP Grad JIT round 1 Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
 

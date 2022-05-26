@@ -1,0 +1,41 @@
+---------- Graph Information ----------
+Number of nodes (n) = 9
+Graph Name = grid_W3_H3
+Attack Duration (tau) = 5
+Graph Code = N9_111837205133
+
+---------- Optimizer Information ----------
+Optimizer used = sgd
+
+Optimizer Parameters from Test Specification:
+{
+    "optimizer_name": "sgd",
+    "grad_mode": "MCP_parametrization",
+    "num_init_Ps": 15,
+    "conv_test_mode": "P_update",
+    "conv_radius": 0.001,
+    "conv_window_size": 200,
+    "P_update_elt_bound": 0.5,
+    "nominal_learning_rate": 0.05,
+    "use_momentum": true,
+    "mom_decay_rate": 0.99,
+    "use_nesterov": true,
+    "max_iters": 7000,
+    "use_P_update_bound_schedule": false,
+    "use_learning_rate_schedule": true,
+    "use_num_LCPs_schedule": false,
+    "num_LCPs": 4,
+    "iters_per_printout": 200,
+    "iters_per_trackvals": 10
+}
+
+Schedules used:
+learning_rate_schedule:
+{"iters": [2000, 4000, 6000], "scaled_learning_rate_multipliers": [0.5, 0.1, 0.05]}
+
+Optimizer Parameters computed during testing:
+Scaled Learning Rates = [0.1815181  1.0085586  0.3070114  0.43672067 0.3739116  0.52369946 0.18402019 0.38352343 0.32035294 0.80340636 0.18103306 0.09908549 0.94780856 0.25019902 0.07475483]
+Max absolute-value elements of initial MCP gradients = [0.27545464 0.0495757  0.16286041 0.11448966 0.13372146 0.09547462 0.27170932 0.13037014 0.15607786 0.06223501 0.27619267 0.5046148  0.05275327 0.19984092 0.6688531 ]
+Final MCPs achieved = [0.22345439 0.22342937 0.20180322 0.2234621  0.22347899 0.2234381  0.22340678 0.22347568 0.22347665 0.22347593 0.19096896 0.22344975 0.2234205  0.22342898 0.20661548]
+Number of iterations required = [4107, 1600, 4106, 4082, 4030, 4057, 4077, 4085, 4086, 4034, 4067, 4122, 4028, 4125, 4140]
+Optimization Times Required (seconds) = [13.95374059677124, 4.983719348907471, 13.071345090866089, 12.759825944900513, 12.530125617980957, 14.864817380905151, 19.81274652481079, 17.574947118759155, 13.041001081466675, 14.895847797393799, 19.86807346343994, 12.427433490753174, 11.930432081222534, 12.721569538116455, 13.28125262260437]

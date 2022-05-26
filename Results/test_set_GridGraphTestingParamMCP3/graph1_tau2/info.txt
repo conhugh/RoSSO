@@ -1,0 +1,20 @@
+---------- Graph Information ----------
+Number of nodes (n) = 4
+Attack Duration (tau) = 2
+Graph Code = 4_51
+---------- Optimizer Information ----------
+Optimizer used = sgd_GradConv
+Gradient Mode = mcp_parametrization
+Number of LCPs used, if applicable = 2
+Learning Rate = 0.18185748
+eps0 = 0.05
+Momentum Decay Rate = 0.99
+Nesterov = True
+Convergence radius = 0.005
+Moving average window size (numRecPs) = 200
+Max allowed number of iterations (maxIters) = 20000
+Learning Rates (eps) = [0.1323397  0.14058729 0.17013328 0.03891526 0.13554227 0.0445728  0.1564763  0.15035284 0.0398003  0.18185748]
+Max element of initial MCP gradients (lrScales) = [0.37781557 0.35565093 0.29388726 1.2848431  0.36888862 1.1217604  0.31953722 0.3325511  1.256272   0.27494058]
+Final MCP achieved = [0.49858359 0.49914432 0.4993869  0.49879232 0.499313   0.4996144  0.49948892 0.49893713 0.49876902 0.49903864]
+Number of iterations required = [266. 275. 236. 276. 266. 314. 231. 271. 270. 237.]
+Optimization Times Required (seconds) = [1.616157   0.7366657  0.6203344  0.6866505  0.68285155 0.8265307  0.55859685 0.6468351  0.6234951  0.5477989 ]

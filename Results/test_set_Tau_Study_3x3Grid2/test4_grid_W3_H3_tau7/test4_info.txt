@@ -1,0 +1,41 @@
+---------- Graph Information ----------
+Number of nodes (n) = 9
+Graph Name = grid_W3_H3
+Attack Duration (tau) = 7
+Graph Code = N9_111837205133
+
+---------- Optimizer Information ----------
+Optimizer used = sgd
+
+Optimizer Parameters from Test Specification:
+{
+    "optimizer_name": "sgd",
+    "grad_mode": "MCP_parametrization",
+    "num_init_Ps": 15,
+    "conv_test_mode": "P_update",
+    "conv_radius": 0.001,
+    "conv_window_size": 200,
+    "P_update_elt_bound": 0.5,
+    "nominal_learning_rate": 0.01,
+    "use_momentum": true,
+    "mom_decay_rate": 0.99,
+    "use_nesterov": true,
+    "max_iters": 7000,
+    "use_P_update_bound_schedule": false,
+    "use_learning_rate_schedule": true,
+    "use_num_LCPs_schedule": false,
+    "num_LCPs": 4,
+    "iters_per_printout": 200,
+    "iters_per_trackvals": 10
+}
+
+Schedules used:
+learning_rate_schedule:
+{"iters": [2000], "scaled_learning_rate_multipliers": [0.5]}
+
+Optimizer Parameters computed during testing:
+Scaled Learning Rates = [0.0182245  0.08399204 0.02450312 0.03965955 0.03519591 0.04193767 0.0249709  0.03808977 0.02653678 0.07411109 0.02469479 0.02615954 0.08180232 0.0365582  0.00965772]
+Max absolute-value elements of initial MCP gradients = [0.54871184 0.11905889 0.40811124 0.25214607 0.28412393 0.23844911 0.4004662  0.26253766 0.37683553 0.13493258 0.40494365 0.38226977 0.12224592 0.27353644 1.035441  ]
+Final MCPs achieved = [0.36296332 0.36334696 0.34389907 0.3632665  0.3546667  0.3632295  0.36328965 0.36320323 0.3630996  0.34548533 0.36330092 0.36317587 0.3631435  0.36307538 0.35530412]
+Number of iterations required = [7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001]
+Optimization Times Required (seconds) = [24.94792628288269, 23.428519010543823, 23.836525201797485, 25.10579228401184, 26.89671301841736, 23.126739501953125, 22.825621366500854, 22.815775871276855, 23.59504222869873, 24.369792222976685, 22.9386203289032, 22.465237140655518, 22.233025074005127, 22.37592053413391, 23.403677225112915]

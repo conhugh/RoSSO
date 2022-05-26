@@ -1,0 +1,41 @@
+---------- Graph Information ----------
+Number of nodes (n) = 9
+Graph Name = grid_W3_H3
+Attack Duration (tau) = 5
+Graph Code = N9_111837205133
+
+---------- Optimizer Information ----------
+Optimizer used = sgd
+
+Optimizer Parameters from Test Specification:
+{
+    "optimizer_name": "sgd",
+    "grad_mode": "MCP_parametrization",
+    "num_init_Ps": 15,
+    "conv_test_mode": "P_update",
+    "conv_radius": 0.001,
+    "conv_window_size": 200,
+    "P_update_elt_bound": 0.5,
+    "nominal_learning_rate": 0.01,
+    "use_momentum": true,
+    "mom_decay_rate": 0.99,
+    "use_nesterov": true,
+    "max_iters": 7000,
+    "use_P_update_bound_schedule": false,
+    "use_learning_rate_schedule": true,
+    "use_num_LCPs_schedule": false,
+    "num_LCPs": 4,
+    "iters_per_printout": 200,
+    "iters_per_trackvals": 10
+}
+
+Schedules used:
+learning_rate_schedule:
+{"iters": [2000], "scaled_learning_rate_multipliers": [0.5]}
+
+Optimizer Parameters computed during testing:
+Scaled Learning Rates = [0.03630362 0.20171173 0.06140228 0.08734413 0.07478231 0.10473988 0.03680404 0.07670468 0.06407058 0.16068126 0.03620661 0.0198171  0.18956171 0.0500398  0.01495097]
+Max absolute-value elements of initial MCP gradients = [0.27545464 0.0495757  0.16286041 0.11448966 0.13372146 0.09547462 0.27170932 0.13037014 0.15607786 0.06223501 0.27619267 0.5046148  0.05275327 0.19984092 0.6688531 ]
+Final MCPs achieved = [0.22304972 0.2233426  0.20154376 0.22324955 0.22309738 0.22323732 0.22324374 0.22321731 0.22318266 0.22323695 0.22321849 0.22326022 0.22334704 0.22316915 0.20641282]
+Number of iterations required = [7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001, 7001]
+Optimization Times Required (seconds) = [40.45956087112427, 21.511205911636353, 21.36623787879944, 35.4542715549469, 22.605809926986694, 23.07935857772827, 22.932772636413574, 23.55781865119934, 22.917063236236572, 41.02730131149292, 42.71980333328247, 26.8587486743927, 27.294111490249634, 21.22075915336609, 22.448464155197144]

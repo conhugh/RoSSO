@@ -1,0 +1,37 @@
+---------- Graph Information ----------
+Number of nodes (n) = 10
+Graph Name = complete_N10
+Attack Duration (tau) = 2
+Graph Code = N10_70368744177663
+
+---------- Optimizer Information ----------
+Optimizer used = adam
+
+Optimizer Parameters from Test Specification:
+{
+    "optimizer_name": "adam",
+    "grad_mode": "MCP_parametrization",
+    "num_init_Ps": 5,
+    "conv_test_mode": "P_update",
+    "conv_radius": 0.005,
+    "conv_window_size": 200,
+    "P_update_elt_bound": 0.5,
+    "nominal_learning_rate": 0.001,
+    "use_momentum": true,
+    "mom_decay_rate": 0.99,
+    "use_nesterov": true,
+    "max_iters": 5000,
+    "use_P_update_bound_schedule": false,
+    "use_learning_rate_schedule": false,
+    "use_num_LCPs_schedule": false,
+    "num_LCPs": 4,
+    "iters_per_printout": 200,
+    "iters_per_trackvals": 10
+}
+
+Optimizer Parameters computed during testing:
+Scaled Learning Rates = [0.00090039 0.0008975  0.00107442 0.0008947  0.00103174]
+Max absolute-value elements of initial MCP gradients = [1.1106329  1.1142112  0.9307364  1.117687   0.96923506]
+Final MCPs achieved = [0.17378989 0.1717987  0.17546517 0.19150956 0.19734554]
+Number of iterations required = [5001, 5001, 5001, 5001, 5001]
+Optimization Times Required (seconds) = [120.74067211151123, 122.97348499298096, 126.5935263633728, 123.10418391227722, 123.51448917388916]

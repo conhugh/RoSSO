@@ -1,0 +1,37 @@
+---------- Graph Information ----------
+Number of nodes (n) = 10
+Graph Name = complete_N10
+Attack Duration (tau) = 1
+Graph Code = N10_70368744177663
+
+---------- Optimizer Information ----------
+Optimizer used = rmsprop
+
+Optimizer Parameters from Test Specification:
+{
+    "optimizer_name": "rmsprop",
+    "grad_mode": "MCP_abs_parametrization",
+    "num_init_Ps": 5,
+    "conv_test_mode": "P_update",
+    "conv_radius": 0.005,
+    "conv_window_size": 200,
+    "P_update_elt_bound": 0.5,
+    "nominal_learning_rate": 0.0001,
+    "use_momentum": true,
+    "mom_decay_rate": 0.9,
+    "use_nesterov": true,
+    "max_iters": 5000,
+    "use_P_update_bound_schedule": false,
+    "use_learning_rate_schedule": false,
+    "use_num_LCPs_schedule": false,
+    "num_LCPs": 4,
+    "iters_per_printout": 200,
+    "iters_per_trackvals": 10
+}
+
+Optimizer Parameters computed during testing:
+Scaled Learning Rates = [0.00010003 0.00010021 0.00010037 0.00010008 0.00010014]
+Max absolute-value elements of initial MCP gradients = [0.9996727  0.99793535 0.9963171  0.9992329  0.9986184 ]
+Final MCPs achieved = [0. 0. 0. 0. 0.]
+Number of iterations required = [5001, 5001, 5001, 5001, 5001]
+Optimization Times Required (seconds) = [21.61198115348816, 21.825572967529297, 22.025516510009766, 23.437623262405396, 25.8318829536438]
