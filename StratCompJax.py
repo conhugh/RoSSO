@@ -708,64 +708,6 @@ def proj_row_onto_simplex_test(row):
     row = jnp.maximum(row - tau, jnp.zeros(jnp.shape(row)))
     return row
 
-# @jit
-# def proj_row_onto_simplex_michelot(row):
-#     """
-#     Project rows of the Transition Probability Matrix `P` onto the probability simplex.
-
-#     To ensure gradient-based updates to the Transition Probability Matrix maintain
-#     row-stochasticity, the rows of the updated Transition Probability Matrix are projected 
-#     onto the nearest point on the probability n-simplex, where `n` is the number of
-#     columns of `P`.  For further explanation, see [LINK TO DOCUMENT ON GITHUB], and 
-#     for more about the projection algorithm used, see http://www.optimization-online.org/DB_FILE/2014/08/4498.pdf.
-
-#     Parameters
-#     ----------
-#     P : numpy.ndarray 
-#         Transition Probability Matrix after gradient update, potentially invalid. 
-    
-#     Returns
-#     -------
-#     numpy.ndarray
-#         Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
-#     """
-#     v = row
-#     print("row shape = ")
-#     print(jnp.shape(row))
-#     print("len v = ")
-#     print(len(v))
-#     rho = (jnp.sum(row) - 1)/len(row)
-#     # ELEMENT ELIMINATION LOOP:
-#     len_change = True
-#     while len_change:
-#         v_len = len(v)
-#         k = 0
-#         # while k < len(v):
-#         #     lax.cond(v[k] <= rho, lambda v, k : jnp.delete(v, k), lambda k : k + 1, v, k)
-#         #     # ^THINK ABOUT HOW TO DO THIS NOT ELEMENT-WISE
-#         #     # if v[k] <= rho:
-#         #     #     jnp.delete(v, k)
-#         #     # else:
-#         #     #     k = k + 1
-#         # rho = (jnp.sum(v) - 1)/(len(v))
-#         v, rho = elim_elts(v, rho)
-#         if v_len == len(v):
-#             len_change = False
-#     tau = rho
-#     # PROJECTION:
-#     row = jnp.maximum(row - tau, jnp.zeros(jnp.shape(row)))
-#     return row
-
-# @jit
-# def elim_elts(v, rho):
-#     rho_vals = jnp.full_like(v, rho)
-    
-#     del_inds = jnp.argwhere(v <= rho_vals)
-#     v_new = jnp.delete(v, del_inds)
-#     rho_new = (jnp.sum(v_new) - 1)/(len(v_new))
-#     return v_new, rho_new
-
-
 def get_closest_sym_strat_grid(P_ref, P_comp, gridrows, gridcols, sym_index=None):
     if(gridrows == gridcols):
         P_syms = jnp.stack([P_comp, sq_grid_rot90(P_comp, gridrows, gridcols), grid_rot180(P_comp), \
@@ -845,122 +787,11 @@ if __name__ == '__main__':
     # print("Devices available:")
     # print(jax.devices())
 
-    gridw = 3
-    gridh = 4
-    A0, _ = gen_grid_G(gridw, gridh)
-    # print("A = ")
-    # print(np.asarray(A0))
-
-    # P0 = init_rand_Ps(A0, 1)
-    trange = np.arange((gridw*gridh)**2)
-    P0 = jnp.asarray(trange)
-    n = int(jnp.sqrt(jnp.shape(P0)[0]))
-    P0 = P0.reshape((n, n))
-
-    P_ref = grid_rot180(P0)
-    P_match = get_closest_sym_strat_grid(P_ref, P0, gridw, gridh)
-
-    print("P_ref = ")
-    print(np.asarray(P_ref))
-    print("P_match = ")
-    print(np.asarray(P_match))
-
-    # print("P0 = ")
-    # print(np.asarray(P0))
-
-    # draw_env_graph(A0, "gridgraphA0", os.getcwd())
-    # # draw_avg_opt_graph(A, P0, 3, os.getcwd() + "/grid1")
-    # draw_trans_prob_graph(A0, P0, "grid", P_num=0, folder_path=os.getcwd())
 
 
-    # A = gen_star_G(6)
-    # n = A.shape[0]
-    # P0 = init_rand_P(A)
-    # randP = init_rand_P(A) + jnp.full_like(A, 0.1)
-    # tau = 4
-    # F0 = jnp.full((n, n, tau), np.NaN)
-    # P = P0
-    # num_LCPs = 4
 
-    # num_init_Ps = 2
-    # print("ALGORITHM COMPARISON:")
 
-    # A_shape = jnp.shape(A)
-    # n = A_shape[0]
-    # init_Ps = jnp.full((n, n, num_init_Ps), np.NaN)
-    # for k in range(num_init_Ps):
-    #     key = jax.random.PRNGKey(k)
-    #     P0 = jax.random.uniform(key, A_shape)
-    #     init_Ps = init_Ps.at[:, :, k].set(P0)
 
-    # for k in range(num_init_Ps):
-    #     print("---------------------------------------------------------------")
-    #     P0 = init_Ps[:, :, k]
-    #     # print("P0 = ")
-    #     # print(P0)
-    #     proj_P_orig1 = jnp.zeros(A_shape)
-    #     start_time = time.time()
-    #     for i in range(jnp.shape(P0)[0]):
-    #         row = P0[i, :]
-    #         proj_P_orig1 = proj_P_orig1.at[i, :].set(proj_row_onto_simplex(row))
-    #     print("Original row-wise jitted projection algorithm took %s seconds" % str(time.time() - start_time))
-    #     # print("proj_P_orig1 = ")
-    #     # print(proj_P_orig1)
-
-    #     start_time = time.time()
-    #     proj_P_orig2 = proj_onto_simplex(P0)
-    #     print("Original full-matrix jitted projection algorithm took %s seconds" % str(time.time() - start_time))
-    #     # print("proj_P_orig2 = ")
-    #     # print(proj_P_orig2)
-
-    #     proj_P_test = jnp.zeros(A_shape)
-    #     start_time = time.time()
-    #     for i in range(jnp.shape(P0)[0]):
-    #         row = P0[i, :]
-    #         proj_P_test = proj_P_test.at[i, :].set(proj_row_onto_simplex_test(row))
-    #     print("New projection algorithm took %s seconds" % str(time.time() - start_time))
-    #     # print("proj_P_test = ")
-    #     # print(proj_P_test)
-
-    #     # proj_P_michelot_test = jnp.zeros(A_shape)
-    #     # start_time = time.time()
-    #     # for i in range(jnp.shape(P0)[0]):
-    #     #     row = P0[i, :]
-    #     #     proj_P_michelot_test = proj_P_test.at[i, :].set(proj_row_onto_simplex_michelot(row))
-    #     # print("Michelot jitted projection algorithm took %s seconds" % str(time.time() - start_time))
-    #     # print("proj_P_test = ")
-    #     # print(proj_P_test)
-
-    #     check1 = jnp.sum(proj_P_orig1 - proj_P_test)
-    #     print("check1 = " + str(check1))
-    #     check2 = jnp.sum(proj_P_orig2 - proj_P_test)
-    #     print("check2 = " + str(check2))
-    #     # check3 = jnp.sum(proj_P_michelot_test - proj_P_test)
-    #     # print("check3 = " + str(check3))
-    #     print("---------------------------------------------------------------")
-
-    
-    # start = timeit.default_timer()
-    # P0_gpu = jax.device_put(P0)
-    # F0_gpu = jax.device_put(F0)
-    # tau_gpu = jax.device_put(tau)
-    # print('GPU copying Elapsed time: {} seconds'.format(timeit.default_timer() - start))
-
-    # start = timeit.default_timer()
-    # F1 = compute_MCP(P0, F0, tau).block_until_ready()
-    # print('MCP computation warmup Elapsed time: {} seconds'.format(timeit.default_timer() - start))
-
-    # start = timeit.default_timer()
-    # F1 = compute_MCP(P0, F0, tau).block_until_ready()
-    # print('MCP computation round 1 Elapsed time: {} seconds'.format(timeit.default_timer() - start))
-
-    # start = timeit.default_timer()
-    # J = comp_MCP_grad(P0_gpu, F0_gpu, tau).block_until_ready()
-    # print('Rev Mode MCP Grad JIT warmup Elapsed time: {} seconds'.format(timeit.default_timer() - start))
-
-    # start = timeit.default_timer()
-    # J1 = comp_MCP_grad(P0_gpu, F0_gpu, tau).block_until_ready()
-    # print('Rev Mode MCP Grad JIT round 1 Elapsed time: {} seconds'.format(timeit.default_timer() - start))
 
 
 

@@ -216,13 +216,13 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
                     opt_metrics[track].append(tracked_vals[track])
                 else:
                     opt_metrics[track].extend(tracked_vals[track])
-                with open(metrics_dir + "/debug.txt", 'w') as metric_debug_file:
-                    metric_debug_file.write(str(opt_metrics["P_diff_sums"]))
+                # with open(metrics_dir + "/debug.txt", 'w') as metric_debug_file:
+                #     metric_debug_file.write(str(opt_metrics["P_diff_sums"]))
 
     if(save):
         np.savetxt(test_dir + "/A.csv", np.asarray(A).astype(int), delimiter=',')  # Save the env graph binary adjacency matrix
         draw_env_graph(A, graph_name, test_dir)  # Save a drawing of the env graph
-        plot_opt_metrics(opt_metrics, test_name, test_dir) # Save plots of the optimization metrics tracked
+        visualize_metrics(opt_metrics, test_name, test_dir) # Save plots of the optimization metrics tracked
         graph_code = gen_graph_code(A)  # Generate unique graph code
 
         # Save all optimization metrics which were tracked:

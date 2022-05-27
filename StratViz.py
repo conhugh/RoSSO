@@ -8,10 +8,7 @@ import networkx as nx
 import pygraphviz as pgv
 import jax.numpy as jnp
 import TestSpec as ts
-# from StratComp import *
 from StratCompJax import *
-
-# from StratCompJax import computecap_probsJIT
 
 # Plot transition probabilities for each pair of nodes for the given P matrices
 # Takes a list of initial and optimized P matrices
@@ -246,61 +243,106 @@ def find_overlay_files(directory, metric):
                 metric_filepaths[t_run_num] = f
     return iter_filepaths, metric_filepaths
 
+# Plot optimization metrics as each test completes:
+def visualize_metrics(metrics, test_name, test_dir, overlay=True):
+    met_vis_dir = test_dir + "/metrics_visualization"
+    if not os.path.isdir(met_vis_dir):
+        os.mkdir(met_vis_dir)
+    for metric_name in metrics.keys():
+        if metric_name.find("final") == -1 and metric_name.find("iters") == -1:
+            if overlay:
+                plt.figure()
+                plt.xlabel("Iteration Number")
+                plt.ylabel(metric_name)
+                plt.title(test_name)
+            for r in range(len(metrics[metric_name])):
+                iters = metrics["iters"][r]
+                metric_vals = metrics[metric_name][r]
+                if not overlay:
+                    plt.figure()
+                    plt.xlabel("Iteration Number")
+                    plt.ylabel(metric_name)
+                    plt.title(test_name)
 
-# Visualize metrics related to the optimization process:
-def visualize_metrics(test_set_name, overlay=False):
-    test_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
-    sub_dir_num = len(os.listdir(test_dir))
+                plt.plot(iters, metric_vals, label="Run " + str(r + 1))
+
+                if not overlay:
+                    plot_name = metric_name + "_" + str(r + 1)
+                    plt.savefig(os.path.join(met_vis_dir, plot_name), bbox_inches = "tight")
+                    plt.close()    
+            if overlay:
+                ax = plt.gca()
+                box = ax.get_position()
+                ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
+                plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+                plt.savefig(os.path.join(met_vis_dir, metric_name), bbox_inches = "tight")   
+                plt.close()
+
+# Visualize metrics related to the optimization process (after all tests have completed):
+def visualize_metrics_retro(test_set_name, overlay=False):
+    test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
+    sub_dir_num = len(os.listdir(test_set_dir))
     print("Generating Metrics Visualization...")
     print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
-    for sub_dir_count, sub_dir in enumerate(os.listdir(test_dir)):
-        if(sub_dir.find("graph") != -1):
+    for sub_dir_count, sub_dir in enumerate(os.listdir(test_set_dir)):
+        if (sub_dir.find("test") != -1 and sub_dir.find("test_spec") == -1):
             test_name = sub_dir
-            graph_num, tau = parse_test_name(test_name)
-            graph_dir = os.path.join(test_dir, test_name)
-            metrics_dir = os.path.join(graph_dir, "metrics")
-            met_vis_dir = os.path.join(graph_dir, "metrics_visualization")
+            test_dir = os.path.join(test_set_dir, test_name)
+            metrics_dir = os.path.join(test_dir, "metrics")
+            met_vis_dir = os.path.join(test_dir, "metrics_visualization")
             if not os.path.isdir(met_vis_dir):
                 os.mkdir(met_vis_dir)
-            used_filepaths = []
+            with open(metrics_dir + "/iters.txt") as iters_file:
+                iters = []
+                line = True
+                while line:
+                    line = iters_file.readline()
+                    line = line.strip()
+                    line = line.strip("[]")
+                    iters_list = line.split()
+                    iters.append(list(map(int, iters_list)))
             for filename in os.listdir(metrics_dir):
-                i = os.path.join(metrics_dir, filename)
-                if os.path.isfile(i):
-                    if filename.find("iters") != -1:
-                        _, run_num = parse_metric_name(filename)
-                        with open(i) as iters:
-                            iters = np.loadtxt(iters, delimiter=',')
-                        for filename in os.listdir(metrics_dir):
-                            m = os.path.join(metrics_dir, filename)
-                            if os.path.isfile(m) and (filename.find("iters") == -1) and filename not in used_filepaths:
-                                metric_name, m_run_num = parse_metric_name(filename)
-                                if(m_run_num == run_num and metric_name.find("final") == -1):
-                                    used_filepaths.append(filename)
-                                    with open(m) as metric:
-                                        metric = np.loadtxt(metric, delimiter = ',')
-                                        plt.figure()
-                                        plt.xlabel("Iteration Number")
-                                        plt.ylabel(metric_name)
-                                        if not overlay:
-                                            plt.plot(iters, metric, label="Run " + run_num)
-                                            plt.title(test_name + " " + metric_name + " Run " + run_num)
-                                            plot_filepath = os.path.join(met_vis_dir, metric_name + "_" + run_num)
-                                        if overlay:
-                                            plt.title(test_name + " " + metric_name)
-                                            plot_filepath = os.path.join(met_vis_dir, metric_name)
-                                            iter_files, metric_files = find_overlay_files(metrics_dir, metric_name)
-                                            for r in iter_files.keys():
-                                                with open(iter_files[r]) as t_iters:
-                                                    t_iters = np.loadtxt(t_iters, delimiter=',')
-                                                with open(metric_files[r]) as metric:
-                                                    used_filepaths.append(metric_files[r])
-                                                    metric = np.loadtxt(metric, delimiter = ',')
-                                                plt.plot(t_iters, metric, label="Run " + r)
-                                        plt.savefig(plot_filepath, bbox_inches = "tight")
-                                        plt.close()
+                if (filename.find("iters") == -1) and (filename.find("debug") == -1) and (filename.find("final") == -1):
+                    metric_file = os.path.join(metrics_dir, filename)
+                    metric_name = filename[:filename.find(".")]
+                    with open(metric_file) as metric:
+                        if overlay:
+                            plt.figure()
+                            plt.xlabel("Iteration Number")
+                            plt.ylabel(metric_name)
+                        run_num = 1
+                        line = True
+                        while line:
+                            line = metric.readline()
+                            line = line.strip()
+                            line = line.strip("[]")
+                            metric_string = line.split()
+                            metric_vals = list(map(float, metric_string))
+                            if not overlay:
+                                plt.figure()
+                                plt.xlabel("Iteration Number")
+                                plt.ylabel(metric_name)
+                            plt.plot(iters[run_num - 1], metric_vals, label="Run " + str(run_num))
+                            if not overlay:
+                                plt.title(test_name + " " + metric_name + " Run " + str(run_num))
+                                ax = plt.gca()
+                                box = ax.get_position()
+                                ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
+                                plt.legend(loc='upper left', bbox_to_anchor=(1, 1))                            
+                                plot_filepath = os.path.join(met_vis_dir, metric_name + "_" + str(run_num))
+                                plt.savefig(plot_filepath, bbox_inches = "tight")
+                                plt.close()
+                            run_num = run_num + 1
+                        if overlay:
+                            plt.title(test_name + " " + metric_name)
+                            ax = plt.gca()
+                            box = ax.get_position()
+                            ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
+                            plt.legend(loc='upper left', bbox_to_anchor=(1, 1))                            
+                            plot_filepath = os.path.join(met_vis_dir, metric_name)
+                            plt.savefig(plot_filepath, bbox_inches = "tight")
+                            plt.close()
         print_progress_bar(sub_dir_count + 1, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
-
-
 
 # Visualize initial and optimized P matrices: 
 def visualize_results(test_set_name):
@@ -485,7 +527,8 @@ def get_MCP_data(test_set_name, num_top_MCPs=None):
                 while line:
                     line = info.readline()
                     if(line.find("Final MCPs achieved") != -1):
-                        MCP_string = line[line.find("[") + 1:line.find("]")]
+                        MCP_string = line.strip("[]")
+                        # MCP_string = line[line.find("[") + 1:line.find("]")]
                         MCPs = MCP_string.split()
                         MCPs = list(map(float, MCPs))
                         if num_top_MCPs is not None:
@@ -505,63 +548,6 @@ def get_MCP_data(test_set_name, num_top_MCPs=None):
     MCP_data["final_MCP_taus"] = np.asarray(MCP_data["final_MCP_taus"], dtype=float)
     return MCP_data
 
-# Print iterations progress
-def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', print_end = "\r"):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-        print_end    - Optional  : end character (e.g. "\r", "\r\n") (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filled_length = int(length * iteration // total)
-    bar = fill * filled_length + '-' * (length - filled_length)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = print_end)
-    # Print New Line on Complete
-    if iteration == total: 
-        print()
-
-# Plot optimization metrics after each test:
-def plot_opt_metrics(metrics, test_name, test_dir, overlay=True):
-    met_vis_dir = test_dir + "/metrics_visualization"
-    if not os.path.isdir(met_vis_dir):
-        os.mkdir(met_vis_dir)
-    for metric_name in metrics.keys():
-        if metric_name.find("final") == -1 and metric_name.find("iters") == -1:
-            if overlay:
-                plt.figure()
-                plt.xlabel("Iteration Number")
-                plt.ylabel(metric_name)
-                plt.title(test_name)
-            for r in range(len(metrics[metric_name])):
-                iters = metrics["iters"][r]
-                metric_vals = metrics[metric_name][r]
-                if not overlay:
-                    plt.figure()
-                    plt.xlabel("Iteration Number")
-                    plt.ylabel(metric_name)
-                    plt.title(test_name)
-
-                plt.plot(iters, metric_vals, label="Run " + str(r + 1))
-
-                if not overlay:
-                    plot_name = metric_name + "_" + str(r + 1)
-                    plt.savefig(os.path.join(met_vis_dir, plot_name), bbox_inches = "tight")
-                    plt.close()    
-            if overlay:
-                ax = plt.gca()
-                box = ax.get_position()
-                ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
-                plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-                plt.savefig(os.path.join(met_vis_dir, metric_name), bbox_inches = "tight")   
-                plt.close()
-            
 # Plot runtimes vs MCPs for each optimizer (inline with optimization):
 def plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, final_MCPs):
     avg_run_times = []
@@ -657,20 +643,39 @@ def plot_optimizer_comparison_retro(test_set_name):
     plt.close()
 
 
+# Print iterations progress
+def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', print_end = "\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        print_end    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filled_length = int(length * iteration // total)
+    bar = fill * filled_length + '-' * (length - filled_length)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = print_end)
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
     
-
-
 
             
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
     
-    test_set_name = "Complete_Graph_Testing4"
-    # visualize_metrics(test_set_name, overlay=True)
-    visualize_results(test_set_name)
-    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
-    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
-    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
+    test_set_name = "temp"
+    visualize_metrics_retro(test_set_name, overlay=True)
+    # visualize_results(test_set_name)
+    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
+    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
+    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=10, plot_best_fit=True)
     # plot_optimizer_comparison_retro(test_set_name)
 
