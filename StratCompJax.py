@@ -4,7 +4,7 @@ import numpy as np
 import time
 import jax
 import functools
-from jax import jacrev, jit
+from jax import grad, jacrev, jit
 import jax.numpy as jnp
 # from StratViz import *
 
@@ -488,6 +488,47 @@ def compute_LCPs(P, F0, tau, num_LCPs):
     return lcps
 
 
+# # closure which returns desired gradient computation function:
+# def get_grad_func(num_LCPs=1, parametrization="ReLU", projection=None):
+#     # validate input:
+#     if parametrization is None and projection is None:
+#         raise ValueError("Must specify either parametrization type or projection type.")
+#     elif parametrization is not None and projection is not None:
+#         raise ValueError("If specifying projection type, must set parametrization=None.")
+#     # return desired gradient computation function:
+#     if num_LCPs == 1 and parametrization is not None:
+#         if parametrization=="ReLU":
+#             return comp_MCP_grad_param
+#         elif parametrization=="AbsVal":
+#             return comp_MCP_grad_param_abs
+#         else:
+#             raise ValueError("Invalid parametrization type, must specify either \"ReLU\" or \"AbsVal\".")
+#     elif num_LCPs != 1 and parametrization is not None:
+#         if parametrization=="ReLU":
+#             return comp_avg_LCP_grad_param
+#         else:
+#             raise ValueError("Invalid parametrization type, must specify either \"ReLU\" or \"AbsVal\".")
+#     elif num_LCPs==1:  #implement different projection types here if desired
+#         return comp_MCP_grad
+#     else:
+#         return comp_avg_LCP_grad
+
+# closure which returns desired gradient computation function:
+def get_grad_func(grad_mode="MCP_parametrization"):
+    if grad_mode == "MCP_parametrization":
+        return comp_MCP_grad_param 
+    elif grad_mode == "MCP_abs_parametrization":
+        return comp_MCP_grad_param_abs
+    elif grad_mode == "LCP_parametrization":
+        return comp_avg_LCP_grad_param
+    elif grad_mode == "MCP_projection":
+        return comp_MCP_grad
+    elif grad_mode == "LCP_projection":
+        return comp_avg_LCP_grad
+    else:
+        raise ValueError("Invalid grad_mode specified!")
+
+
 # Autodiff version of Min Cap Prob Gradient computation:
 _comp_MCP_grad = jacrev(compute_MCP)
 # wrapper function:
@@ -499,23 +540,15 @@ def comp_MCP_grad(P, A, F0, tau):
 
 # Autodiff version of Lowest Cap Probs Gradient computation:
 _comp_LCP_grads = jacrev(compute_LCPs)
-# wrapper function:
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
-def comp_LCP_grads(P, A, F0, tau, num_LCPs):
-    G = _comp_LCP_grads(P, F0, tau, num_LCPs)
-    G = G*A
-    return G
-
-# Autodiff version of average Lowest Cap Probs Gradient computation:
-@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
-def comp_avg_LCP_grad(P, A, F0, tau, num_LCPs):
+def comp_avg_LCP_grad(P, A, F0, tau, num_LCPs=None):
     G = _comp_LCP_grads(P, F0, tau, num_LCPs)
     G = G*A
     G_avg = jnp.mean(G, axis=0)
     return G_avg
 
 # Parametrization of the P matrix
-@functools.partial(jit, static_argnames=['tau'])
+@jit
 def comp_P_param(Q, A):
     P = Q*A
     P = jnp.maximum(jnp.zeros_like(P), P) # apply component-wise ReLU
@@ -523,7 +556,7 @@ def comp_P_param(Q, A):
     return P
 
 # Parametrization of the P matrix
-@functools.partial(jit, static_argnames=['tau'])
+@jit
 def comp_P_param_abs(Q, A):
     P = Q*A
     P = jnp.abs(P) # apply component-wise absolute-value
@@ -551,6 +584,18 @@ def comp_MCP_grad_param(Q, A, F0, tau):
     grad = _comp_MCP_grad_param(Q, A, F0, tau) 
     return grad
 
+# # Autodiff parametrized loss function
+# _comp_MCP_grad_param_test = grad(loss_MCP)
+# @functools.partial(jit, static_argnames=['tau'])
+# def comp_MCP_grad_param_test(Q, A, F0, tau):
+#     grad = _comp_MCP_grad_param_test(Q, A, F0, tau) 
+#     return grad
+
+# @functools.partial(jit, static_argnames=['tau'])
+# def comp_MCP_grad_param_extra(Q, A, F0, tau, num_LCPs=None):
+#     grad = _comp_MCP_grad_param(Q, A, F0, tau) 
+#     return grad
+
 # Autodiff parametrized loss function
 _comp_MCP_grad_param_abs = jacrev(loss_MCP_abs)
 @functools.partial(jit, static_argnames=['tau'])
@@ -560,7 +605,7 @@ def comp_MCP_grad_param_abs(Q, A, F0, tau):
 
 # Loss function with constraints included in parametrization
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
-def loss_LCP(Q, A, F0, tau, num_LCPs):
+def loss_LCP(Q, A, F0, tau, num_LCPs=None):
     P = comp_P_param(Q, A)
     lcps = compute_LCPs(P, F0, tau, num_LCPs)
     return lcps
@@ -568,11 +613,11 @@ def loss_LCP(Q, A, F0, tau, num_LCPs):
 # Autodiff parametrized loss function
 _comp_LCP_grads_param = jacrev(loss_LCP)
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
-def comp_avg_LCP_grad_param(Q, A, F0, tau, num_LCPs):
+def comp_avg_LCP_grad_param(Q, A, F0, tau, num_LCPs=None):
     J = _comp_LCP_grads_param(Q, A, F0, tau, num_LCPs) 
     grad = jnp.mean(J, axis=0)
     return grad
-    
+
 
 @jit
 def proj_onto_simplex(P):
@@ -609,6 +654,33 @@ def proj_onto_simplex(P):
     for i in range(n):
         for j in range(n):
             P_new = P_new.at[i, sort_map[i, j]].set(X_new[i, j])
+    return P_new
+
+@jit
+def proj_onto_simplex_large(P):
+    """
+    Project rows of the Transition Probability Matrix `P` onto the probability simplex.
+
+    To ensure gradient-based updates to the Transition Probability Matrix maintain
+    row-stochasticity, the rows of the updated Transition Probability Matrix are projected 
+    onto the nearest point on the probability n-simplex, where `n` is the number of
+    columns of `P`.  For further explanation, see [LINK TO DOCUMENT ON GITHUB], and 
+    for more about the projection algorithm used, see https://arxiv.org/abs/1309.1541.
+
+    Parameters
+    ----------
+    P : numpy.ndarray 
+        Transition Probability Matrix after gradient update, potentially invalid. 
+    
+    Returns
+    -------
+    numpy.ndarray
+        Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
+    """
+    n = P.shape[0]
+    P_new = jnp.full_like(P, np.nan)
+    for i in range(n):
+        P_new = P_new.at[i, :].set(proj_row_onto_simplex(P[i, :]))
     return P_new
 
 

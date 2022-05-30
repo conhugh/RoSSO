@@ -12,7 +12,104 @@ import TestSpec as ts
 from StratCompJax import *
 from StratViz import *
 
-def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
+# Run desired optimizer for a fixed number of iterations
+def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, grad_mode):
+    """
+    Test and time various Optax optimizers for a fixed number of iterations.
+
+    Parameters
+    ----------
+    P0 : numpy.ndarray 
+        Random initial transition probability matrix. 
+    F0 : numpy.ndarray
+        Placeholder for storing FHT probability matrices. 
+    tau : int
+        Intruder's attack duration. 
+    eps0 : float
+        Learning rate.
+    max_iters : int
+        Total number of iterations.
+    grad_mode : String
+        The type of gradient computation to perform.
+    
+    Returns
+    -------
+    numpy.ndarray
+        Transition probability matrix corresponding to optimized strategy.
+    numpy.ndarray
+        Capture Probability matrix corresponding to optimized strategy.
+    """
+    init_Ps = init_rand_Ps(A, num_init_Ps)
+    num_LCPs = 4
+    nominal_learning_rate = 0.0001
+    n = A.shape[0]
+    F0 = jnp.full((n, n, tau), np.NaN)
+    print("comp_MCP_grad_param id:")
+    print(id(comp_MCP_grad_param))
+    # print("comp_MCP_grad_param_extra id:")
+    # print(id(comp_MCP_grad_param_extra))
+    # print("comp_MCP_grad_param_test id:")
+    # print(id(comp_MCP_grad_param_test))
+    time_avgs = []
+    for k in range(num_init_Ps):
+        # print("---------------------Optimizing with initial P matrix number " + str(k + 1) + "----------------------------")
+        P0 = init_Ps[:, :, k]
+        P = P0
+        Q = P0
+        # print("P0 shape = " + str(jnp.shape(P0)) + ", F0 shape = " + str(jnp.shape(F0)) + ", A shape = " + str(jnp.shape(A)))
+        scaled_learning_rate, _ = set_learning_rate(P0, A, F0, tau, num_LCPs, nominal_learning_rate, grad_mode)
+        # print("scaled_learning_rate = " + str(scaled_learning_rate))
+        # optimizer = optax.rmsprop(scaled_learning_rate)
+        # optimizer = optax.rmsprop(scaled_learning_rate, momentum=0.9, nesterov=False)
+        optimizer = optax.sgd(scaled_learning_rate, momentum=0.99, nesterov=True)
+        opt_state = optimizer.init(P0)
+        check_time = time.time()
+        for iter in range(max_iters + 1):
+            # print("iteration number: " + str(k))
+            # start_time = time.time()
+            if grad_mode == "MCP_parametrization":
+                grad = -1*comp_MCP_grad_param(Q, A, F0, tau) # negate so that the optimizer does gradient ascent
+            # elif grad_mode == "MCP_extra_parametrization":
+            #     grad = -1*comp_MCP_grad_param_extra(Q, A, F0, tau, num_LCPs) # negate so that the optimizer does gradient ascent
+            # elif grad_mode == "MCP_test_parametrization":
+            #     grad = -1*comp_MCP_grad_param_test(Q, A, F0, tau) # negate so that the optimizer does gradient ascent
+            elif grad_mode == "MCP_abs_parametrization":
+                grad = -1*comp_MCP_grad_param_abs(Q, A, F0, tau) # negate so that the optimizer does gradient ascent
+            elif grad_mode == "LCP_parametrization":
+                grad = -1*comp_avg_LCP_grad_param(Q, A, F0, tau, num_LCPs) # negate so that the optimizer does gradient ascent
+            elif grad_mode == "MCP_projection":
+                grad = -1*comp_MCP_grad(P, F0, tau) # negate so that the optimizer does gradient ascent
+            elif grad_mode == "LCP_projection":
+                grad = -1*comp_avg_LCP_grad(P, F0, tau, num_LCPs) # negate so that the optimizer does gradient ascent
+            else:
+                raise ValueError("Invalid grad_mode specified!")
+            # print("--- Getting grad took: %s seconds ---" % (time.time() - start_time))
+            # start_time = time.time()
+            updates, opt_state = optimizer.update(grad, opt_state)
+            # print("--- Getting update and state took: %s seconds ---" % (time.time() - start_time))
+            # start_time = time.time()
+            if grad_mode.find("parametrization") != -1:
+                Q = optax.apply_updates(Q, updates)
+                P = comp_P_param(Q, A)
+            else:
+                P = optax.apply_updates(P, updates)
+                P = proj_onto_simplex(P)
+            # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
+            # if iter % 200 == 0:
+            # # if iter % 1 == 0: 
+            #     print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time)[:7] + "-------")
+            #     print("grad 1-norm = " + str(jnp.sum(jnp.abs(grad))))
+            #     print("grad inf norm = " + str(jnp.max(jnp.abs(grad))))
+            #     print("MCP = " + str(compute_MCP(P, F0, tau)))
+        opt_time = time.time() - check_time
+        time_avgs.append(opt_time)
+        print("Optimizing P matrix number " + str(k + 1) + " over " + str(max_iters) + " iterations took: " + str(opt_time)[:7] + " seconds")
+        # print("Final MCP:")
+        # print(compute_MCP(P, F0, tau))
+    return time_avgs
+
+# Run desired optimizer for a fixed number of iterations 
+def test_optimizer_fixed_iters_test(A, tau, num_init_Ps, max_iters):
     """
     Test and time various Optax optimizers for a fixed number of iterations.
 
@@ -37,43 +134,32 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
         Capture Probability matrix corresponding to optimized strategy.
     """
     init_Ps = init_rand_Ps(A, num_init_Ps)
-    num_LCPs = 4
+    num_LCPs=1
     nominal_learning_rate = 0.0001
     grad_mode = "MCP_parametrization"
+    grad_func = get_grad_func(grad_mode)
+    print("grad_func id:")
+    print(id(grad_func))
     n = A.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
-
+    time_avgs = []
     for k in range(num_init_Ps):
-        print("---------------------Optimizing with initial P matrix number " + str(k + 1) + "----------------------------")
+        # print("---------------------Optimizing with initial P matrix number " + str(k + 1) + "----------------------------")
         P0 = init_Ps[:, :, k]
         P = P0
         Q = P0
         # print("P0 shape = " + str(jnp.shape(P0)) + ", F0 shape = " + str(jnp.shape(F0)) + ", A shape = " + str(jnp.shape(A)))
         scaled_learning_rate, _ = set_learning_rate(P0, A, F0, tau, num_LCPs, nominal_learning_rate, grad_mode)
-        print("scaled_learning_rate = " + str(scaled_learning_rate))
+        # print("scaled_learning_rate = " + str(scaled_learning_rate))
         # optimizer = optax.rmsprop(scaled_learning_rate)
-        optimizer = optax.rmsprop(scaled_learning_rate, momentum=0.9, nesterov=False)
-        # optimizer = optax.sgd(scaled_learning_rate, momentum=0.99, nesterov=True)
+        # optimizer = optax.rmsprop(scaled_learning_rate, momentum=0.9, nesterov=False)
+        optimizer = optax.sgd(scaled_learning_rate, momentum=0.99, nesterov=True)
         opt_state = optimizer.init(P0)
         check_time = time.time()
         for iter in range(max_iters + 1):
-            # bound the update to the P matrix:
-            # updates = jnp.minimum(updates, P_update_bound)
-            # updates = jnp.maximum(updates, -1*P_update_bound)
-            # print("iteration number: " + str(k))
             # start_time = time.time()
-            if grad_mode == "MCP_parametrization":
-                grad = -1*comp_MCP_grad_param_abs(Q, A, F0, tau) # negate so that the optimizer does gradient ascent
-            elif grad_mode == "MCP_abs_parametrization":
-                grad = -1*comp_MCP_grad_param_abs(Q, A, F0, tau) # negate so that the optimizer does gradient ascent
-            elif grad_mode == "LCP_parametrization":
-                grad = -1*comp_avg_LCP_grad_param(Q, A, F0, tau, num_LCPs) # negate so that the optimizer does gradient ascent
-            elif grad_mode == "MCP_projection":
-                grad = -1*comp_MCP_grad(P, F0, tau) # negate so that the optimizer does gradient ascent
-            elif grad_mode == "LCP_projection":
-                grad = -1*comp_avg_LCP_grad(P, F0, tau, num_LCPs) # negate so that the optimizer does gradient ascent
-            else:
-                raise ValueError("Invalid grad_mode specified!")
+            grad = -1*grad_func(Q, A, F0, tau)
+            # grad = grad_comp_test(P, Q, A, F0, tau, num_LCPs, grad_mode)
             # print("--- Getting grad took: %s seconds ---" % (time.time() - start_time))
             # start_time = time.time()
             updates, opt_state = optimizer.update(grad, opt_state)
@@ -86,22 +172,28 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
                 P = optax.apply_updates(P, updates)
                 P = proj_onto_simplex(P)
             # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
-            if iter % 200 == 0:
-            # if iter % 1 == 0: 
-                print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time)[:7] + "-------")
-                print("grad 1-norm = " + str(jnp.sum(jnp.abs(grad))))
-                print("grad inf norm = " + str(jnp.max(jnp.abs(grad))))
-                print("MCP = " + str(compute_MCP(P, F0, tau)))
-
-
-        print("Final MCP:")
-        print(compute_MCP(P, F0, tau))
+            # if iter % 200 == 0:
+            # # if iter % 1 == 0: 
+            #     print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time)[:7] + "-------")
+            #     print("grad 1-norm = " + str(jnp.sum(jnp.abs(grad))))
+            #     print("grad inf norm = " + str(jnp.max(jnp.abs(grad))))
+            #     print("MCP = " + str(compute_MCP(P, F0, tau)))
+        opt_time = time.time() - check_time
+        time_avgs.append(opt_time)
+        print("Optimizing P matrix number " + str(k + 1) + " over " + str(max_iters) + " iterations took: " + str(opt_time)[:7] + " seconds")
+        # print("Final MCP:")
+        # print(compute_MCP(P, F0, tau))
+    return time_avgs
 
 def set_learning_rate(P0, A, F0, tau, num_LCPs, nominal_LR, grad_mode):
     if grad_mode == "MCP_projection":
         init_grad = comp_MCP_grad(P0, A, F0, tau)
     elif grad_mode == "MCP_parametrization":
         init_grad = comp_MCP_grad_param(P0, A, F0, tau)
+    # elif grad_mode == "MCP_test_parametrization":
+    #     init_grad = comp_MCP_grad_param_test(P0, A, F0, tau)
+    # elif grad_mode == "MCP_extra_parametrization":
+    #     init_grad = comp_MCP_grad_param_extra(P0, A, F0, tau, num_LCPs)
     elif grad_mode == "MCP_abs_parametrization":
         init_grad = comp_MCP_grad_param_abs(P0, A, F0, tau) 
     elif grad_mode == "LCP_parametrization":
@@ -113,7 +205,6 @@ def set_learning_rate(P0, A, F0, tau, num_LCPs, nominal_LR, grad_mode):
     LR_scale = jnp.max(jnp.abs(init_grad))
     LR = nominal_LR/LR_scale
     return LR, LR_scale
-
 
 # Run the set of tests described by test_specification:
 def run_test_set(test_set_name, test_spec=None, save=True, opt_comparison=False):
@@ -164,18 +255,8 @@ def run_test_set(test_set_name, test_spec=None, save=True, opt_comparison=False)
     if(opt_comparison):
         plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, final_MCPs)
 
-
 # Explore optima for the given graph and attack duration:
 def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, trackers, save=True):
-    n = A.shape[0]
-    F0 = jnp.full((n, n, tau), np.NaN)
-    num_init_Ps = opt_params["num_init_Ps"]
-    init_Ps = init_rand_Ps(A, num_init_Ps)
-    learning_rates = []
-    lr_scales = []
-    conv_times = []
-    opt_metrics = {track : [] for track in trackers}
-
     if(save):
         # Create directory for saving the results for the given graph and tau value:
         test_name = "test" + str(test_num) + "_" + graph_name + "_tau" + str(tau)
@@ -190,6 +271,14 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
             os.mkdir(metrics_dir)
 
     # Run the optimization algorithm:
+    n = A.shape[0]
+    F0 = jnp.full((n, n, tau), np.NaN)
+    num_init_Ps = opt_params["num_init_Ps"]
+    init_Ps = init_rand_Ps(A, num_init_Ps)
+    learning_rates = []
+    lr_scales = []
+    conv_times = []
+    opt_metrics = {track : [] for track in trackers}
     for k in range(num_init_Ps):
         print("Optimizing with initial P matrix number " + str(k + 1) + "...")
         print("Using optimizer: " + opt_params["optimizer_name"])
@@ -200,7 +289,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
         opt_params["scaled_learning_rate"] = lr
         # --------------------------------------------------------------------
         start_time = time.time()
-        P, F, tracked_vals = test_optimizer_grad_conv(P0, A, F0, tau, opt_params, schedules, trackers)
+        P, F, tracked_vals = run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers)
         conv_time = time.time() - start_time
         print("--- Optimization took: %s seconds ---" % (conv_time))
         # --------------------------------------------------------------------
@@ -216,15 +305,12 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
                     opt_metrics[track].append(tracked_vals[track])
                 else:
                     opt_metrics[track].extend(tracked_vals[track])
-                # with open(metrics_dir + "/debug.txt", 'w') as metric_debug_file:
-                #     metric_debug_file.write(str(opt_metrics["P_diff_sums"]))
 
     if(save):
         np.savetxt(test_dir + "/A.csv", np.asarray(A).astype(int), delimiter=',')  # Save the env graph binary adjacency matrix
         draw_env_graph(A, graph_name, test_dir)  # Save a drawing of the env graph
         visualize_metrics(opt_metrics, test_name, test_dir) # Save plots of the optimization metrics tracked
         graph_code = gen_graph_code(A)  # Generate unique graph code
-
         # Save all optimization metrics which were tracked:
         for metric_name in opt_metrics.keys():
             metric_path = os.path.join(metrics_dir, metric_name + ".txt")
@@ -233,7 +319,6 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
                 for r in range(len(opt_metrics[metric_name])):
                     metric_string = metric_string + str(np.asarray(opt_metrics[metric_name][r])) + "\n"
                 metric_file.write(metric_string)
-                
         # Write info file with graph and optimization algorithm info:
         info_path = os.path.join(test_dir, "test" + str(test_num) + "_info.txt")
         with open(info_path, 'w') as info:
@@ -269,7 +354,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
         info.close()
     return conv_times, opt_metrics["final_iters"], opt_metrics["final_MCP"]
 
-def test_optimizer_grad_conv(P0, A, F0, tau, opt_params, schedules, trackers):
+def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
     check_time = time.time()
     n = P0.shape[0]
     P = P0 
@@ -278,6 +363,7 @@ def test_optimizer_grad_conv(P0, A, F0, tau, opt_params, schedules, trackers):
 
     optimizer = setup_optimizer(opt_params)
     opt_state = optimizer.init(P0)
+    grad_func = get_grad_func(opt_params["grad_mode"])
 
     conv_test_vals = deque()  # queue storing recent values of desired metric, for checking convergence
     P_update_bound = jnp.full((n, n), opt_params["P_update_elt_bound"])
@@ -295,11 +381,11 @@ def test_optimizer_grad_conv(P0, A, F0, tau, opt_params, schedules, trackers):
     converged = False
     while not converged:
         # Apply desired scheduling:
-        if opt_params["use_learning_rate_schedule"]:
+        if opt_params["use_learning_rate_schedule"]:  #currently only implemented for SGD
             if lr_schedule["iters"].count(iter) != 0:
                 index = lr_schedule["iters"].index(iter)
                 new_lr = opt_params["scaled_learning_rate"]*lr_schedule["scaled_learning_rate_multipliers"][index]
-                if opt_params["use_momentum"]:
+                if opt_params["use_momentum"]:  
                     optimizer = optax.sgd(new_lr, momentum=opt_params["mom_decay_rate"], nesterov=opt_params["use_nesterov"])
                 else:
                     optimizer = optax.sgd(new_lr)
@@ -319,26 +405,26 @@ def test_optimizer_grad_conv(P0, A, F0, tau, opt_params, schedules, trackers):
                 num_LCPs = lcp_num_schedule["lcp_nums"][index]
                 print("Updated P_update_elt_bound to: " + str(num_LCPs) + " at iteration " + str(iter))
 
-        # compute gradient:
-        grad = get_grad(A, P, Q, F0, tau, num_LCPs, opt_params)
 
-        # get update to the P matrix or Q matrix:
-        updates, opt_state = optimizer.update(grad, opt_state)
-        # bound the update to the P matrix if using projection-based approach: [TEST TO SEE IF Q BOUND NEEDED]
-        if opt_params["grad_mode"].find("projection") != -1:
+        # apply update to P matrix, and parametrization Q, if applicable:
+        if opt_params["grad_mode"].find("parametrization") != -1:
+            grad = -1*grad_func(Q, A, F0, tau) # compute negative gradient
+            P_old = comp_P_param(Q, A)
+            # get update to the parametrization Q:
+            updates, opt_state = optimizer.update(grad, opt_state)
+            Q = optax.apply_updates(Q, updates)
+            P = comp_P_param(Q, A) # compute new P matrix
+        else:
+            grad = -1*grad_func(P, A, F0, tau) # compute negative gradient
+            P_old = P
+            # get update to the P matrix:
+            updates, opt_state = optimizer.update(grad, opt_state)
             updates = jnp.minimum(updates, P_update_bound)
             updates = jnp.maximum(updates, -1*P_update_bound)
-
-        # apply update to P matrix and compute P_diff matrix:
-        if opt_params["grad_mode"].find("parametrization") != -1:
-            P_old = comp_P_param(Q, A)
-            Q = optax.apply_updates(Q, updates)
-            P = comp_P_param(Q, A)
-        else:
-            P_old = P
-            P = optax.apply_updates(P, updates)
-            P = proj_onto_simplex(P)
+            P = optax.apply_updates(P, updates) 
+            P = proj_onto_simplex(P) # project rows onto simplexes to get valid new P matrix
     
+        # Compute the difference between the latest P matrix and the previous one:
         P_diff = P - P_old
         abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
 
@@ -396,21 +482,6 @@ def setup_optimizer(opt_params):
             optimizer = optax.rmsprop(opt_params["scaled_learning_rate"])
     return optimizer
 
-def get_grad(A, P, Q, F0, tau, num_LCPs, opt_params):
-        if opt_params["grad_mode"] == "MCP_parametrization":
-            grad = -1*comp_MCP_grad_param(Q, A, F0, tau) # negate so that the optimizer does gradient ascent
-        elif opt_params["grad_mode"] == "MCP_abs_parametrization":
-            grad = -1*comp_MCP_grad_param_abs(Q, A, F0, tau) # negate so that the optimizer does gradient ascent
-        elif opt_params["grad_mode"] == "LCP_parametrization":
-            grad = -1*comp_avg_LCP_grad_param(Q, A, F0, tau, num_LCPs) # negate so that the optimizer does gradient ascent
-        elif opt_params["grad_mode"] == "MCP_projection":
-            grad = -1*comp_MCP_grad(P, F0, tau) # negate so that the optimizer does gradient ascent
-        elif opt_params["grad_mode"] == "LCP_projection":
-            grad = -1*comp_avg_LCP_grad(P, F0, tau, num_LCPs) # negate so that the optimizer does gradient ascent
-        else:
-            raise ValueError("Invalid grad_mode specified!")
-        return grad
-
 # Check for convergence in moving average of chosen convergence metric:
 def conv_check(iter, new_val, conv_test_vals, opt_params):
     conv_test_vals.append(new_val)
@@ -425,6 +496,8 @@ def conv_check(iter, new_val, conv_test_vals, opt_params):
         converged = True
     return converged, conv_test_vals
 
+# 
+
 # TESTING ------------------------------------------------------------------------
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
@@ -437,24 +510,43 @@ if __name__ == '__main__':
     run_test_set(test_set_name, test_spec)
     print("Running test_set_" + test_set_name + " took " + str(time.time() - test_start_time) + " seconds to complete.")
 
-    # A, graph_name = gen_grid_G(3, 3)
+    visualize_results(test_set_name)
+    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
+    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
+    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
+    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=10, plot_best_fit=True)
+
+    # A, graph_name = gen_grid_G(3, 5)
     # tau = graph_diam(A)
-    # num_init_Ps = 5
-    # max_iters = 1000
-    # print("Graph name: " + graph_name)
-    # test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
+    # num_init_Ps = 15
+    # max_iters = 2000
+    # print("Graph name: " + graph_name)    
 
-    # test_start_time = time.time()
-    # for i in range(1):
-    #     for j in range(1):
-    #         for k in range(len(test_graphs)):
-    #             print("-------- Working on Graph Number " + str(graph_num) + "----------")
-    #             A = test_graphs[k]
-    #             tau = test_taus[k]
-    #             explore_graph_optima(A, tau, test_set_name, graph_num, num_init_Ps, grad_mode="MCP_parametrization")
-    #             graph_num = graph_num + 1
-    # print("Running test_set_" + test_set_name + " took " + str(time.time() - test_start_time) + " seconds to complete.")
+    # print("--------------------- Speed testing standard jacrev...")
+    # test_time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_parametrization")
+    # print("Optimizing took " + str(np.mean(np.asarray(test_time_avgs))) + " seconds to complete on avg")
 
+    # print("---------------------Speed testing with grad...")
+    # time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_test_parametrization")
+    # print("Optimizing (grad) took " + str(np.mean(np.asarray(time_avgs))) + " seconds to complete on avg")
+
+    # print("---------------------Speed testing with extra param...")
+    # time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_extra_parametrization")
+    # print("Optimizing (extra param) took " + str(np.mean(np.asarray(time_avgs))) + " seconds to complete on avg")
+
+    # print("--------------------- Speed testing standard jacrev...")
+    # test_time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_parametrization")
+    # print("Optimizing took " + str(np.mean(np.asarray(test_time_avgs))) + " seconds to complete on avg")
+
+    # print("---------------------Speed testing with grad...")
+    # time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_test_parametrization")
+    # print("Optimizing (grad) took " + str(np.mean(np.asarray(time_avgs))) + " seconds to complete on avg")
+
+    # print("---------------------Speed testing with extra param...")
+    # time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_extra_parametrization")
+    # print("Optimizing (extra param) took " + str(np.mean(np.asarray(time_avgs))) + " seconds to complete on avg")
+
+    
     # Visualization: [NEED TO FIX CIRCULAR IMPORT WITH visualize_results for avg_opt_P_mat drawing]
     # visualize_metrics(test_set_name, overlay=True)
     # visualize_results(test_set_name)

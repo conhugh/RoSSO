@@ -263,9 +263,7 @@ def visualize_metrics(metrics, test_name, test_dir, overlay=True):
                     plt.xlabel("Iteration Number")
                     plt.ylabel(metric_name)
                     plt.title(test_name)
-
                 plt.plot(iters, metric_vals, label="Run " + str(r + 1))
-
                 if not overlay:
                     plot_name = metric_name + "_" + str(r + 1)
                     plt.savefig(os.path.join(met_vis_dir, plot_name), bbox_inches = "tight")
@@ -401,9 +399,7 @@ def visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_f
     MCP_dir = os.path.join(test_set_dir, "MCP_results")
     if not os.path.isdir(MCP_dir):
         os.mkdir(MCP_dir)
-
     MCP_data = get_MCP_data(test_set_name, num_top_MCPs)
-
     plt.figure()
     if tau_study:
         plt.scatter(MCP_data["taus"], MCP_data["MCP_avgs"])
