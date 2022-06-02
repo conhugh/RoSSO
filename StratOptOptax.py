@@ -246,8 +246,11 @@ def run_test_set(test_set_name, test_spec=None, save=True, opt_comparison=False)
             schedules = test_spec.schedules[test_name]
         else:
             schedules = test_spec.schedules["schedules"]
+        test_start_time = time.time()
         print("-------- Working on Graph " + graph_name + " with tau = " + str(tau) + "----------")
         times, iters, MCPs = run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, trackers)
+        print("Running test number " + str(test_num) + " took " + str(time.time() - test_start_time) + " seconds to complete.")
+        
         run_times.append(times)
         final_iters.append(iters)
         final_MCPs.append(MCPs)
@@ -309,7 +312,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
     if(save):
         np.savetxt(test_dir + "/A.csv", np.asarray(A).astype(int), delimiter=',')  # Save the env graph binary adjacency matrix
         draw_env_graph(A, graph_name, test_dir)  # Save a drawing of the env graph
-        visualize_metrics(opt_metrics, test_name, test_dir) # Save plots of the optimization metrics tracked
+        visualize_metrics(opt_metrics, test_name, test_dir, show_legend=False) # Save plots of the optimization metrics tracked
         graph_code = gen_graph_code(A)  # Generate unique graph code
         # Save all optimization metrics which were tracked:
         for metric_name in opt_metrics.keys():
@@ -496,26 +499,180 @@ def conv_check(iter, new_val, conv_test_vals, opt_params):
         converged = True
     return converged, conv_test_vals
 
-# 
+# Simulated annealing approach to finding optimal strategy:
+def sim_anneal(Q0, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print):
+    check_time = time.time()
+    n = A.shape[0]
+    Q = Q0
+    best_Q = Q
+    P = comp_P_param(Q, A)
+    best_MCP = compute_MCP(P, F0, tau)
+    curr_Q, curr_MCP = best_Q, best_MCP
+    key = jax.random.PRNGKey(1)
+    iter = 0  # number of gradient ascent steps taken so far
+    for iter in range(max_iters + 1):
+        # if(iter % iters_per_print == 0):
+        #     print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time) + "-------")
+        #     print("best_MCP = " + str(best_MCP))
+        #     print("curr_MCP = " + str(curr_MCP))
+        key, subkey = jax.random.split(key)
+        candidate_Q = curr_Q + elt_step_size*jax.random.uniform(subkey, (n, n))
+        candidate_P = comp_P_param(candidate_Q, A)
+        candidate_MCP = compute_MCP(candidate_P,  F0, tau)
+        if candidate_MCP > best_MCP:
+            best_Q, best_MCP = candidate_Q, candidate_MCP
+        MCP_diff = curr_MCP - candidate_MCP
+        temp = init_temp/float(iter + 1)
+        metropolis = jnp.exp(-MCP_diff/temp)
+        key, subkey = jax.random.split(key)
+        if MCP_diff > 0 or jax.random.uniform(subkey) < metropolis:
+            curr_Q, curr_MCP = candidate_Q, candidate_MCP
+    best_P = comp_P_param(best_Q, A)
+    return best_Q, best_P, best_MCP
+
+def sim_anneal_test(Q0, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print):
+    check_time = time.time()
+    n = A.shape[0]
+    Q = Q0
+    best_Q = Q
+    P = comp_P_param_abs(Q, A)
+    best_MCP = compute_MCP(P, F0, tau)
+    curr_Q, curr_MCP = best_Q, best_MCP
+    print("initial MCP = ")
+    print(curr_MCP)
+    key = jax.random.PRNGKey(1)
+    iter = 0  # number of gradient ascent steps taken so far
+    for iter in range(max_iters + 1):
+        # if(iter % iters_per_print == 0):
+        #     print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time) + "-------")
+        #     print("best_MCP = " + str(best_MCP))
+        #     print("curr_MCP = " + str(curr_MCP))
+        curr_Q, curr_MCP, best_Q, best_MCP = sim_anneal_inner(curr_Q, curr_MCP, best_Q, best_MCP, iter, A, F0, tau, elt_step_size, init_temp, key)
+        time.sleep(0.005)
+    best_P = comp_P_param_abs(best_Q, A)
+    return best_Q, best_P, best_MCP
+
+@functools.partial(jit, static_argnames=['tau'])
+def sim_anneal_inner(curr_Q, curr_MCP, best_Q, best_MCP, iter, A, F0, tau, elt_step_size, init_temp, key):
+    key, subkey = jax.random.split(key)
+    candidate_Q = curr_Q + elt_step_size*jax.random.uniform(subkey, (n, n), minval=-1.0, maxval=1.0)
+    candidate_P = comp_P_param_abs(candidate_Q, A)
+    candidate_MCP = compute_MCP(candidate_P,  F0, tau)
+    # if candidate_MCP > best_MCP:
+    MCP_array = jnp.full(2, np.NaN)
+    MCP_array = MCP_array.at[0].set(candidate_MCP)
+    MCP_array = MCP_array.at[1].set(best_MCP)
+    Q_array = jnp.full((n, n, 2), np.NaN)
+    Q_array = Q_array.at[:, :, 0].set(candidate_Q)
+    Q_array = Q_array.at[:, :, 1].set(best_Q)
+    best_MCP = jnp.max(MCP_array)
+    best_ind = jnp.argmax(MCP_array)
+    best_Q = Q_array[:, :, best_ind]
+    MCP_diff = curr_MCP - candidate_MCP
+    temp = init_temp/jnp.array(iter + 1, dtype=float)
+    metropolis = jnp.exp(-MCP_diff/temp)
+    key, subkey = jax.random.split(key)
+    # reset arrays to hold candidate and curr:
+    Q_array = Q_array.at[:, :, 0].set(candidate_Q)
+    Q_array = Q_array.at[:, :, 1].set(curr_Q)
+    MCP_array = MCP_array.at[0].set(candidate_MCP)
+    MCP_array = MCP_array.at[1].set(curr_MCP)
+    # check if MCP_diff is > 0:
+    MCP_diff_array = jnp.full(2, np.NaN)
+    MCP_diff_array = MCP_diff_array.at[0].set(MCP_diff)
+    MCP_diff_array = MCP_diff_array.at[1].set(0)
+    zero_check_ind = jnp.argmax(MCP_diff_array)
+    # update curr_Q and curr_MCP if so:
+    curr_Q = Q_array[:, :, zero_check_ind]
+    curr_MCP = MCP_array[zero_check_ind]
+    # check if metropolis criterion satisfied and update curr_Q and curr_MCP if so:
+    metropolis_array = jnp.full(2, np.NaN)
+    metropolis_array = metropolis_array.at[0].set(jax.random.uniform(subkey))
+    metropolis_array = metropolis_array.at[1].set(metropolis)
+    metropolis_ind = jnp.argmin(metropolis_array)
+    curr_Q = Q_array[:, :, metropolis_ind]
+    curr_MCP = MCP_array[metropolis_ind]
+    return curr_Q, curr_MCP, best_Q, best_MCP
 
 # TESTING ------------------------------------------------------------------------
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
     np.set_printoptions(suppress=True)
 
-    test_set_name = "Complete_Graph_Testing4"
-    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/complete_graph_test_spec_v2.json")
+    test_set_name = "Split_Star_Study2"
+    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/splitstar_study_v2.json")
 
-    test_start_time = time.time()
+    test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
-    print("Running test_set_" + test_set_name + " took " + str(time.time() - test_start_time) + " seconds to complete.")
+    print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
 
-    visualize_results(test_set_name)
-    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
-    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
-    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
-    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=10, plot_best_fit=True)
 
+
+
+    # res_vis_dir = os.getcwd() + "/Results/test_set_InitP1000_Study_3x3Grid1/test1_grid_W3_H3_tau4/results_visualization"
+    # best_opt_P = np.loadtxt(res_vis_dir + "/sym_transformed_opt_P_887.csv", delimiter=',')
+
+    # A, graph_name = gen_grid_G(3, 3)
+    # n = A.shape[0]
+    # tau = 4
+    # F0 = jnp.full((n, n, tau), np.NaN)
+    # test_opt_P = np.array([[0, 0.467, 0, 0.533, 0, 0, 0, 0, 0],
+    #                        [0.3, 0, 0, 0, 0.7, 0, 0, 0, 0],
+    #                        [0, 1.00, 0, 0, 0, 0, 0, 0, 0], 
+    #                        [0.337, 0, 0, 0, 0.575, 0, 0.088, 0, 0],
+    #                        [0, 0, 0, 0, 0, 0.60, 0, 0.40, 0],
+    #                        [0, 0, 0.567, 0, 0, 0, 0, 0, 0.433],
+    #                        [0, 0, 0, 1.00, 0, 0, 0, 0, 0],
+    #                        [0, 0, 0, 0, 0.4433, 0, 0.52, 0, 0.0367],
+    #                        [0, 0, 0, 0, 0, 0.30, 0, 0.70, 0]])                       
+    # test_opt_P = jnp.asarray(test_opt_P, dtype=float)
+    # MCP = compute_MCP(test_opt_P, F0, tau)
+    # print("test_opt_P = ")
+    # print(np.asarray(test_opt_P))    
+    # print("MCP = ")
+    # print(MCP)
+    # print("best_opt_P = ")
+    # print(best_opt_P)
+    # best_opt_P = jnp.asarray(best_opt_P)
+    # MCP = compute_MCP(best_opt_P, F0, tau)
+    # print("MCP = ")
+    # print(MCP)
+
+
+
+    # visualize_results(test_set_name)
+    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
+    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
+    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
+    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=10, plot_best_fit=True)
+
+    # A, graph_name = gen_grid_G(3, 3)
+    # num_init_Ps = 1
+    # init_Ps = init_rand_Ps(A, num_init_Ps)
+    # tau = graph_diam(A)
+    # P0 = init_Ps[:, :, 0]
+    # n = A.shape[0]
+    # F0 = jnp.full((n, n, tau), np.NaN)
+    # P0 = init_Ps[:, :, 1]
+    # elt_step_size = 0.1
+    # init_temp = 500
+    # max_iters = 5000
+    # iters_per_print = 100
+    # print("Graph Name: " + graph_name)
+    # print("tau = " + str(tau))
+    # # print("init_P_num = " + str(i))
+    # best_Q, best_P, best_MCP = sim_anneal_test(P0, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print)
+    # # max_iters = 10000
+    # init_temp = 100
+    # for i in range(50):
+    #     print("Current best MCP: " + str(best_MCP))
+    #     elt_step_size = 0.1/(i + 1)
+    #     best_Q, best_P, best_MCP = sim_anneal_test(best_Q, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print)
+
+    # print(best_MCP)
+    # print(best_Q)
+    # print(best_P)
+    
     # A, graph_name = gen_grid_G(3, 5)
     # tau = graph_diam(A)
     # num_init_Ps = 15
