@@ -531,8 +531,7 @@ def sim_anneal(Q0, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_pr
     return best_Q, best_P, best_MCP
 
 def sim_anneal_test(Q0, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print):
-    check_time = time.time()
-    n = A.shape[0]
+    # check_time = time.time()
     Q = Q0
     best_Q = Q
     P = comp_P_param_abs(Q, A)
@@ -554,6 +553,7 @@ def sim_anneal_test(Q0, A, F0, tau, elt_step_size, init_temp, max_iters, iters_p
 
 @functools.partial(jit, static_argnames=['tau'])
 def sim_anneal_inner(curr_Q, curr_MCP, best_Q, best_MCP, iter, A, F0, tau, elt_step_size, init_temp, key):
+    n = A.shape[0]
     key, subkey = jax.random.split(key)
     candidate_Q = curr_Q + elt_step_size*jax.random.uniform(subkey, (n, n), minval=-1.0, maxval=1.0)
     candidate_P = comp_P_param_abs(candidate_Q, A)
@@ -599,15 +599,12 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
     np.set_printoptions(suppress=True)
 
-    test_set_name = "Split_Star_Study2"
-    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/splitstar_study_v2.json")
+    # test_set_name = "Grid_Graph_Aspect_Ratio_Study1"
+    # test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/grid_graph_aspect_ratio_study.json")
 
-    test_set_start_time = time.time()
-    run_test_set(test_set_name, test_spec)
-    print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
-
-
-
+    # test_set_start_time = time.time()
+    # run_test_set(test_set_name, test_spec)
+    # print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
 
     # res_vis_dir = os.getcwd() + "/Results/test_set_InitP1000_Study_3x3Grid1/test1_grid_W3_H3_tau4/results_visualization"
     # best_opt_P = np.loadtxt(res_vis_dir + "/sym_transformed_opt_P_887.csv", delimiter=',')
@@ -646,32 +643,32 @@ if __name__ == '__main__':
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=10, plot_best_fit=True)
 
-    # A, graph_name = gen_grid_G(3, 3)
-    # num_init_Ps = 1
-    # init_Ps = init_rand_Ps(A, num_init_Ps)
-    # tau = graph_diam(A)
-    # P0 = init_Ps[:, :, 0]
-    # n = A.shape[0]
-    # F0 = jnp.full((n, n, tau), np.NaN)
-    # P0 = init_Ps[:, :, 1]
-    # elt_step_size = 0.1
-    # init_temp = 500
-    # max_iters = 5000
-    # iters_per_print = 100
-    # print("Graph Name: " + graph_name)
-    # print("tau = " + str(tau))
-    # # print("init_P_num = " + str(i))
-    # best_Q, best_P, best_MCP = sim_anneal_test(P0, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print)
-    # # max_iters = 10000
-    # init_temp = 100
-    # for i in range(50):
-    #     print("Current best MCP: " + str(best_MCP))
-    #     elt_step_size = 0.1/(i + 1)
-    #     best_Q, best_P, best_MCP = sim_anneal_test(best_Q, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print)
+    A, graph_name = gen_grid_G(3, 3)
+    num_init_Ps = 1
+    init_Ps = init_rand_Ps(A, num_init_Ps)
+    tau = graph_diam(A)
+    P0 = init_Ps[:, :, 0]
+    n = A.shape[0]
+    F0 = jnp.full((n, n, tau), np.NaN)
+    P0 = init_Ps[:, :, 1]
+    elt_step_size = 0.1
+    init_temp = 500
+    max_iters = 5000
+    iters_per_print = 100
+    print("Graph Name: " + graph_name)
+    print("tau = " + str(tau))
+    # print("init_P_num = " + str(i))
+    best_Q, best_P, best_MCP = sim_anneal_test(P0, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print)
+    # max_iters = 10000
+    init_temp = 10
+    for i in range(50):
+        print("Current best MCP: " + str(best_MCP))
+        elt_step_size = 0.1/(i + 1)
+        best_Q, best_P, best_MCP = sim_anneal_test(best_Q, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print)
 
-    # print(best_MCP)
-    # print(best_Q)
-    # print(best_P)
+    print(best_MCP)
+    print(best_Q)
+    print(best_P)
     
     # A, graph_name = gen_grid_G(3, 5)
     # tau = graph_diam(A)

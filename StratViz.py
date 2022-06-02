@@ -679,7 +679,7 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
     
-    test_set_name = "Split_Star_Study1"
+    test_set_name = "Grid_Graph_Aspect_Ratio_Study1"
     # visualize_metrics_retro(test_set_name, overlay=True)
     visualize_results(test_set_name, num_top_MCP_runs=5)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
