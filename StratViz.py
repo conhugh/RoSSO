@@ -170,13 +170,16 @@ def draw_avg_opt_graph(A, avg_opt_P_mat, tau, folder_path, save=True):
     n = jnp.shape(A)[0]
     F0 = jnp.full((n, n, tau), np.NaN)
     F = compute_cap_probs(avg_opt_P_mat, F0, tau)
-    mcp_indices = np.where(F == np.min(F))
+    MCP = np.min(F)
+    MCP_indices = np.where(F == MCP)
+    G_viz.graph_attr["labelloc"] = "t"
+    G_viz.graph_attr["label"] = "MCP = " + str(MCP) + ", Attack Duration = " + str(tau)
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
-            if i in mcp_indices[0]:
+            if i in MCP_indices[0]:
                 robot_loc = G_viz.get_node(i)
                 robot_loc.attr["color"] = "blue"
-            if j in mcp_indices[1]:
+            if j in MCP_indices[1]:
                 intruder_loc = G_viz.get_node(j)
                 intruder_loc.attr["color"] = "red"
             if A[i, j] == 1:
@@ -212,7 +215,6 @@ def plot_CP_avg_opt_P(avg_opt_P_mat, tau, folder_path):
     plt.savefig(folder_path + "/avg_opt_Pcap_probs")
     plt.close()
 
-
 # Parse graph name (test set subdirectory) to get graph number and tau.
 # Graph name assumed to be in format: "graphX_tauY", returns X, Y
 def parse_test_name(test_name):
@@ -244,7 +246,7 @@ def find_overlay_files(directory, metric):
     return iter_filepaths, metric_filepaths
 
 # Plot optimization metrics as each test completes:
-def visualize_metrics(metrics, test_name, test_dir, overlay=True):
+def visualize_metrics(metrics, test_name, test_dir, show_legend=True, overlay=True):
     met_vis_dir = test_dir + "/metrics_visualization"
     if not os.path.isdir(met_vis_dir):
         os.mkdir(met_vis_dir)
@@ -269,10 +271,11 @@ def visualize_metrics(metrics, test_name, test_dir, overlay=True):
                     plt.savefig(os.path.join(met_vis_dir, plot_name), bbox_inches = "tight")
                     plt.close()    
             if overlay:
-                ax = plt.gca()
-                box = ax.get_position()
-                ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
-                plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+                if show_legend:
+                    ax = plt.gca()
+                    box = ax.get_position()
+                    ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
+                    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
                 plt.savefig(os.path.join(met_vis_dir, metric_name), bbox_inches = "tight")   
                 plt.close()
 
@@ -342,10 +345,14 @@ def visualize_metrics_retro(test_set_name, overlay=False):
                             plt.close()
         print_progress_bar(sub_dir_count + 1, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
 
+# Save symmetry-transformed optimized P matrices:
+def save_sym_opt_Ps(res_vis_dir, opt_P_mats, opt_P_run_nums):
+    for i in range(len(opt_P_run_nums)):
+        np.savetxt(res_vis_dir + "/sym_transformed_opt_P_" + str(opt_P_run_nums[i]) + ".csv", opt_P_mats[i], delimiter=',')
+
 # Visualize initial and optimized P matrices: 
-def visualize_results(test_set_name):
-    cwd = os.getcwd()
-    test_set_dir = os.path.join(cwd, "Results/test_set_" + test_set_name)
+def visualize_results(test_set_name, num_top_MCP_runs=None):
+    test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
     sub_dir_num = len(os.listdir(test_set_dir))
     print("Generating Results Visualization...")
     print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
@@ -354,29 +361,37 @@ def visualize_results(test_set_name):
             test_name = sub_dir
             _, graph_name, tau = parse_test_name(test_name)
             test_dir = os.path.join(test_set_dir, test_name)
-            res_vis_dir = os.path.join(test_dir, "results_visualization")
             res_dir = os.path.join(test_dir, "results")
+            metrics_dir = os.path.join(test_dir, "metrics")
+            res_vis_dir = os.path.join(test_dir, "results_visualization")
             if not os.path.isdir(res_vis_dir):
                 os.mkdir(res_vis_dir)
             with open(test_dir + "/A.csv") as A:
                 A = np.loadtxt(A, delimiter = ',')
+            top_MCP_run_nums=None
+            if num_top_MCP_runs is not None:
+                final_MCP_path = os.path.join(metrics_dir, "final_MCP.txt")
+                with open(final_MCP_path) as final_MCP_file:
+                    final_MCPs = np.loadtxt(final_MCP_file)
+                    top_MCP_run_nums = np.argsort(final_MCPs)[len(final_MCPs) - num_top_MCP_runs:] + 1
             init_P_mats = [] 
             opt_P_mats = []
             init_run_nums = []
             opt_run_nums = []
             for filename in os.listdir(res_dir):
                 run_num = int(filename[filename.rfind("_") + 1:filename.find(".csv")])
-                f = os.path.join(res_dir, filename)
-                if(filename.find("init_P") != -1):
-                    with open(f) as init_P:
-                        init_P = np.loadtxt(init_P, delimiter = ',')
-                        init_P_mats.append(init_P)
-                        init_run_nums.append(run_num)
-                if(filename.find("opt_P") != -1):
-                    with open(f) as opt_P:
-                        opt_P = np.loadtxt(opt_P, delimiter = ',')
-                        opt_P_mats.append(opt_P)
-                        opt_run_nums.append(run_num)
+                if top_MCP_run_nums is None or run_num in top_MCP_run_nums:
+                    f = os.path.join(res_dir, filename)
+                    if(filename.find("init_P") != -1):
+                        with open(f) as init_P:
+                            init_P = np.loadtxt(init_P, delimiter = ',')
+                            init_P_mats.append(init_P)
+                            init_run_nums.append(run_num)
+                    if(filename.find("opt_P") != -1):
+                        with open(f) as opt_P:
+                            opt_P = np.loadtxt(opt_P, delimiter = ',')
+                            opt_P_mats.append(opt_P)
+                            opt_run_nums.append(run_num)
             if graph_name.find("grid") != -1:
                 gridw = int(graph_name[graph_name.find("_W") + 2:graph_name.find("_H")])
                 gridh = int(graph_name[graph_name.find("_H") + 2:])
@@ -384,6 +399,7 @@ def visualize_results(test_set_name):
                 for r in range(1, len(opt_P_mats)):
                     opt_P_mats[r], sym_ind = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw)
                     init_P_mats[r], _ = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw, sym_ind)
+            save_sym_opt_Ps(res_vis_dir, opt_P_mats, opt_run_nums)
             plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, \
                                 test_name, os.path.join(res_vis_dir, "P_plot2D")) 
             plot_opt_trans_probs_2D(opt_P_mats, res_vis_dir)
@@ -393,7 +409,6 @@ def visualize_results(test_set_name):
             draw_opt_graphs(A, opt_P_mats, test_name, opt_run_nums, res_vis_dir)
         print_progress_bar(sub_dir_count + 1, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
 
-            
 def visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=False):
     test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
     MCP_dir = os.path.join(test_set_dir, "MCP_results")
@@ -638,7 +653,6 @@ def plot_optimizer_comparison_retro(test_set_name):
     plt.savefig(test_set_dir + "/OptimizerComparison.png", bbox_inches = "tight")
     plt.close()
 
-
 # Print iterations progress
 def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', print_end = "\r"):
     """
@@ -661,14 +675,13 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
     if iteration == total: 
         print()
     
-
             
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
     
-    test_set_name = "temp"
-    visualize_metrics_retro(test_set_name, overlay=True)
-    # visualize_results(test_set_name)
+    test_set_name = "Split_Star_Study1"
+    # visualize_metrics_retro(test_set_name, overlay=True)
+    visualize_results(test_set_name, num_top_MCP_runs=5)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
@@ -681,7 +694,11 @@ if __name__ == '__main__':
     # hex_gscale = hex(gscale)
     # print(hex_gscale)
 
-    # x = np.array([0, 1, 2, 3])
+    # x = np.array([1, 2, 3, 0, 4])
+    # print(len(x))
+    # x_inds = np.argsort(x)
+    # print(x_inds)
+    # print(x_inds[len(x) - 2:])
     # y = np.array([[0, 0, 0], [1, 2, 1], [2, 4, 1], [3, 6, 0]])
     # print(y.shape)
 
