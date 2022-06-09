@@ -10,7 +10,7 @@ test_graph_names = {}
 test_graph_codes = {}
 test_taus = {}
 test_start_time = time.time()
-for i in range(1, 22, 3):
+for i in range(1, 23, 3):
     graph, graph_name = gen_rand_tree_G(12, 3)
     graph_code = gen_graph_code(graph)
     test_graphs.append(graph)
