@@ -315,15 +315,15 @@ def gen_hallway_G(length, double_sided=True):
 
     Parameters
     ----------
-    width : int 
-        Number of nodes in each row of the hallway graph.
-    height : int
-        Number of nodes in each column of the hallway graph.
+    length : int 
+        Number of nodes in along the center of the hallway graph.
+    double_sided : bool
+        Whether the hallway graph has leaf nodes on both sides. 
     
     Returns
     -------
     jaxlib.xla_extension.DeviceArray
-        Binary adjacency matrix for the grid graph. 
+        Binary adjacency matrix for the hallway graph. 
     """
     if double_sided:
         graph_name = "hallway2S_L" + str(length)
@@ -337,22 +337,72 @@ def gen_hallway_G(length, double_sided=True):
     left_rooms = jnp.zeros((n, n)).at[:2*length, :2*length].set(jnp.diag(jnp.ones(length), -length)) \
                 + jnp.zeros((n, n)).at[:2*length, :2*length].set(jnp.diag(jnp.ones(length), length))
     A = A + left_rooms
-    # left_rooms = left_rooms.at[:, length].set(jnp.diag(jnp.ones(length), -length))
-    # A = A + jnp.diag(jnp.ones(length), -length)
-    # A = A + jnp.diag(jnp.ones(length), -length)
     if double_sided:
         right_rooms = jnp.zeros((n, n)).at[:, :].set(jnp.diag(jnp.ones(length), -2*length)) \
                      + jnp.zeros((n, n)).at[:, :].set(jnp.diag(jnp.ones(length), 2*length))
         A = A + right_rooms
-    # for k in range(n):
 
-    #     if k % height == 0:
-    #         A = A.at[k, k + 1].set(1)
-    #     elif k % height == (height - 1):
-    #         A = A.at[k, k - 1].set(1)
-    #     else:
-    #         A = A.at[k, k + 1].set(1)
-    #         A = A.at[k, k - 1].set(1)
+    return A, graph_name
+
+
+def gen_rand_tree_G(n, req_depth):
+    """
+    Generate binary adjacency matrix for a random tree graph. 
+
+    Parameters
+    ----------
+    n : int 
+        Number of nodes in the tree graph.
+    req_depth : int
+        Required depth of the tree graph.
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Binary adjacency matrix for the random tree graph. 
+    """
+    if req_depth > n - 1:
+        raise ValueError("Required maximum depth is too large for the number of nodes specified.")
+    graph_name = "randomtree_D" + str(req_depth) + "_N" + str(n)
+    A = jnp.identity(n)
+    line_G, _ = gen_line_G(req_depth + 1)
+    A = A.at[:(req_depth + 1), :(req_depth + 1)].set(line_G)
+    d_nodes = []
+    for i in range(req_depth + 1):
+        d_nodes.append([i])
+    nodes_rem = n - req_depth - 1
+    curr_root = 0
+    child_depth = 1
+    curr_root_ind = d_nodes[child_depth - 1].index(curr_root)
+    seed = np.random.randint(1000)
+    key = jax.random.PRNGKey(seed)
+    while nodes_rem != 0:
+        num_new_children = 0
+        curr_max_node = n - nodes_rem
+        if child_depth == req_depth and curr_root_ind == len(d_nodes[child_depth - 1]):
+            num_new_children = nodes_rem
+        else:
+            key, subkey = jax.random.split(key)
+            num_new_children = int(jnp.ceil((jax.random.uniform(subkey))*(nodes_rem**(child_depth/(req_depth)))))
+        if num_new_children != 0:
+            child_nums = list(np.arange(n - nodes_rem, n - nodes_rem + num_new_children))
+            d_nodes[child_depth].extend(child_nums)
+            A = A.at[curr_root, curr_max_node:curr_max_node + num_new_children].set(jnp.ones(num_new_children))
+            A = A.at[curr_max_node:curr_max_node + num_new_children, curr_root].set(jnp.ones(num_new_children))
+            if curr_root == 0:
+                A = A.at[0, 1].set(1)
+                A = A.at[1, 0].set(1)
+            A = A.at[curr_root, (n - nodes_rem)].set(1)
+            A = A.at[(n - nodes_rem), curr_root].set(1)
+        nodes_rem = nodes_rem - num_new_children
+        new_root_ind = curr_root_ind + 1
+        if new_root_ind == len(d_nodes[child_depth - 1]):
+            child_depth = child_depth + 1
+            curr_root = d_nodes[child_depth - 1][0]
+            curr_root_ind = 0
+        else:
+            curr_root = d_nodes[child_depth - 1][new_root_ind]
+            curr_root_ind = new_root_ind
     return A, graph_name
 
 def gen_cycle_G(n):

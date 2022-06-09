@@ -599,8 +599,8 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
     np.set_printoptions(suppress=True)
 
-    test_set_name = "InitP250_Study_L4Hallway1"
-    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/init_study_hallway_graph.json")
+    test_set_name = "InitP10_Study_D3RandTree2"
+    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/init_study_randtree_graph_v2.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)

@@ -730,14 +730,13 @@ if __name__ == '__main__':
     # # cols = [0, 1]
     # comp_MCP_var_P_test(initP, tau, rows, cols, 50)
 
-    test_set_name = "InitP250_Study_L4Hallway1"
+    test_set_name = "InitP10_Study_D3RandTree1"
     visualize_results(test_set_name, num_top_MCP_runs=5)
 
-    # A, graph_name = gen_hallway_G(4, double_sided=False)
+    # A, graph_name = gen_rand_tree_G(12, 3)
     # print(graph_name)
-    # print(A)
     # draw_env_graph(A, graph_name, os.getcwd())
-
+    # print(A)
 
     # visualize_metrics_retro(test_set_name, overlay=True)
     # visualize_results(test_set_name, num_top_MCP_runs=5)

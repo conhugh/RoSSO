@@ -1,0 +1,77 @@
+{
+    "test_spec_name": "Random_Tree_Graph_Test_Specification",
+    "num_tests": 6,
+    "optimizer_params": {
+        "varying_optimizer_params": false,
+        "params": {
+            "optimizer_name": "sgd",
+            "grad_mode": "MCP_abs_parametrization",
+            "num_init_Ps": 10,
+            "conv_test_mode": "P_update",
+            "conv_radius": 0.002,
+            "conv_window_size": 200,
+            "P_update_elt_bound": 0.5,
+            "nominal_learning_rate": 0.005,
+            "use_momentum": false,
+            "mom_decay_rate": 0.99,
+            "use_nesterov": false,
+            "max_iters": 1000,
+            "use_P_update_bound_schedule": false,
+            "use_learning_rate_schedule": false,
+            "use_num_LCPs_schedule": false,
+            "num_LCPs": 4,
+            "iters_per_printout": 500,
+            "iters_per_trackvals": 10
+        }
+    },
+    "schedules": {
+        "varying_schedules": false,
+        "schedules": {
+            "learning_rate_schedule": {
+                "iters": null,
+                "scaled_learning_rate_multipliers": null
+            },
+            "P_update_elt_bound_schedule": {
+                "iters": null,
+                "bounds": null
+            },
+            "lcp_num_schedule": {
+                "iters": null,
+                "lcp_nums": null
+            }
+        }
+    },
+    "trackers": [
+        "iters",
+        "P_diff_sums",
+        "P_diff_max_elts",
+        "MCP_inds",
+        "MCPs",
+        "final_MCP",
+        "final_iters"
+    ],
+    "graph_names": {
+        "test1": "randomtree_D3_N12",
+        "test2": "randomtree_D3_N12",
+        "test3": "randomtree_D3_N12",
+        "test4": "randomtree_D3_N12",
+        "test5": "randomtree_D3_N12",
+        "test6": "randomtree_D3_N12"
+    },
+    "taus": {
+        "test1": 5,
+        "test2": 7,
+        "test3": 8,
+        "test4": 5,
+        "test5": 7,
+        "test6": 8
+    },
+    "graph_codes": {
+        "test1": "N12_117617714310483574784",
+        "test2": "N12_117617714310483574784",
+        "test3": "N12_117617714310483574784",
+        "test4": "N12_117617714516629520384",
+        "test5": "N12_117617714516629520384",
+        "test6": "N12_117617714516629520384"
+    }
+}
