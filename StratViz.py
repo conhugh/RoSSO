@@ -86,30 +86,69 @@ def plot_cap_probs_3D(cap_probs):
     ax.set_zlabel('Capture Probability')
     plt.show()
 
+# Plot a function in 3D
+# def plot_func_3D(X, Y, func):
+#     Z = func(X, Y)
+#     robot_locs = np.arange(cap_probs.shape[0])
+#     intruder_locs = np.arange(cap_probs.shape[1])
+#     X, Y = np.meshgrid(robot_locs, intruder_locs)
+#     fig = plt.figure()
+#     ax = plt.axes(projection='3d')
+#     ax.plot_surface(X, Y, cap_probs)
+#     ax.set_xlabel('Robot Location')
+#     ax.set_ylabel('Intruder Location')
+#     ax.set_zlabel('Capture Probability')
+#     plt.show()
+
 # Plot the capture probabilities as a function of P_ij
-def comp_CP_var_P(P, tau, i, j):
+def comp_CP_var_P(P, tau, i, j, resolution):
     n = P.shape[0]
-    cap_probs = np.full([n, n, 51], np.NaN)
-    for k in range(51):
+    cap_probs = jnp.full([n, n, resolution + 1], np.NaN)
+    for k in range(resolution + 1):
         # Set the (i, j) element of transition probability matrix:
-        P[i, j] = k/50
+        P = P.at[i, j].set(k/resolution)
         # Normalize all the other entries in row i to generate valid prob dist:
-        rem_row_sum = np.sum(P[i, :]) - P[i, j]
-        for col in range(P.shape[1]):
+        rem_row_sum = jnp.sum(P[i, :]) - P[i, j]
+        for col in range(jnp.shape(P)[1]):
             if col != j:
-                P[i, col] = P[i, col]*(1 - P[i, j])/rem_row_sum
+                P = P.at[i, col].set(P[i, col]*(1 - P[i, j])/rem_row_sum)
         F0 = jnp.full((n, n, tau), np.NaN)
-        cap_probs[:, :, k] = compute_cap_probs(P, F0, tau)
-    P_range = np.linspace(0, 1, 51)
-    for row in range(P.shape[0]):
-        for col in range(P.shape[1]):
+        cap_probs = cap_probs.at[:, :, k].set(compute_cap_probs(P, F0, tau))
+    P_range = jnp.linspace(0, 1, resolution + 1)
+    for row in range(jnp.shape(P)[0]):
+        for col in range(jnp.shape(P)[1]):
             plt.plot(P_range, cap_probs[row, col, :], label = "(" + str(row) + ", " + str(col) + ")")
     plt.xlabel("P(" + str(i) + ", " + str(j) + ") value")
     plt.ylabel("Capture Probabilities")
-    plt.legend(bbox_to_anchor=(1.05, 0.95), loc='upper right', borderaxespad=-2)
+    # plt.legend(bbox_to_anchor=(1.05, 0.95), loc='upper right', borderaxespad=-2)
     plt.title("Capture Probabilities for tau = " + str(tau) + " and varying P(" + str(i) + ", " + str(j) + ")")
-    plt.show()
+    plt.savefig(os.getcwd() + "/test_CP_plot.png")
     return cap_probs
+
+# Plot the capture probabilities as a function of P_ij
+def comp_MCP_var_P_test(P0, tau, rows, cols, resolution):
+    n = P0.shape[0]
+    MCPs = jnp.full([resolution + 1], np.NaN)
+    for ind in range(len(rows)):
+        i = rows[ind]
+        j = cols[ind]
+        P = P0
+        for k in range(resolution + 1):
+            # Set the (i, j) element of transition probability matrix:
+            P = P.at[i, j].set(k/resolution)
+            # Normalize all the other entries in row i to generate valid prob dist:
+            rem_row_sum = jnp.sum(P[i, :]) - P[i, j]
+            for col in range(jnp.shape(P)[1]):
+                if col != j:
+                    P = P.at[i, col].set(P[i, col]*(1 - P[i, j])/rem_row_sum)
+            F0 = jnp.full((n, n, tau), np.NaN)
+            MCPs = MCPs.at[k].set(compute_MCP(P, F0, tau))
+        P_range = jnp.linspace(0, 1, resolution + 1)
+        plt.plot(P_range, MCPs)
+    plt.xlabel("P_ij value")
+    plt.ylabel("Capture Probabilities")
+    plt.title("Capture Probabilities for tau = " + str(tau) + " and varying P")
+    plt.savefig(os.getcwd() + "/test_CP_plot.png")
 
 # Generate a NetworkX graph from adjacency matrix A
 def gen_graph(A):
@@ -678,10 +717,30 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
             
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-    
-    test_set_name = "Grid_Graph_Aspect_Ratio_Study1"
-    # visualize_metrics_retro(test_set_name, overlay=True)
+
+
+    # A, graph_name = gen_star_G(6)
+    # tau = 2
+    # initQ = jnp.ones(jnp.shape(A))    
+    # initP = comp_P_param(initQ, A)
+    # # initP = np.asarray(initP)
+    # rows = [0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5]
+    # cols = [0, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0]
+    # # rows = [0, 0]
+    # # cols = [0, 1]
+    # comp_MCP_var_P_test(initP, tau, rows, cols, 50)
+
+    test_set_name = "InitP250_Study_L4Hallway1"
     visualize_results(test_set_name, num_top_MCP_runs=5)
+
+    # A, graph_name = gen_hallway_G(4, double_sided=False)
+    # print(graph_name)
+    # print(A)
+    # draw_env_graph(A, graph_name, os.getcwd())
+
+
+    # visualize_metrics_retro(test_set_name, overlay=True)
+    # visualize_results(test_set_name, num_top_MCP_runs=5)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)

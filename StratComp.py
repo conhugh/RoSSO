@@ -232,8 +232,8 @@ def compCPJac(P, tau):
     compFkJacs
     """
     J = compFkJacs(P, tau)
-    CPGrad = np.sum(J, axis=2)
-    return CPGrad
+    CPJac = np.sum(J, axis=2)
+    return CPJac
 
 
 def zeroCPJacCols(J, A):
@@ -308,6 +308,25 @@ def projOntoSimplex(P):
 
 # TESTING -----------------------------------------------------------------------------------------
 if __name__ == '__main__':
+    np.set_printoptions(linewidth=np.inf)
+    
+    n = 5
+    P = np.reshape(np.arange(1, n**2 + 1), (n, n), order='F')
+    print("P = ")
+    print(P)
+
+    tau = 2
+
+    J = compCPJac(P, tau)
+    print("J by StratComp = ")
+    print(J)
+
+    A = genStarG(n)
+    Jz = zeroCPJacCols(J, A)
+    print("Jz by StratComp = ")
+    print(Jz)
+
+
     # P = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])  # initialize transition prob matrix
     # # P = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])  # initialize transition prob matrix
     # P = np.matmul(np.diag(1/np.sum(P, axis=1)), P)   # normalize to generate valid prob dist
@@ -338,9 +357,9 @@ if __name__ == '__main__':
     # print("newP = ")
     # print(newP)
 
-    A = genStarG(9)
-    print(A)
-    A = genLineG(9)
-    print(A)
+    # A = genStarG(9)
+    # print(A)
+    # A = genLineG(9)
+    # print(A)
 
 
