@@ -222,6 +222,36 @@ def gen_star_G(n):
     A = A.at[:, 0].set(jnp.ones(n))
     return A, graph_name
 
+def gen_rand_NUDEL_star_G(n, max_edge_len):
+    """
+    Generate binary adjacency matrix for a star graph with `n` nodes.
+
+    Parameters
+    ----------
+    n : int 
+        Number of nodes in the star graph.
+
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Binary adjacency matrix for the star graph with `n` nodes. 
+    jaxlib.xla_extension.DeviceArray
+        Weighted adjacency matrix for the star graph with `n` nodes. 
+    String
+        Description of the graph structure. 
+    """
+    graph_name = "nudel_star_N" + str(n)
+    A = gen_star_G(n)
+    seed = np.random.randint(1000)
+    key = jax.random.PRNGKey(seed)
+    W = jnp.identity(n)
+    for i in range(1, n):
+        key, subkey = jax.random.split(key)
+        edge_len = int(jnp.ceil(jax.random.uniform(subkey)*max_edge_len))
+        W = W.at[0, i].set(edge_len)
+        W = W.at[i, 0].set(edge_len)
+    return A, W, graph_name
+
 def gen_line_G(n):
     """
     Generate binary adjacency matrix for a line graph with `n` nodes.
@@ -235,6 +265,8 @@ def gen_line_G(n):
     -------
     jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the line graph with `n` nodes. 
+    String
+        Description of the graph structure. 
     """
     graph_name = "line_N" + str(n)
     A = jnp.identity(n)
@@ -263,6 +295,8 @@ def gen_split_star_G(left_leaves, right_leaves, num_line_nodes):
     -------
     jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the split star graph. 
+    String
+        Description of the graph structure. 
     """
     graph_name = "splitstar_L" + str(left_leaves) + "_R" + str(right_leaves) + "_M" + str(num_line_nodes)
     left_star = jnp.identity(left_leaves + 1)
@@ -293,6 +327,8 @@ def gen_grid_G(width, height):
     -------
     jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the grid graph. 
+    String
+        Description of the graph structure. 
     """
     graph_name = "grid_W" + str(width) + "_H" + str(height)
     n = width*height
@@ -324,6 +360,8 @@ def gen_hallway_G(length, double_sided=True):
     -------
     jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the hallway graph. 
+    String
+        Description of the graph structure. 
     """
     if double_sided:
         graph_name = "hallway2S_L" + str(length)
@@ -360,6 +398,8 @@ def gen_rand_tree_G(n, req_depth):
     -------
     jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the random tree graph. 
+    String
+        Description of the graph structure. 
     """
     if req_depth > n - 1:
         raise ValueError("Required maximum depth is too large for the number of nodes specified.")
@@ -418,6 +458,8 @@ def gen_cycle_G(n):
     -------
     jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the cycle graph. 
+    String
+        Description of the graph structure. 
     """
     graph_name = "cycle_N" + str(n)
     A, _ = gen_line_G(n)
@@ -438,6 +480,8 @@ def gen_complete_G(n):
     -------
     jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the complete graph. 
+    String
+        Description of the graph structure. 
     """
     graph_name = "complete_N" + str(n)
     A = jnp.ones((n, n))
@@ -458,13 +502,15 @@ def gen_complete_bipartite_G(left_nodes, right_nodes):
     -------
     jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix for the complete bipartite graph. 
+    String
+        Description of the graph structure. 
     """
     graph_name = "completebipartite_L" + str(left_nodes) + "_R" + str(right_nodes)
     n = left_nodes + right_nodes
     A = jnp.identity(n)
     A = A.at[:left_nodes, left_nodes:].set(jnp.ones((left_nodes, right_nodes)))
     A = A.at[left_nodes:, :left_nodes].set(jnp.ones((right_nodes, left_nodes)))
-    return A
+    return A, graph_name
 
 @functools.partial(jit, static_argnames=['tau'])
 def compute_FHT_probs(P, F0, tau):
@@ -492,6 +538,50 @@ def compute_FHT_probs(P, F0, tau):
     F0 = F0.at[:, :, 0].set(P)
     for i in range(1, tau):
         F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
+    return F0
+
+@functools.partial(jit, static_argnames=['tau'])
+def compute_NUDEL_FHT_probs(P, W, F0, tau):
+    """
+    Compute First Hitting Time (FHT) Probability matrices.
+
+    To compute the Capture Probability Matrix, we must sum the FHT
+    Probability matrices from 1 up to `tau` time steps. This function
+    computes these matrices in the case where the environment graph
+    has integer (as opposed to unit) edge lengths. 
+    For more information see https://arxiv.org/abs/1803.07705.
+
+    Parameters
+    ----------
+    P : numpy.ndarray 
+        Transition probability matrix. 
+    F0 : numpy.ndarray 
+        Placeholder to be populated with FHT Probability matrices.
+    tau : int
+        Intruder's attack duration. 
+    
+    Returns
+    -------
+    numpy.ndarray
+        Array of `tau` distinct First Hitting Time Probability matrices. 
+    """
+    n = jnp.shape(P)[0]
+    max_w = jnp.max(W)
+    F_vec = jnp.full((n**2, tau + max_w))
+    F_vec = jnp.reshape(F0, (n**2, tau), order='F')
+    F0 = F0.at[:, :, 0].set(jnp.zeros((n**2)))
+    I = jnp.identity(n)
+    for k in range(1, tau):
+        ind_mat = (k*jnp.ones((n, n)) == W).all()
+        print(ind_mat)
+        P_ind = P*ind_mat
+
+        for i in range(n):
+            for j in range(n):
+                E_j = jnp.diag(jnp.ones(n) - I[:, j])
+                E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
+
+                F0 = F0.at[:, :, k].set(jnp.matmul(P, (F0[:, :, k - 1] - jnp.diag(jnp.diag(F0[:, :, k - 1])))))
     return F0
 
 @functools.partial(jit, static_argnames=['tau'])
@@ -1037,10 +1127,10 @@ if __name__ == '__main__':
     # print("F = ")
     # print(F)
 
-    A, graph_name = gen_hallway_G(4)
+    A, W, graph_name = gen_rand_NUDEL_star_G(6, 5)
     print(graph_name)
     print(A)
-
+    print(W)
     # Pvec = P.flatten(order='F')
 
 # ATTEMPT TO CHECK PL-INEQUALITY:
