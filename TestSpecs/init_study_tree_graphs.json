@@ -1,0 +1,77 @@
+{
+    "test_spec_name": "Init_Study_Tree_Graphs_Test_Specification",
+    "num_tests": 6,
+    "optimizer_params": {
+        "varying_optimizer_params": false,
+        "params": {
+            "optimizer_name": "sgd",
+            "grad_mode": "MCP_abs_parametrization",
+            "num_init_Ps": 250,
+            "conv_test_mode": "P_update",
+            "conv_radius": 0.0025,
+            "conv_window_size": 200,
+            "P_update_elt_bound": 0.5,
+            "nominal_learning_rate": 0.01,
+            "use_momentum": true,
+            "mom_decay_rate": 0.99,
+            "use_nesterov": true,
+            "max_iters": 5000,
+            "use_P_update_bound_schedule": false,
+            "use_learning_rate_schedule": false,
+            "use_num_LCPs_schedule": false,
+            "num_LCPs": 4,
+            "iters_per_printout": 500,
+            "iters_per_trackvals": 10
+        }
+    },
+    "schedules": {
+        "varying_schedules": false,
+        "schedules": {
+            "learning_rate_schedule": {
+                "iters": null,
+                "scaled_learning_rate_multipliers": null
+            },
+            "P_update_elt_bound_schedule": {
+                "iters": null,
+                "bounds": null
+            },
+            "lcp_num_schedule": {
+                "iters": null,
+                "lcp_nums": null
+            }
+        }
+    },
+    "trackers": [
+        "iters",
+        "P_diff_sums",
+        "P_diff_max_elts",
+        "MCP_inds",
+        "MCPs",
+        "final_MCP",
+        "final_iters"
+    ],
+    "graph_names": {
+        "test1": "tree_N10",
+        "test2": "tree_N10",
+        "test3": "tree_N10",
+        "test4": "tree_N10",
+        "test5": "tree_N10",
+        "test6": "tree_N10"
+    },
+    "taus": {
+        "test1": 7,
+        "test2": 6,
+        "test3": 5,
+        "test4": 5,
+        "test5": 6,
+        "test6": 7
+    },
+    "graph_codes": {
+        "test1": "N10_55010075365893",
+        "test2": "N10_55027121017349",
+        "test3": "N10_55027121017350",
+        "test4": "N10_55027121025030",
+        "test5": "N10_55027121025029",
+        "test6": "N10_55010075373573"
+    }
+}

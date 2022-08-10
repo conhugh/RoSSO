@@ -1,10 +1,10 @@
 # Computation of quantities relevant to optimization of stochastic surveillance strategies
-import numpy as np
-import time
-import jax
 import functools
+
+import jax
 from jax import grad, jacrev, jit
 import jax.numpy as jnp
+import numpy as np
 
 def init_rand_P(A):
     """
@@ -59,7 +59,6 @@ def init_rand_P_key(A, key):
     P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)   # normalize to generate valid prob dist
     return P0
 
-
 def init_rand_Ps(A, num):
     """
     Generate a set of `num` random initial transition probability matrices.
@@ -87,20 +86,6 @@ def init_rand_Ps(A, num):
         initPs = initPs.at[:, : , k].set(init_rand_P_key(A, subkey))
     return initPs
 
-#     Returns
-#     -------
-#     String
-#         Unique encoding of the binary adjacency matrix.
-    
-#     """
-#     bin_string = "1"  # leading 1 added to avoid issues with decimal conversion in decoding
-#     for i in range(A.shape[0] - 1):
-#         for j in range(i + 1, A.shape[1]):
-#             bin_string = bin_string + str(int(A[i, j]))
-#     graph_num = int(bin_string, base=2)
-#     graph_code = "N" + str(A.shape[0]) + "_" + str(graph_num)
-#     return graph_code
-
 def gen_graph_code(A):
     """
     Generate a unique code representing the environment graph.
@@ -123,7 +108,6 @@ def gen_graph_code(A):
     graph_num = int(bin_string, base=2)
     graph_code = "N" + str(A.shape[0]) + "_" + str(graph_num)
     return graph_code
-
 
 def gen_graph_hexcode(A):
     """
@@ -148,7 +132,6 @@ def gen_graph_hexcode(A):
     graph_hex = hex(graph_num)
     graph_code = "N" + str(A.shape[0]) + "_" + str(graph_hex).lstrip("0x")
     return graph_code
-
 
 def graph_decode(graph_code):
     """
@@ -201,7 +184,6 @@ def graph_diam(A):
             return i
     return np.NaN
 
-
 def gen_star_G(n):
     """
     Generate binary adjacency matrix for a star graph with `n` nodes.
@@ -222,7 +204,7 @@ def gen_star_G(n):
     A = A.at[:, 0].set(jnp.ones(n))
     return A, graph_name
 
-def gen_rand_NUDEL_star_G(n, max_edge_len):
+def gen_rand_NUDEL_star_G(n, edge_len_UB, edge_len_LB=1):
     """
     Generate binary adjacency matrix for a star graph with `n` nodes.
 
@@ -230,6 +212,10 @@ def gen_rand_NUDEL_star_G(n, max_edge_len):
     ----------
     n : int 
         Number of nodes in the star graph.
+    edge_len_LB : int
+        Lower bound on the travel time for edges in the graph (excl. self-loops).  
+    edge_len_UB : int
+        Upper bound on the travel time for edges in the graph.    
 
     Returns
     -------
@@ -237,20 +223,28 @@ def gen_rand_NUDEL_star_G(n, max_edge_len):
         Binary adjacency matrix for the star graph with `n` nodes. 
     jaxlib.xla_extension.DeviceArray
         Weighted adjacency matrix for the star graph with `n` nodes. 
+    int
+        Largest travel time for any edge in the generated graph.
     String
         Description of the graph structure. 
     """
+    if edge_len_LB < 1:
+        raise ValueError("Lower bound on travel time cannot be less than 1.")
+    if edge_len_LB > edge_len_UB:
+        raise ValueError("Upper bound on travel time must be greater than or equal to the lower bound.")
     graph_name = "nudel_star_N" + str(n)
-    A = gen_star_G(n)
+    A, _ = gen_star_G(n)
     seed = np.random.randint(1000)
+    # seed = 1
     key = jax.random.PRNGKey(seed)
     W = jnp.identity(n)
     for i in range(1, n):
         key, subkey = jax.random.split(key)
-        edge_len = int(jnp.ceil(jax.random.uniform(subkey)*max_edge_len))
+        edge_len = int(edge_len_LB + jnp.round(jax.random.uniform(subkey)*(edge_len_UB - edge_len_LB)))
         W = W.at[0, i].set(edge_len)
         W = W.at[i, 0].set(edge_len)
-    return A, W, graph_name
+    w_max = int(jnp.max(W))
+    return A, W, w_max, graph_name
 
 def gen_line_G(n):
     """
@@ -312,7 +306,81 @@ def gen_split_star_G(left_leaves, right_leaves, num_line_nodes):
     split_star = split_star.at[(left_leaves + num_line_nodes - 1):n, (left_leaves + num_line_nodes - 1):n].set(right_star)
     return split_star, graph_name
     
-def gen_grid_G(width, height):
+def gen_grid_G(grid_rows, grid_cols):
+    """
+    Generate binary adjacency matrix for a grid graph. 
+
+    Parameters
+    ----------
+    grid_rows : int
+        Number of rows of nodes in the grid graph.
+    grid_cols : int 
+        Number of columns of nodes in the grid graph.
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Binary adjacency matrix for the grid graph. 
+    String
+        Description of the graph structure. 
+    """
+    graph_name = "grid_R" + str(grid_rows) + "_C" + str(grid_cols)
+    n = grid_cols*grid_rows
+    A = jnp.identity(n)
+    A = A + jnp.diag(jnp.ones(n - grid_rows), grid_rows)
+    A = A + jnp.diag(jnp.ones(n - grid_rows), -grid_rows)
+    for k in range(n):
+        if k % grid_rows == 0:
+            A = A.at[k, k + 1].set(1)
+        elif k % grid_rows == (grid_rows - 1):
+            A = A.at[k, k - 1].set(1)
+        else:
+            A = A.at[k, k + 1].set(1)
+            A = A.at[k, k - 1].set(1)
+    return A, graph_name
+
+def gen_holy_grid_G(grid_rows, grid_cols, missing_nodes):
+    """
+    Generate binary adjacency matrix for a grid graph with holes. 
+
+    Parameters
+    ----------
+    grid_rows : int
+        Number of rows of nodes in the grid graph.
+    grid_cols : int 
+        Number of columns of nodes in the grid graph.
+    missing_nodes : list of numpy.arrays
+        List of zero-indexed (row, column) coordinates of nodes to remove. 
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Binary adjacency matrix for the grid graph. 
+    String
+        Description of the graph structure. 
+    """
+    graph_name = "holygrid_R" + str(grid_rows) + "_C" + str(grid_cols)
+    n = grid_cols*grid_rows
+    A, _ = gen_grid_G(grid_cols, grid_rows)
+    m_inds = np.full(len(missing_nodes), np.NaN, dtype=int)
+    for i, m_node in enumerate(missing_nodes):
+        m_inds[i] = int(m_node[1]*grid_rows + m_node[0])
+        # m_row = m_node[0]
+        # m_col = m_node[1]
+        # m_ind = m_node[1]*grid_rows + m_node[0]
+        # A = jnp.concatenate([A[:m_ind, :], A[m_ind + 1:, :]])
+        # A = jnp.concatenate([A[:, :m_ind], A[:, m_ind + 1:]], axis=1)
+
+    A_holy = jnp.delete(A, m_inds, axis=0)
+    A_holy = jnp.delete(A_holy, m_inds, axis=1)
+    # for i in range(1, len(m_inds)):
+        # A_holy = jnp.concatenate(A_holy, )
+    # jnp.concatenate([A[:m_inds[0], :], A[m_inds[0] + 1:, :]])
+
+    return A_holy, graph_name
+
+
+def gen_NUDEL_grid_G(width_vec, height_vec):
     """
     Generate binary adjacency matrix for a grid graph. 
 
@@ -330,20 +398,31 @@ def gen_grid_G(width, height):
     String
         Description of the graph structure. 
     """
-    graph_name = "grid_W" + str(width) + "_H" + str(height)
+    width = len(width_vec) + 1
+    height = len(height_vec) + 1
+    A, _ = gen_grid_G(width, height)
+    graph_name = "NUDEL_grid_W" + str(width) + "_H" + str(height)
     n = width*height
-    A = jnp.identity(n)
-    A = A + jnp.diag(jnp.ones(n - height), height)
-    A = A + jnp.diag(jnp.ones(n - height), -height)
+    W = jnp.identity(n)
+    # W = W + jnp.diag(jnp.ones(n - height), height)
+    # W = W + jnp.diag(jnp.ones(n - height), -height)
+    width_diag = jnp.full([n - height], np.NaN)
+    for i in range(width - 1):
+        width_diag = width_diag.at[i*height:(i + 1)*height].set(width_vec[i]*np.ones(height))
+    # for i in range(1, height):
+    #     width_diag = np.concatenate([width_diag, width_vec])
+    W = W + jnp.diag(width_diag, height)
+    W = W + jnp.diag(width_diag, -height)
     for k in range(n):
         if k % height == 0:
-            A = A.at[k, k + 1].set(1)
+            W = W.at[k, k + 1].set(height_vec[0])
         elif k % height == (height - 1):
-            A = A.at[k, k - 1].set(1)
+            W = W.at[k, k - 1].set(height_vec[height - 2])
         else:
-            A = A.at[k, k + 1].set(1)
-            A = A.at[k, k - 1].set(1)
-    return A, graph_name
+            W = W.at[k, k + 1].set(height_vec[k % height])
+            W = W.at[k, k - 1].set(height_vec[(k % height) - 1])
+    return A, W, graph_name
+
 
 def gen_hallway_G(length, double_sided=True):
     """
@@ -381,7 +460,6 @@ def gen_hallway_G(length, double_sided=True):
         A = A + right_rooms
 
     return A, graph_name
-
 
 def gen_rand_tree_G(n, req_depth):
     """
@@ -443,6 +521,54 @@ def gen_rand_tree_G(n, req_depth):
         else:
             curr_root = d_nodes[child_depth - 1][new_root_ind]
             curr_root_ind = new_root_ind
+    return A, graph_name
+
+def gen_tree_G(n, tree_dict):
+    """
+    Generate binary adjacency matrix for the given tree graph. 
+
+    Parameters
+    ----------
+    n : int 
+        Number of nodes in the tree graph.
+    tree_dict : dictionary
+        Dictionary of integers specifying tree structure. [CREATE EXAMPLES FOR THIS]
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Binary adjacency matrix for the tree graph described by tree_dict. 
+    String
+        Description of the graph structure. 
+    """
+    # EXAMPLE INPUT:
+    # n = 5
+    # tree_dict = {
+    #     0 : [1], 
+    #     1 : [2],
+    #     2 : [3, 4],
+    #     3 : None,
+    #     4 : None
+    # }
+    graph_name = "tree_N" + str(n)
+    # Check validity of tree_dict:
+    keys = list(tree_dict.keys())
+    if len(keys) != n:
+        raise ValueError("Number of keys in dictionary does not match specified number of nodes in tree.")
+    nodes = list(np.arange(n))
+    if nodes != keys:
+        raise ValueError("Every node in the tree must be a key in the dictionary, and every key in the dictionary must be a node in the tree.")
+    # Generate binary adjacency matrix:
+    A = jnp.identity(n)
+    for key in keys:
+        vals = tree_dict[key]
+        if vals is not None:
+            for val in vals:
+                if val not in keys:
+                    raise ValueError("Every value in the dictionary must be either a list of nodes in the tree or None.")
+                else:
+                    A = A.at[key, val].set(1)
+                    A = A.at[val, key].set(1)
     return A, graph_name
 
 def gen_cycle_G(n):
@@ -523,16 +649,16 @@ def compute_FHT_probs(P, F0, tau):
 
     Parameters
     ----------
-    P : numpy.ndarray 
+    P : jaxlib.xla_extension.DeviceArray
         Transition probability matrix. 
-    F0 : numpy.ndarray 
+    F0 : jaxlib.xla_extension.DeviceArray
         Placeholder to be populated with FHT Probability matrices.
     tau : int
         Intruder's attack duration. 
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Array of `tau` distinct First Hitting Time Probability matrices. 
     """
     F0 = F0.at[:, :, 0].set(P)
@@ -540,8 +666,8 @@ def compute_FHT_probs(P, F0, tau):
         F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
     return F0
 
-@functools.partial(jit, static_argnames=['tau'])
-def compute_NUDEL_FHT_probs(P, W, F0, tau):
+@functools.partial(jit, static_argnames=['w_max', 'tau']) 
+def compute_NUDEL_FHT_probs_vec(P, W, w_max, tau):
     """
     Compute First Hitting Time (FHT) Probability matrices.
 
@@ -553,36 +679,41 @@ def compute_NUDEL_FHT_probs(P, W, F0, tau):
 
     Parameters
     ----------
-    P : numpy.ndarray 
+    P : jaxlib.xla_extension.DeviceArray
         Transition probability matrix. 
-    F0 : numpy.ndarray 
+    W : jaxlib.xla_extension.DeviceArray
+        Integer-valued travel time matrix. 
+    F0 : jaxlib.xla_extension.DeviceArray 
         Placeholder to be populated with FHT Probability matrices.
     tau : int
         Intruder's attack duration. 
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Array of `tau` distinct First Hitting Time Probability matrices. 
     """
     n = jnp.shape(P)[0]
-    max_w = jnp.max(W)
-    F_vec = jnp.full((n**2, tau + max_w))
-    F_vec = jnp.reshape(F0, (n**2, tau), order='F')
-    F0 = F0.at[:, :, 0].set(jnp.zeros((n**2)))
+    F_vecs = jnp.zeros((n**2, tau + w_max))
     I = jnp.identity(n)
-    for k in range(1, tau):
-        ind_mat = (k*jnp.ones((n, n)) == W).all()
-        print(ind_mat)
-        P_ind = P*ind_mat
 
+    for k in range(tau):
+        indic_mat = ((k + 1)*jnp.ones((n, n)) == W)
+        P_direct = P*indic_mat
+        P_direct_vec = jnp.reshape(P_direct, n**2, order='F')
+
+        multi_step_probs = jnp.zeros(n**2)
         for i in range(n):
             for j in range(n):
                 E_j = jnp.diag(jnp.ones(n) - I[:, j])
                 E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
+                multi_step_probs = multi_step_probs + P[i, j]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int)])
+                
+        F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
+        
+    F_v = F_vecs[:, w_max:]
+    return F_v
 
-                F0 = F0.at[:, :, k].set(jnp.matmul(P, (F0[:, :, k - 1] - jnp.diag(jnp.diag(F0[:, :, k - 1])))))
-    return F0
 
 @functools.partial(jit, static_argnames=['tau'])
 def compute_FHT_probs_vec(Pvec, tau):
@@ -595,16 +726,16 @@ def compute_FHT_probs_vec(Pvec, tau):
 
     Parameters
     ----------
-    P : numpy.ndarray 
+    P : jaxlib.xla_extension.DeviceArray 
         Transition probability matrix. 
-    F0 : numpy.ndarray 
+    F0 : jaxlib.xla_extension.DeviceArray 
         Placeholder to be populated with FHT Probability matrices.
     tau : int
         Intruder's attack duration. 
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Array of `tau` distinct First Hitting Time Probability matrices. 
     """
     n = int(np.sqrt(len(Pvec)))
@@ -616,7 +747,6 @@ def compute_FHT_probs_vec(Pvec, tau):
         F0 = F0.at[:, i].set(jnp.matmul(jnp.matmul(jnp.kron(jnp.identity(n), P), E), F0[:, i - 1]))
     return F0
 
-
 @functools.partial(jit, static_argnames=['tau'])
 def compute_cap_probs(P, F0, tau):
     """
@@ -624,16 +754,16 @@ def compute_cap_probs(P, F0, tau):
 
     Parameters
     ----------
-    P : numpy.ndarray 
+    P : jaxlib.xla_extension.DeviceArray 
         Transition probability matrix.
-    F0 : numpy.ndarray 
+    F0 : jaxlib.xla_extension.DeviceArray 
         Placeholder to be populated with FHT Probability matrices. 
     tau : int
         Intruder's attack duration. 
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Capture Probability matrix. 
     
     See Also
@@ -651,16 +781,16 @@ def compute_cap_probs_vec(Pvec, tau):
 
     Parameters
     ----------
-    P : numpy.ndarray 
+    P : jaxlib.xla_extension.DeviceArray 
         Transition probability matrix.
-    F0 : numpy.ndarray 
+    F0 :  jaxlib.xla_extension.DeviceArray
         Placeholder to be populated with FHT Probability matrices. 
     tau : int
         Intruder's attack duration. 
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Capture Probability matrix. 
     
     See Also
@@ -679,16 +809,16 @@ def compute_MCP(P, F0, tau):
 
     Parameters
     ----------
-    P : numpy.ndarray 
+    P : jaxlib.xla_extension.DeviceArray  
         Transition probability matrix. 
-    F0 : numpy.ndarray 
+    F0 : jaxlib.xla_extension.DeviceArray   
         Placeholder to be populated with FHT Probability matrices.
     tau : int
         Intruder's attack duration. 
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Minimum Capture Probability. 
     
     See Also
@@ -699,7 +829,6 @@ def compute_MCP(P, F0, tau):
     mcp = jnp.min(F)
     return mcp
     
-
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
 def compute_LCPs(P, F0, tau, num_LCPs):
     """
@@ -707,9 +836,9 @@ def compute_LCPs(P, F0, tau, num_LCPs):
 
     Parameters
     ----------
-    P : numpy.ndarray 
+    P : jaxlib.xla_extension.DeviceArray 
         Transition probability matrix. 
-    F0 : numpy.ndarray 
+    F0 : jaxlib.xla_extension.DeviceArray 
         Placeholder to be populated with FHT Probability matrices.
     tau : int
         Intruder's attack duration. 
@@ -718,7 +847,7 @@ def compute_LCPs(P, F0, tau, num_LCPs):
     
     Returns
     -------
-    numpy.ndarray
+    jaxlib.xla_extension.DeviceArray
         Set of `num_LCPs` lowest capture probabilities. 
     
     See Also
@@ -744,7 +873,6 @@ def get_grad_func(grad_mode="MCP_parametrization"):
         return comp_avg_LCP_grad
     else:
         raise ValueError("Invalid grad_mode specified!")
-
 
 _CP_jac = jacrev(compute_cap_probs_vec)
 def comp_CP_jac(Pvec, A, tau):
@@ -773,7 +901,6 @@ def comp_CPk_hess(Pvec, A, tau, k):
     for j in range(len(Pvec)):
         H = H.at[:, j].set(comp_CPk_hess_col(Pvec, A, tau, k, j))
     return H
-
 
 def comp_CP_jac_nz(Pvec, tau):
     G = _CP_jac(Pvec, tau)
@@ -868,7 +995,6 @@ def comp_avg_LCP_grad_param(Q, A, F0, tau, num_LCPs=None):
     grad = jnp.mean(J, axis=0)
     return grad
 
-
 @jit
 def proj_onto_simplex(P):
     """
@@ -933,7 +1059,6 @@ def proj_onto_simplex_large(P):
         P_new = P_new.at[i, :].set(proj_row_onto_simplex(P[i, :]))
     return P_new
 
-
 @jit
 def proj_row_onto_simplex(row):
     """
@@ -968,7 +1093,6 @@ def proj_row_onto_simplex(row):
     for j in range(n):
         new_row = new_row.at[sort_map[j]].set(X_new[j])
     return new_row
-
 
 def proj_row_onto_simplex_test(row):
     """
@@ -1108,185 +1232,5 @@ def sq_grid_rot270(M, gridrows, gridcols):
 # TESTING -----------------------------------------------------------------------------------------
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
-
-    # n = 5
-    # P = jnp.reshape(jnp.arange(1, n**2 + 1,  dtype=float), (n, n), order='F')
-    # print("P = ")
-    # print(P)
-
-    # P = np.zeros((n, n))
-    # P[0, : ] = [0, 0.25, 0.25, 0.25, 0.25]
-    # P[:, 0] = [0, 1, 1, 1, 1]
-    # print("P = ")
-    # print(P)
-
-    # P = jnp.asarray(P)
-    # tau = 2
-    # F0 = jnp.full((n, n, tau), np.NaN)
-    # F = compute_cap_probs(P, F0, tau)
-    # print("F = ")
-    # print(F)
-
-    A, W, graph_name = gen_rand_NUDEL_star_G(6, 5)
-    print(graph_name)
-    print(A)
-    print(W)
-    # Pvec = P.flatten(order='F')
-
-# ATTEMPT TO CHECK PL-INEQUALITY:
-
-
-
-# BY-HAND JACOBIAN COMPUTATION: (NOT WORKING)
-    # A = jnp.identity(n**2) - jnp.diag(jnp.identity(n).flatten(order='F'))
-    # print("A = ")
-    # print(A)
-
-    # P_krons = jnp.kron(jnp.transpose(P), jnp.identity(n)) + jnp.kron(jnp.identity(n), P)
-
-    # J = jnp.matmul(A, P_krons) + jnp.identity(n**2)
-    # print("J by hand = ")
-    # print(J)
-
-# USING AUTODIFF FOR HESSIAN COMPUTATION:
-    # tau = 2
-    # # F0 = jnp.full((n, n, tau), np.NaN)
-    # cap_probs_vec = compute_cap_probs_vec(Pvec, tau)
-
-    # Agraph, _ = gen_star_G(n)
-    # J1 = comp_CP_jac_nz(Pvec, tau)
-    # print("J by autodiff = ")
-    # print(J1)
-
-    # Agraph, _ = gen_star_G(n)
-    # Jz = comp_CP_jac(Pvec, Agraph, tau)
-    # print("Jz by autodiff = ")
-    # print(Jz)
-
-    # kgrad = comp_CPk_grad(Pvec, Agraph, tau, 0)
-    # print("grad of zeroeth cp: ")
-    # print(kgrad)
-
-    # kjelt = comp_CPk_grad_elt(Pvec, Agraph, tau, 0, 0)
-    # print("zeroeth elt of grad of zeroeth cp: ")
-    # print(kjelt)
-
-    # khess_col = comp_CPk_hess_col(Pvec, Agraph, tau, 0, 0)
-    # print("grad of zeroeth elt of grad of zeroeth cp: ")
-    # print(khess_col)
-
-    # khess = comp_CPk_hess(Pvec, Agraph, tau, 0)
-    # print("hessian of zeroeth cp:")
-    # print(khess)
-
-    # npHess = np.asarray(khess)
-    # eigvals = np.linalg.eigvals((1/2)*(npHess + np.transpose(npHess)))
-    # max_eigval = np.max(eigvals)
-    # min_eigval = np.min(eigvals)
-    # print("(H + H')/2 max eigenvalue = " + str(max_eigval) + ", min eigenvalue = " + str(min_eigval))
-
-    # B1 = jnp.kron(jnp.transpose(P), jnp.identity(n))
-    # print("B1 = ")
-    # print(B1)
-    # B2 = jnp.kron(jnp.identity(n), P)
-    # print("B2 = ")
-    # print(B2)
-    # permn2 = jnp.diag(jnp.ones(n**2 - n), k=-n) + jnp.diag(jnp.ones(n), n**2 - n)
-    # # permn2 = permn2.at[5, n**2 - 1].set(1)
-    # print("permn2 = ")
-    # print(permn2)
-    # permn = jnp.diag(jnp.ones(n - 1), k=-1) + jnp.diag(jnp.ones(5), n**2 - 5)
-    # permn = permn.at[0, n- 1].set(1)
-    # print("permn = ")
-    # print(permn)
-
-
-    # Hess_sum = jnp.zeros((n**2, n**2))
-    # for k in range(1**2):    
-    #     e_k = jnp.zeros((1, n**2))
-    #     e_k = e_k.at[0, k].set(1)
-    #     print("e_k = ")
-    #     print(e_k)
-    #     r_k = jnp.matmul(e_k, A)
-    #     Hess = jnp.zeros((n**2, n**2))
-    #     for j in range(n**2):
-    #         e_j = jnp.zeros(n**2)
-    #         e_j = e_j.at[j].set(1)
-    #         M_j = jnp.reshape(e_j, (n, n), order='F')
-    #         M_krons = jnp.kron(jnp.identity(n), M_j) + jnp.kron(jnp.transpose(M_j), jnp.identity(n))
-    #         Hess_col_j = jnp.matmul(r_k, M_krons)
-    #         Hess_col_j = jnp.reshape(Hess_col_j, n**2)
-    #         Hess = Hess.at[:, j].set(Hess_col_j)
-    #     Hess_sum = Hess_sum + Hess
-    #     print("Hessian of cap prob " + str(k) + " = ")
-    #     print(Hess)
-    #     npHess = np.asarray(Hess)
-    #     eigvals = np.linalg.eigvals((1/2)*(npHess + np.transpose(npHess)))
-    #     max_eigval = np.max(eigvals)
-    #     min_eigval = np.min(eigvals)
-    #     print("(H + H')/2 max eigenvalue = " + str(max_eigval) + ", min eigenvalue = " + str(min_eigval))
-    # print("Hess_sum = ")
-    # print(Hess_sum)
-
-
-    # test = jnp.outer(Pvec, jnp.ones(n**2))
-    # print("test = ")
-    # print(test)
-    # # permtest = jnp.matmul(jnp.kron(jnp.identity(n), permn), Pvec)
-    # permn2test = jnp.matmul(permn2, Pvec)
-    # print("permn2test = ")
-    # print(permn2test)
-    # E = jnp.diag(jnp.identity(n).flatten(order='F'))
-    # print("E = ")
-    # print(E)
-    # Evec = jnp.identity(n).flatten(order='F')
-    # print("Evec = ")
-    # print(Evec)
-    # temp = jnp.matmul(jnp.kron(jnp.identity(n), jnp.ones((n, n))), E)
-    # print("temp = ")
-    # print(temp)
-    # temptest = temp*test
-    # print("temptest = ")
-    # print(temptest)
-    # Etest = jnp.matmul(Evec, test)
-    # print("Etest = ")
-    # print(Etest)
-    # test2 = jnp.matmul(jnp.kron(jnp.ones((n, n)), jnp.identity(n)), test)
-    # print("test2 = ")
-    # print(test2)
-    # B = B1 + B2
-    # print("B = ")
-    # print(B)
-    # A = jnp.identity(n**2) - jnp.diag(jnp.identity(n).flatten(order='F'))
-    # print("A = ")
-    # print(A)
-    # C = jnp.matmul(A, B)
-    # print("C = ")
-    # print(C)
-    # D = C + jnp.identity(n**2)
-    # print("D = ")
-    # print(D)
-    # k = 4
-    # krow = D[k, :]
-    # print("kth row = ")
-    # print(krow)
-    # print("Devices available:")
-    # print(jax.devices())
-
-    # test_opt_P = np.array([[0, 0.47, 0, 0.53, 0, 0, 0, 0, 0],
-    #                        [0.30, 0, 0, 0, 0.70, 0, 0, 0, 0],
-    #                        [0, 1.00, 0, 0, 0, 0, 0, 0, 0], 
-    #                        [0.34, 0, 0, 0, 0.56, 0, 0.1, 0, 0],
-    #                        [0, 0, 0, 0, 0, 0.60, 0, 0.40, 0],
-    #                        [0, 0, 0.567, 0, 0, 0, 0, 0, 0.433],
-    #                        [0, 0, 0, 1.00, 0, 0, 0, 0, 0],
-    #                        [0, 0, 0, 0, 0.445, 0, 0.555, 0, 0],
-    #                        [0, 0, 0, 0, 0, 0.30, 0, 0.70, 0]])
-
-
-
-
-
-
 
 

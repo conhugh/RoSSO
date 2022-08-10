@@ -1,14 +1,16 @@
 # Visualization of the performance of stochastic surveillance strategies
 import os
 import time
-import numpy as np
+
+import jax.numpy as jnp
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import pygraphviz as pgv
-import jax.numpy as jnp
-import TestSpec as ts
+
 from StratCompJax import *
+import TestSpec as ts
 
 # Plot transition probabilities for each pair of nodes for the given P matrices
 # Takes a list of initial and optimized P matrices
@@ -165,11 +167,18 @@ def set_edge_length(G, A, len):
                 edge.attr["len"] = len
 
 # Save the environment graph without edge labels:
-def draw_env_graph(A, graph_name, folder_path, save=True):
+def draw_env_graph(A, graph_name, folder_path, show_edge_lens=False, save=True):
     G = gen_graph(A)
     G_viz = nx.nx_agraph.to_agraph(G)
     set_edge_length(G_viz, A, 2)
     G_viz.graph_attr["nodesep"] = 0.5
+    if show_edge_lens:
+        for i in range(A.shape[0]):
+            for j in range(A.shape[1]):
+                if A[i, j] != 0:
+                    e = G_viz.get_edge(i, j)
+                    e.attr["xlabel"] = "{:.3f}".format(A[i, j])
+                    e.attr["fontsize"] = 10.0
     if(save):
         G_viz.layout()
         G_viz.draw(folder_path + "/" + graph_name +  ".png", prog="sfdp")
@@ -187,7 +196,11 @@ def draw_trans_prob_graph(A, P, graph_name, folder_path, P_num=None, save=True):
     if(save):
         # G_viz.write(folder_path + "/" + graph_name + "_P" + str(P_num) + ".dot")
         G_viz.layout()
-        G_viz.draw(folder_path + "/" + graph_name + "_P" + str(P_num) +  ".png", prog="sfdp")
+        if P_num is not None:
+            G_viz.draw(folder_path + "/" + graph_name + "_P" + str(P_num) +  ".png", prog="sfdp")
+        else:
+            G_viz.draw(folder_path + "/" + graph_name +  ".png", prog="sfdp")
+
     return G_viz
 
 # Save the environment graph with edges labeled with optimized transition probabilities, 
@@ -244,6 +257,7 @@ def plot_CP_avg_opt_P(avg_opt_P_mat, tau, folder_path):
     n = avg_opt_P_mat.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
     F = compute_cap_probs(avg_opt_P_mat, F0, tau)
+    np.savetxt(folder_path + "/avg_opt_Pcap_probs.csv", F, delimiter=',')
     F_vec = F.flatten('F')
     probs = np.linspace(1, n**2, n**2)
     plt.figure()
@@ -394,10 +408,11 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
     test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
     sub_dir_num = len(os.listdir(test_set_dir))
     print("Generating Results Visualization...")
-    print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
+    # print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
     for sub_dir_count, sub_dir in enumerate(os.listdir(test_set_dir)):
         if(sub_dir.find("test") != -1 and sub_dir.find("test_spec") == -1):
             test_name = sub_dir
+            # print("sub_dir = " + str(sub_dir))
             _, graph_name, tau = parse_test_name(test_name)
             test_dir = os.path.join(test_set_dir, test_name)
             res_dir = os.path.join(test_dir, "results")
@@ -413,7 +428,7 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
                 with open(final_MCP_path) as final_MCP_file:
                     final_MCPs = np.loadtxt(final_MCP_file)
                     top_MCP_run_nums = np.argsort(final_MCPs)[len(final_MCPs) - num_top_MCP_runs:] + 1
-            init_P_mats = [] 
+            init_P_mats = []
             opt_P_mats = []
             init_run_nums = []
             opt_run_nums = []
@@ -429,6 +444,10 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
                     if(filename.find("opt_P") != -1):
                         with open(f) as opt_P:
                             opt_P = np.loadtxt(opt_P, delimiter = ',')
+                            # print("run_num = " + str(run_num))
+                            # print(np.argwhere(np.isnan(opt_P)))
+                            # # if np.argwhere(np.isnan(opt_P))[0] >= 1:
+                            # #     input("found a nan entry in opt_P_" + str(run_num)) 
                             opt_P_mats.append(opt_P)
                             opt_run_nums.append(run_num)
             if graph_name.find("grid") != -1:
@@ -443,10 +462,11 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
                                 test_name, os.path.join(res_vis_dir, "P_plot2D")) 
             plot_opt_trans_probs_2D(opt_P_mats, res_vis_dir)
             avg_opt_P_mat = np.mean(opt_P_mats, axis=0)
+            # print(avg_opt_P_mat)
             draw_avg_opt_graph(A, avg_opt_P_mat, int(tau), res_vis_dir)
             plot_CP_avg_opt_P(avg_opt_P_mat, int(tau), res_vis_dir)
             draw_opt_graphs(A, opt_P_mats, test_name, opt_run_nums, res_vis_dir)
-        print_progress_bar(sub_dir_count + 1, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
+        # print_progress_bar(sub_dir_count + 1, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
 
 def visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=False):
     test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
@@ -577,8 +597,9 @@ def get_MCP_data(test_set_name, num_top_MCPs=None):
                 while line:
                     line = info.readline()
                     if(line.find("Final MCPs achieved") != -1):
-                        MCP_string = line.strip("[]")
-                        # MCP_string = line[line.find("[") + 1:line.find("]")]
+                        # MCP_string = line.strip("[]")
+                        # print(MCP_string)
+                        MCP_string = line[line.find("[") + 1:line.find("]")]
                         MCPs = MCP_string.split()
                         MCPs = list(map(float, MCPs))
                         if num_top_MCPs is not None:
@@ -718,107 +739,14 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 
-
-    # A, graph_name = gen_star_G(6)
-    # tau = 2
-    # initQ = jnp.ones(jnp.shape(A))    
-    # initP = comp_P_param(initQ, A)
-    # # initP = np.asarray(initP)
-    # rows = [0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5]
-    # cols = [0, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0]
-    # # rows = [0, 0]
-    # # cols = [0, 1]
-    # comp_MCP_var_P_test(initP, tau, rows, cols, 50)
-
-    # test_set_name = "InitP100_Study_D3RandTree1"
+    test_set_name = "InitP250_Study_TreeGraphs1_NoConv"
     # visualize_results(test_set_name, num_top_MCP_runs=5)
-
-    for i in range(10):
-        A, graph_name = gen_rand_tree_G(12, 3)
-        print(graph_name)
-        draw_env_graph(A, graph_name + "_" + str(i), os.getcwd())
-        # print(A)
 
     # visualize_metrics_retro(test_set_name, overlay=True)
-    # visualize_results(test_set_name, num_top_MCP_runs=5)
-    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
+    visualize_results(test_set_name, num_top_MCP_runs=5)
+    visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=None, plot_best_fit=False)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
-    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=10, plot_best_fit=True)
+    visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=25, plot_best_fit=False)
     # plot_optimizer_comparison_retro(test_set_name)
 
-    # import_testing()
-
-    # gscale = int(np.around(255*0.01))
-    # hex_gscale = hex(gscale)
-    # print(hex_gscale)
-
-    # x = np.array([1, 2, 3, 0, 4])
-    # print(len(x))
-    # x_inds = np.argsort(x)
-    # print(x_inds)
-    # print(x_inds[len(x) - 2:])
-    # y = np.array([[0, 0, 0], [1, 2, 1], [2, 4, 1], [3, 6, 0]])
-    # print(y.shape)
-
-    # plt.figure()
-    # plt.plot(x, y)
-    # plt.savefig("testfig", bbox_inches = "tight")
-
-
-    # P = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])  # initialize transition prob matrix
-    # # P = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])  # initialize transition prob matrix
-    # P = np.matmul(np.diag(1/np.sum(P, axis=1)), P)   # normalize to generate valid prob dist
-
-    # tau = 2  # attack duration
-
-    # plot_cap_probs_3D(cap_probs)
-
-    # cap_probs = comp_CP_var_P(P, 3, 0, 0)
-
-    # # A = gen_star_G(9)
-    # A = np.array([[1, 0, 1, 0, 0, 0, 0], [0, 1, 1, 0, 0, 0, 0], [1, 1, 1, 1, 0, 0, 0], [0, 0, 1, 1, 1, 1, 1], [0, 0, 0, 1, 1, 0, 0], [0, 0, 0, 1, 0, 1, 0], [0, 0, 0, 1, 0, 0, 1]])
-    # # print(A)
-    # # P0 = np.array([[0, 0.2, 1 - 0.2], [1, 0, 0], [1, 0, 0]])
-    # P0 = initRandP(A)
-
-    # # fig2 = plt.figure()
-    # # ax2 = plt.plot()
-    # G = gen_graph(A)
-    # # nx.draw(G, with_labels=True, font_weight='bold')
-    # # plt.show()
-
-    # G_viz = nx.nx_agraph.to_agraph(G)
-
-    # center = G_viz.get_node(0)
-    # center.attr["color"] = "blue"
-    # # center.attr["fixedsize"] = True
-    # # center.attr["imagescale"] = True
-    # # center.attr["image"] = "small robot.png"
-
-    # # intruder_loc = G_viz.get_node(3)
-    # # intruder_loc.attr["color"] = "red"
-    # # intruder_loc.attr["fixedsize"] = True
-    # # intruder_loc.attr["image"] = "small intruder.png"
-
-    # for i in range(A.shape[0]):
-    #     for j in range(A.shape[1]):
-    #         if A[i, j] == 1:
-    #             e = G_viz.get_edge(i, j)
-    #             e.attr["xlabel"] = "{:.3f}".format(P0[i, j])
-    #             # e.attr["decorate"] = True
-    #             # e.attr["labelfloat"] = True
-    #             e.attr["fontsize"] = 10.0
-
-    # # e = G_viz.get_edge(center, intruder_loc)
-    # # e.attr["label"] = "P_03"
-    # # e.attr["color"] = "blue"
-
-    # set_edge_length(G_viz, A, 2)
-
-    # G_viz.graph_attr["nodesep"] = 0.5
-    # G_viz.graph_attr["len"] = 4
-    # G_viz.write("test_graph.dot")
-    # G_viz.layout()
-    # G_viz.draw("test_graph.png", prog="sfdp")
-    # # G_viz.draw("test_graph.png", prog="neato")
