@@ -1,6 +1,7 @@
 # Script for defining new test specifications
 import os
 
+from GraphGen import *
 from StratCompJax import *
 import TestSpec as ts
 

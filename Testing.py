@@ -5,6 +5,7 @@ import time
 import numpy as np
 import jax.numpy as jnp
 
+import GraphGen as gg
 import StratCompJax as scj
 import StratOptOptax as soo
 import StratViz as sv

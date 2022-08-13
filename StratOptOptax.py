@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
+from GraphGen import *
 from StratCompJax import *
 from StratViz import *
 import TestSpec as ts

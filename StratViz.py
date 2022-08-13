@@ -153,7 +153,7 @@ def comp_MCP_var_P_test(P0, tau, rows, cols, resolution):
     plt.savefig(os.getcwd() + "/test_CP_plot.png")
 
 # Generate a NetworkX graph from adjacency matrix A
-def gen_graph(A):
+def gen_NXgraph(A):
     temp = nx.DiGraph()
     G = nx.from_numpy_matrix(A, create_using=temp)
     return G
@@ -168,7 +168,7 @@ def set_edge_length(G, A, len):
 
 # Save the environment graph without edge labels:
 def draw_env_graph(A, graph_name, folder_path, show_edge_lens=False, save=True):
-    G = gen_graph(A)
+    G = gen_NXgraph(A)
     G_viz = nx.nx_agraph.to_agraph(G)
     set_edge_length(G_viz, A, 2)
     G_viz.graph_attr["nodesep"] = 0.5
