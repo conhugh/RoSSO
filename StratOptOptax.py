@@ -287,34 +287,31 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
     conv_times = []
     opt_metrics = {track : [] for track in trackers}
     for k in range(num_init_Ps):
-        # FOR TESTING ONLY, DELETE THIS LATER--------------------------------------
-        trajs = [4, 5, 19, 22, 35, 37, 41]
-        if k in trajs:
-            print("Optimizing with initial P matrix number " + str(k + 1) + "...")
-            print("Using optimizer: " + opt_params["optimizer_name"])
-            P0 = init_Ps[:, :, k]
-            lr, lr_scale = set_learning_rate(P0, A, F0, tau, opt_params["num_LCPs"], opt_params["nominal_learning_rate"], opt_params["grad_mode"])
-            lr_scales.append(lr_scale)
-            learning_rates.append(lr)
-            opt_params["scaled_learning_rate"] = lr
-            # --------------------------------------------------------------------
-            start_time = time.time()
-            P, F, tracked_vals = run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers)
-            conv_time = time.time() - start_time
-            print("--- Optimization took: %s seconds ---" % (conv_time))
-            # --------------------------------------------------------------------
-            conv_times.append(conv_time)
-            
-            if(save):
-                # Save initial and optimized P matrices:
-                np.savetxt(test_results_dir + "/init_P_" + str(k + 1) + ".csv", P0, delimiter=',')
-                np.savetxt(test_results_dir + "/opt_P_" + str(k + 1) + ".csv", P, delimiter=',')
-                # Save metrics tracked during the optimization process:
-                for track in trackers:
-                    if track.find("final") == -1:
-                        opt_metrics[track].append(tracked_vals[track])
-                    else:
-                        opt_metrics[track].extend(tracked_vals[track])
+        print("Optimizing with initial P matrix number " + str(k + 1) + "...")
+        print("Using optimizer: " + opt_params["optimizer_name"])
+        P0 = init_Ps[:, :, k]
+        lr, lr_scale = set_learning_rate(P0, A, F0, tau, opt_params["num_LCPs"], opt_params["nominal_learning_rate"], opt_params["grad_mode"])
+        lr_scales.append(lr_scale)
+        learning_rates.append(lr)
+        opt_params["scaled_learning_rate"] = lr
+        # --------------------------------------------------------------------
+        start_time = time.time()
+        P, F, tracked_vals = run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers)
+        conv_time = time.time() - start_time
+        print("--- Optimization took: %s seconds ---" % (conv_time))
+        # --------------------------------------------------------------------
+        conv_times.append(conv_time)
+        
+        if(save):
+            # Save initial and optimized P matrices:
+            np.savetxt(test_results_dir + "/init_P_" + str(k + 1) + ".csv", P0, delimiter=',')
+            np.savetxt(test_results_dir + "/opt_P_" + str(k + 1) + ".csv", P, delimiter=',')
+            # Save metrics tracked during the optimization process:
+            for track in trackers:
+                if track.find("final") == -1:
+                    opt_metrics[track].append(tracked_vals[track])
+                else:
+                    opt_metrics[track].extend(tracked_vals[track])
 
     if(save):
         np.savetxt(test_dir + "/A.csv", np.asarray(A).astype(int), delimiter=',')  # Save the env graph binary adjacency matrix
@@ -370,6 +367,7 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
     P = P0 
     Q = P0
     old_MCP = 0
+    diam_pairs = gg.get_diametric_pairs(A)
 
     optimizer = setup_optimizer(opt_params)
     opt_state = optimizer.init(P0)
@@ -444,9 +442,11 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
             tracked_vals["P_diff_sums"].append(abs_P_diff_sum)
             tracked_vals["P_diff_max_elts"].append(jnp.max(jnp.abs(P_diff)))
             F = compute_cap_probs(P, F0, tau)
+            tracked_vals["diam_pair_CP_variance"].append(compute_diam_pair_CP_variance(F, diam_pairs))
             F = F.reshape((n**2), order='F')
             tracked_vals["MCP_inds"].append(jnp.argmin(F))
             tracked_vals["MCPs"].append(jnp.min(F))
+
             # print status update to terminal:
             if(iter % opt_params["iters_per_printout"] == 0):
                 print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time) + "-------")
@@ -606,147 +606,10 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
     np.set_printoptions(suppress=True)
 
-    # test_set_name = "InitP7_Study_TreeGraphs1_NoConv_TinierStep"
-    # test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/init_study_tree_graphs_noconv.json")
+    test_set_name = "InitP100_Study_D3RandTree_CPvartest"
+    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/rand_tree_CP_var_test.json")
 
-    # test_set_start_time = time.time()
-    # run_test_set(test_set_name, test_spec)
-    # print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
+    test_set_start_time = time.time()
+    run_test_set(test_set_name, test_spec)
+    print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
 
-
-    # # Testing gen_tree_G:
-    # n = 5
-    # tree_dict = {
-    #     0 : [1], 
-    #     1 : [2],
-    #     2 : [3, 4],
-    #     3 : None,
-    #     4 : None
-    # }
-    # print("n = " + str(n))
-    # print("tree_dict = ")
-    # print(tree_dict)
-    # tree, g_name = gen_tree_G(n, tree_dict)
-    # print("graph_name = " + g_name)
-    # print("tree = ")
-    # print(tree)
-
-    # P = init_rand_P(tree)
-    # print("P = ")
-    # print(P)
-    # tau = 5
-    # F0 = jnp.full((n, n, tau), np.NaN)
-
-    # FHTs = compute_FHT_probs(P, F0, tau)
-
-    # for i in range(tau):
-    #     print("F_" + str(i + 1) + ":")
-    #     print(FHTs[:, :, i])
-
-    # draw_trans_prob_graph(tree, P, g_name, os.getcwd())
-
-    # res_vis_dir = os.getcwd() + "/Results/test_set_InitP1000_Study_3x3Grid1/test1_grid_W3_H3_tau4/results_visualization"
-    # best_opt_P = np.loadtxt(res_vis_dir + "/sym_transformed_opt_P_887.csv", delimiter=',')
-
-    # A, graph_name = gen_grid_G(3, 3)
-    # n = A.shape[0]
-    # tau = 4
-    # F0 = jnp.full((n, n, tau), np.NaN)
-    # test_opt_P = np.array([[0, 0.467, 0, 0.533, 0, 0, 0, 0, 0],
-    #                        [0.3, 0, 0, 0, 0.7, 0, 0, 0, 0],
-    #                        [0, 1.00, 0, 0, 0, 0, 0, 0, 0], 
-    #                        [0.337, 0, 0, 0, 0.575, 0, 0.088, 0, 0],
-    #                        [0, 0, 0, 0, 0, 0.60, 0, 0.40, 0],
-    #                        [0, 0, 0.567, 0, 0, 0, 0, 0, 0.433],
-    #                        [0, 0, 0, 1.00, 0, 0, 0, 0, 0],
-    #                        [0, 0, 0, 0, 0.4433, 0, 0.52, 0, 0.0367],
-    #                        [0, 0, 0, 0, 0, 0.30, 0, 0.70, 0]])                       
-    # test_opt_P = jnp.asarray(test_opt_P, dtype=float)
-    # MCP = compute_MCP(test_opt_P, F0, tau)
-    # print("test_opt_P = ")
-    # print(np.asarray(test_opt_P))    
-    # print("MCP = ")
-    # print(MCP)
-    # print("best_opt_P = ")
-    # print(best_opt_P)
-    # best_opt_P = jnp.asarray(best_opt_P)
-    # MCP = compute_MCP(best_opt_P, F0, tau)
-    # print("MCP = ")
-    # print(MCP)
-
-
-
-    # visualize_results(test_set_name)
-    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
-    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
-    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
-    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=10, plot_best_fit=True)
-
-    # A, graph_name = gen_grid_G(3, 3)
-    # num_init_Ps = 1
-    # init_Ps = init_rand_Ps(A, num_init_Ps)
-    # tau = graph_diam(A)
-    # P0 = init_Ps[:, :, 0]
-    # n = A.shape[0]
-    # F0 = jnp.full((n, n, tau), np.NaN)
-    # P0 = init_Ps[:, :, 1]
-    # elt_step_size = 0.1
-    # init_temp = 500
-    # max_iters = 5000
-    # iters_per_print = 100
-    # print("Graph Name: " + graph_name)
-    # print("tau = " + str(tau))
-    # # print("init_P_num = " + str(i))
-    # best_Q, best_P, best_MCP = sim_anneal_test(P0, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print)
-    # # max_iters = 10000
-    # init_temp = 10
-    # for i in range(50):
-    #     print("Current best MCP: " + str(best_MCP))
-    #     elt_step_size = 0.1/(i + 1)
-    #     best_Q, best_P, best_MCP = sim_anneal_test(best_Q, A, F0, tau, elt_step_size, init_temp, max_iters, iters_per_print)
-
-    # print(best_MCP)
-    # print(best_Q)
-    # print(best_P)
-    
-    # A, graph_name = gen_grid_G(3, 5)
-    # tau = graph_diam(A)
-    # num_init_Ps = 15
-    # max_iters = 2000
-    # print("Graph name: " + graph_name)    
-
-    # print("--------------------- Speed testing standard jacrev...")
-    # test_time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_parametrization")
-    # print("Optimizing took " + str(np.mean(np.asarray(test_time_avgs))) + " seconds to complete on avg")
-
-    # print("---------------------Speed testing with grad...")
-    # time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_test_parametrization")
-    # print("Optimizing (grad) took " + str(np.mean(np.asarray(time_avgs))) + " seconds to complete on avg")
-
-    # print("---------------------Speed testing with extra param...")
-    # time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_extra_parametrization")
-    # print("Optimizing (extra param) took " + str(np.mean(np.asarray(time_avgs))) + " seconds to complete on avg")
-
-    # print("--------------------- Speed testing standard jacrev...")
-    # test_time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_parametrization")
-    # print("Optimizing took " + str(np.mean(np.asarray(test_time_avgs))) + " seconds to complete on avg")
-
-    # print("---------------------Speed testing with grad...")
-    # time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_test_parametrization")
-    # print("Optimizing (grad) took " + str(np.mean(np.asarray(time_avgs))) + " seconds to complete on avg")
-
-    # print("---------------------Speed testing with extra param...")
-    # time_avgs = test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, "MCP_extra_parametrization")
-    # print("Optimizing (extra param) took " + str(np.mean(np.asarray(time_avgs))) + " seconds to complete on avg")
-
-    
-    # Visualization: [NEED TO FIX CIRCULAR IMPORT WITH visualize_results for avg_opt_P_mat drawing]
-    # visualize_metrics(test_set_name, overlay=True)
-    # visualize_results(test_set_name)
-
-
-
-
-
-
-    

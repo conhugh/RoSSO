@@ -3,99 +3,56 @@ import os
 
 from GraphGen import *
 from StratCompJax import *
+from StratViz import draw_env_graph
 import TestSpec as ts
 
-test_spec_name = "Tau_Study_Line_Graph_Test_Specification"
+test_spec_name = "InitP250_Study_XD_Tree_Graphs_Test_Specification"
 
 test_graphs = []
 test_graph_names = {}
 test_graph_codes = {}
 test_taus = {}
 
+node_nums = [7, 12]
 tree_dicts = {
     "tree_dict1" : {
-            0 : [1, 4], 
+            0 : [1, 3, 4, 5], 
             1 : [2],
-            2 : [3],
+            2 : None,
             3 : None,
-            4 : [5, 7],
+            4 : None,
             5 : [6],
-            6 : None,
-            7 : [8],
-            8 : [9],
-            9 : None
+            6 : None
         },
     "tree_dict2" : {
-            0 : [1, 4], 
-            1 : [2, 3],
-            2 : None,
-            3 : None,
-            4 : [5, 7],
-            5 : [6],
-            6 : None,
-            7 : [8],
-            8 : [9],
-            9 : None
-        },
-    "tree_dict3" : {
-            0 : [1, 4], 
-            1 : [2, 3],
-            2 : None,
-            3 : None,
-            4 : [5, 7],
-            5 : [6],
-            6 : None,
-            7 : [8, 9],
-            8 : None,
-            9 : None
-        },
-    "tree_dict4" : {
-            0 : [1, 4], 
-            1 : [2, 3],
-            2 : None,
-            3 : None,
-            4 : [5, 6, 7],
-            5 : None,
-            6 : None,
-            7 : [8, 9],
-            8 : None,
-            9 : None
-        },
-    "tree_dict5" : {
-            0 : [1, 4], 
-            1 : [2, 3],
-            2 : None,
-            3 : None,
-            4 : [5, 6, 7],
-            5 : None,
-            6 : None,
-            7 : [8],
-            8 : [9],
-            9 : None
-        },
-    "tree_dict6" : {
-            0 : [1, 4], 
+            0 : [1, 3, 4, 5, 7], 
             1 : [2],
-            2 : [3],
+            2 : None,
             3 : None,
-            4 : [5, 6, 7],
-            5 : None,
+            4 : None,
+            5 : [6],
             6 : None,
             7 : [8],
-            8 : [9],
-            9 : None
+            8 : [9, 10],
+            9 : None,
+            10 : [11],
+            11 : None 
         }
 }
 
 # graph, graph_name = gen_line_G(3)
 # graph_code = gen_graph_code(graph)
-for i in range(1, 7):
-    graph, graph_name = gen_tree_G(10, tree_dicts["tree_dict" + str(i)])
+for i in range(2):
+    graph, graph_name = gen_tree_G(node_nums[i], tree_dicts["tree_dict" + str(i + 1)])
     graph_code = gen_graph_code(graph)
     test_graphs.append(graph)
-    test_graph_names["test" + str(i)] = graph_name
-    test_graph_codes["test" + str(i)] = graph_code
-    test_taus["test" + str(i)] = graph_diam(graph)
+    draw_env_graph(graph, graph_name, os.getcwd())
+    for t in range(3):
+        test_graph_names["test" + str(i*3 + t + 1)] = graph_name
+        test_graph_codes["test" + str(i*3 + t + 1)] = graph_code
+        test_taus["test" + str(i*3 + t + 1)] = graph_diam(graph) + t
+
+
 
 # graph, graph_name = gen_line_G(4)
 # graph_code = gen_graph_code(graph)
@@ -159,4 +116,4 @@ d_test_spec.num_tests = 6
 d_test_spec.graph_names = test_graph_names
 d_test_spec.taus = test_taus
 d_test_spec.graph_codes = test_graph_codes
-d_test_spec.save_test_spec("init_study_tree_graphs", os.getcwd() + "/TestSpecs")
+d_test_spec.save_test_spec("init_study_XD_tree_graphs", os.getcwd() + "/TestSpecs")

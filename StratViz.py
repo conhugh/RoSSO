@@ -10,6 +10,7 @@ import numpy as np
 import pygraphviz as pgv
 
 from StratCompJax import *
+import GraphGen
 import TestSpec as ts
 
 # Plot transition probabilities for each pair of nodes for the given P matrices
@@ -408,7 +409,7 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
     test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
     sub_dir_num = len(os.listdir(test_set_dir))
     print("Generating Results Visualization...")
-    # print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
+    print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
     for sub_dir_count, sub_dir in enumerate(os.listdir(test_set_dir)):
         if(sub_dir.find("test") != -1 and sub_dir.find("test_spec") == -1):
             test_name = sub_dir
@@ -466,7 +467,7 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
             draw_avg_opt_graph(A, avg_opt_P_mat, int(tau), res_vis_dir)
             plot_CP_avg_opt_P(avg_opt_P_mat, int(tau), res_vis_dir)
             draw_opt_graphs(A, opt_P_mats, test_name, opt_run_nums, res_vis_dir)
-        # print_progress_bar(sub_dir_count + 1, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
+        print_progress_bar(sub_dir_count + 1, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
 
 def visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=False):
     test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
@@ -713,6 +714,8 @@ def plot_optimizer_comparison_retro(test_set_name):
     plt.savefig(test_set_dir + "/OptimizerComparison.png", bbox_inches = "tight")
     plt.close()
 
+
+
 # Print iterations progress
 def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', print_end = "\r"):
     """
@@ -739,11 +742,10 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 
-    test_set_name = "InitP250_Study_TreeGraphs1_NoConv"
-    # visualize_results(test_set_name, num_top_MCP_runs=5)
+    test_set_name = "InitP250_Study_XD_TreeGraphs1"
 
     # visualize_metrics_retro(test_set_name, overlay=True)
-    visualize_results(test_set_name, num_top_MCP_runs=5)
+    visualize_results(test_set_name, num_top_MCP_runs=10)
     visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=None, plot_best_fit=False)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)

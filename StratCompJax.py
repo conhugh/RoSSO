@@ -6,6 +6,8 @@ from jax import grad, jacrev, jit
 import jax.numpy as jnp
 import numpy as np
 
+import GraphGen as gg
+
 def init_rand_P(A):
     """
     Generate a random initial transition probability matrix.
@@ -24,6 +26,7 @@ def init_rand_P(A):
     jaxlib.xla_extension.DeviceArray
         Valid, random initial transition probability matrix. 
     """
+
     key = jax.random.PRNGKey(1)
     P0 = jnp.zeros_like(A, dtype='float32')
     for i in range(A.shape[0]):
@@ -110,6 +113,35 @@ def compute_FHT_probs(P, F0, tau):
     jaxlib.xla_extension.DeviceArray
         Array of `tau` distinct First Hitting Time Probability matrices. 
     """
+    F0 = F0.at[:, :, 0].set(P)
+    for i in range(1, tau):
+        F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
+    return F0
+
+
+@functools.partial(jit, static_argnames=['tau'])
+def compute_FHT_probs_NF0(P, tau):
+    """
+    Compute First Hitting Time (FHT) Probability matrices.
+
+    To compute the Capture Probability Matrix, we must sum the FHT
+    Probability matrices from 1 up to `tau` time steps. 
+    For more information see https://arxiv.org/pdf/2011.07604.pdf.
+
+    Parameters
+    ----------
+    P : jaxlib.xla_extension.DeviceArray
+        Transition probability matrix. 
+    tau : int
+        Intruder's attack duration. 
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Array of `tau` distinct First Hitting Time Probability matrices. 
+    """
+    n = jnp.shape(P)[0]
+    F0 = jnp.full((n, n, tau), np.NaN)
     F0 = F0.at[:, :, 0].set(P)
     for i in range(1, tau):
         F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
@@ -223,8 +255,33 @@ def compute_cap_probs(P, F0, tau):
     cap_probs = jnp.sum(F, axis=2)
     return cap_probs
 
+@functools.partial(jit, static_argnames=['tau'])
+def compute_cap_probs_NF0(P, tau):
+    """
+    Compute Capture Probability Matrix.
+
+    Parameters
+    ----------
+    P : jaxlib.xla_extension.DeviceArray 
+        Transition probability matrix.
+    tau : int
+        Intruder's attack duration. 
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Capture Probability matrix. 
+    
+    See Also
+    --------
+    compute_FHT_probs
+    """
+    F = compute_FHT_probs_NF0(P, tau)
+    cap_probs = jnp.sum(F, axis=2)
+    return cap_probs
+
 # @functools.partial(jit, static_argnames=['tau'])
-def compute_cap_probs_vec(Pvec, tau):
+def compute_cap_probs_vec(Pvec, tau):  # MAY WANT TO REPLACE THIS FN BY SETTING AXIS=-1 IN SUM 
     """
     Compute Capture Probability Matrix.
 
@@ -250,6 +307,94 @@ def compute_cap_probs_vec(Pvec, tau):
     F = compute_FHT_probs_vec(Pvec, tau)
     cap_probs_vec = jnp.sum(F, axis=1)
     return cap_probs_vec
+
+
+# @jit
+def compute_SPCPs(A, FHT_mats, node_pairs):
+    """
+    Compute shortest-path capture probabilities for given node pairs. 
+
+    Parameters
+    ----------
+    FHT_mats : jaxlib.xla_extension.DeviceArray  
+        Tensor of first-hitting time probability matrices. 
+    node_pairs : jaxlib.xla_extension.DeviceArray  
+        (D x 2) array whose rows contain ordered pairs of nodes, with robot locations  
+        in first column and intruder locations in second column. 
+
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        (D x 3) array with each row containing an ordered node pair followed by
+        the corresponding shortest-path capture probability in last column.
+         
+    
+    See Also
+    --------
+    compute_FHT_probs
+    GraphGen.get_shortest_path_distances
+    """
+    node_pair_SPDs = gg.get_shortest_path_distances(A, node_pairs)
+    SPCPs = jnp.full((jnp.shape(node_pairs)[0], 3), np.NaN)
+    for k in range(jnp.shape(node_pairs)[0]):
+        SPCPs = SPCPs.at[k, :2].set(node_pairs[k, :])
+        SPCPs = SPCPs.at[k, 2].set(FHT_mats[node_pair_SPDs[k, 0], node_pair_SPDs[k, 1], node_pair_SPDs[k, 2] - 1])
+    return SPCPs
+
+@jit
+def compute_diam_pair_cap_probs(F, diam_pairs):
+    """
+    Compute capture probabilities for all leaf node pairs separated by graph diameter. 
+
+    Parameters
+    ----------
+    F : jaxlib.xla_extension.DeviceArray  
+        Capture probability matrix. 
+    diam_pairs : jaxlib.xla_extension.DeviceArray  
+        Array of ordered pairs of leaf nodes separated by the graph diameter. 
+
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        (D x 3) array with each row containing an ordered diametric leaf node pair
+        followed by the corresponding capture probability in the last column, 
+        where D is the total number of ordered diametric pairs within the graph. 
+    
+    See Also
+    --------
+    compute_cap_probs
+    GraphGen.get_diametric_pairs
+    """
+    dp_cap_probs = jnp.full((jnp.shape(diam_pairs)[0], 3), np.NaN)
+    for k in range(jnp.shape(diam_pairs)[0]):
+        dp_cap_probs = dp_cap_probs.at[k, :2].set(diam_pairs[k, :])
+        dp_cap_probs = dp_cap_probs.at[k, 2].set(F[diam_pairs[k, 0], diam_pairs[k, 1]])
+    return dp_cap_probs
+
+@jit
+def compute_diam_pair_CP_variance(F, diam_pairs):
+    """
+    Compute variance of capture probabilities for leaf node pairs separated by graph diameter. 
+
+    Parameters
+    ----------
+    F : jaxlib.xla_extension.DeviceArray  
+        Capture probability matrix. 
+    diam_pairs : jaxlib.xla_extension.DeviceArray  
+        Array of ordered pairs of leaf nodes separated by the graph diameter. 
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Variance of capture probabilities corresponding to diametric leaf node pairs. 
+    
+    See Also
+    --------
+    compute_diam_pair_cap_probs
+    """
+    dp_cap_probs = compute_diam_pair_cap_probs(F, diam_pairs)
+    dp_CP_var = jnp.var(dp_cap_probs[:, 2])
+    return dp_CP_var
 
 @functools.partial(jit, static_argnames=['tau'])
 def compute_MCP(P, F0, tau):
