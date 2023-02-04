@@ -1,0 +1,44 @@
+---------- Graph Information ----------
+Number of nodes (n) = 9
+Graph Name = line_N9
+Attack Duration (tau) = 8
+Graph Code = N9_103214498341
+
+---------- Optimizer Information ----------
+Optimizer used = sgd
+
+Optimizer Parameters from Test Specification:
+{
+    "optimizer_name": "sgd",
+    "num_init_Ps": 5,
+    "conv_test_mode": "P_update",
+    "conv_radius": 0.0025,
+    "conv_window_size": 200,
+    "num_rec_P_diffs": 200,
+    "P_update_elt_bound": 0.05,
+    "nominal_learning_rate": 0.05,
+    "use_momentum": true,
+    "mom_decay_rate": 0.99,
+    "use_nesterov": true,
+    "max_iters": 20000,
+    "grad_mode": "MCP_parametrization",
+    "use_P_update_bound_schedule": true,
+    "use_learning_rate_schedule": true,
+    "use_num_LCPs_schedule": false,
+    "num_LCPs": 4,
+    "iters_per_printout": 200,
+    "iters_per_trackvals": 10
+}
+
+Schedules used:
+learning_rate_schedule:
+{"iters": [100, 200, 500, 1000], "scaled_learning_rate_multipliers": [0.2, 0.5, 0.2, 0.5]}
+P_update_elt_bound_schedule:
+{"iters": [100, 200, 500, 1000], "bounds": [0.01, 0.005, 0.001, 0.0005]}
+
+Optimizer Parameters computed during testing:
+Scaled Learning Rates = [298.39685 680.7866   64.54587  65.56406 634.6508 ]
+Max absolute-value elements of initial MCP gradients = [0.00016756 0.00007344 0.00077464 0.00076261 0.00007878]
+Final MCPs achieved = [0. 0. 0. 0. 0.]
+Number of iterations required = [213, 208, 212, 225, 206]
+Optimization Times Required (seconds) = [0.6856787204742432, 0.1868293285369873, 0.18685197830200195, 0.19124650955200195, 0.17474794387817383]

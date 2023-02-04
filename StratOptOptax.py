@@ -413,7 +413,6 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
                 num_LCPs = lcp_num_schedule["lcp_nums"][index]
                 print("Updated P_update_elt_bound to: " + str(num_LCPs) + " at iteration " + str(iter))
 
-
         # apply update to P matrix, and parametrization Q, if applicable:
         if opt_params["grad_mode"].find("parametrization") != -1:
             grad = -1*grad_func(Q, A, F0, tau) # compute negative gradient
@@ -601,13 +600,12 @@ def sim_anneal_inner(curr_Q, curr_MCP, best_Q, best_MCP, iter, A, F0, tau, elt_s
     curr_MCP = MCP_array[metropolis_ind]
     return curr_Q, curr_MCP, best_Q, best_MCP
 
-# TESTING ------------------------------------------------------------------------
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
     np.set_printoptions(suppress=True)
 
-    test_set_name = "InitP100_Study_D3RandTree_CPvartest"
-    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/rand_tree_CP_var_test.json")
+    test_set_name = "Quick_Setup_Test"
+    test_spec = ts.TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/quick_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
