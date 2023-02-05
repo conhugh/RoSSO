@@ -8,7 +8,8 @@ The main optimization-related packages are Jax and Optax, more info can be found
 
 It is recommended to use a virtual environment when installing dependencies. If unfamiliar, see https://docs.python.org/3/library/venv.html.
 
-If you only plan to run computations locally and only on CPU, all required packages can be installed simply by running: "pip install -r requirements.txt". 
+If you only plan to run computations locally and only on CPU, all required packages can be installed simply by running: 
+      pip install -r requirements.txt
 
 If you plan to run computations with Google Cloud TPUs or in Google Colab, or if you want to use the GPU in your graphics card to accelerate gradient computation on your local machine, you'll need to set up Jax separately from installing the other packages.
 
