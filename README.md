@@ -1,12 +1,20 @@
 # RoboSurvStratOpt
 Repository for research code related to robotic surveillance problems. 
 
-## Dependencies:
+## Installing Dependencies:
+The main optimization-related packages are Jax and Optax, more info can be found here:
  - Jax (https://jax.readthedocs.io/en/latest/index.html) 
-    To optimize strategies on GPU, will need to follow the install instructions here: https://github.com/google/jax#pip-installation-gpu-cuda 
  - Optax (https://optax.readthedocs.io/en/latest/) 
- - numpy, matplotlib, networkx, pygraphviz ... will add a requirements.txt file soon to make the environment easier to replicate. 
 
+It is recommended to use a virtual environment when installing dependencies. If unfamiliar, see https://docs.python.org/3/library/venv.html.
+
+If you only plan to run computations locally and only on CPU, all required packages can be installed simply by running: "pip install -r requirements.txt". 
+
+If you plan to run computations with Google Cloud TPUs or in Google Colab, or if you want to use the GPU in your graphics card to accelerate gradient computation on your local machine, you'll need to set up Jax separately from installing the other packages.
+
+Installation instructions can be found here: https://github.com/google/jax#installation. When enabling GPU-accelerated computation on your local machine, the most involved part will be installing the NVIDIA CUDA toolkit, cuDNN library, and appropriate driver for your graphics card. You will need to have a CUDA-capable graphics card (see the list here: https://developer.nvidia.com/cuda-gpus). You will also need to sign up for the NVIDIA Developer Program to download and install cuDNN. 
+
+Note that if you have a Windows machine, installing these dependencies will be easier if you set up WSL2 and install Ubuntu (see tutorial here: https://ubuntu.com/tutorials/install-ubuntu-on-wsl2-on-windows-11-with-gui-support#1-overview). As of January 2023, you are supposed to be able to do this on Windows 10 and no longer need Windows 11. Using WSL2 + Ubuntu makes the process simpler, both because Jax provides wheels for installation on Linux only (which you can use with WSL2) and because installing the CUDA toolkit is easier if you download and use the "WSL-Ubuntu" version.
 
 ## Comments on Organization:
 Overall layout of the codebase is as follows:
