@@ -246,7 +246,7 @@ def COMPARE_SPD_SPCP_TAUCP():
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
     # NUDEL_FHT_TESTS()
-    # HOLY_GRID_TESTS()
+    HOLY_GRID_TESTS()
     # F0_REQ_TESTS()
     # CSV_RW_TEST()
     # GET_LEAF_CP_TEST()

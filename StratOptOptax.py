@@ -389,29 +389,29 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
     converged = False
     while not converged:
         # Apply desired scheduling:
-        if opt_params["use_learning_rate_schedule"]:  #currently only implemented for SGD
-            if lr_schedule["iters"].count(iter) != 0:
-                index = lr_schedule["iters"].index(iter)
-                new_lr = opt_params["scaled_learning_rate"]*lr_schedule["scaled_learning_rate_multipliers"][index]
-                if opt_params["use_momentum"]:  
-                    optimizer = optax.sgd(new_lr, momentum=opt_params["mom_decay_rate"], nesterov=opt_params["use_nesterov"])
-                else:
-                    optimizer = optax.sgd(new_lr)
-                if opt_params["grad_mode"].find("parametrization") != -1:
-                    opt_state = optimizer.init(Q)
-                else:
-                    opt_state = optimizer.init(P)
-                print("Updated scaled_learning_rate to: " + str(new_lr) + " at iteration " + str(iter))
-        if opt_params["use_P_update_bound_schedule"]:
-            if P_update_bound_schedule["iters"].count(iter) != 0:
-                index = P_update_bound_schedule["iters"].index(iter)
-                P_update_bound = jnp.full((n, n), P_update_bound_schedule["bounds"][index])
-                print("Updated P_update_elt_bound to: " + str(P_update_bound_schedule["bounds"][index]) + " at iteration " + str(iter))
-        if opt_params["use_num_LCPs_schedule"]:
-            if lcp_num_schedule["iters"].count(iter) != 0:
-                index = lcp_num_schedule["iters"].index(iter)
-                num_LCPs = lcp_num_schedule["lcp_nums"][index]
-                print("Updated P_update_elt_bound to: " + str(num_LCPs) + " at iteration " + str(iter))
+        # if opt_params["use_learning_rate_schedule"]:  #currently only implemented for SGD
+        #     if lr_schedule["iters"].count(iter) != 0:
+        #         index = lr_schedule["iters"].index(iter)
+        #         new_lr = opt_params["scaled_learning_rate"]*lr_schedule["scaled_learning_rate_multipliers"][index]
+        #         if opt_params["use_momentum"]:  
+        #             optimizer = optax.sgd(new_lr, momentum=opt_params["mom_decay_rate"], nesterov=opt_params["use_nesterov"])
+        #         else:
+        #             optimizer = optax.sgd(new_lr)
+        #         if opt_params["grad_mode"].find("parametrization") != -1:
+        #             opt_state = optimizer.init(Q)
+        #         else:
+        #             opt_state = optimizer.init(P)
+        #         print("Updated scaled_learning_rate to: " + str(new_lr) + " at iteration " + str(iter))
+        # if opt_params["use_P_update_bound_schedule"]:
+        #     if P_update_bound_schedule["iters"].count(iter) != 0:
+        #         index = P_update_bound_schedule["iters"].index(iter)
+        #         P_update_bound = jnp.full((n, n), P_update_bound_schedule["bounds"][index])
+        #         print("Updated P_update_elt_bound to: " + str(P_update_bound_schedule["bounds"][index]) + " at iteration " + str(iter))
+        # if opt_params["use_num_LCPs_schedule"]:
+        #     if lcp_num_schedule["iters"].count(iter) != 0:
+        #         index = lcp_num_schedule["iters"].index(iter)
+        #         num_LCPs = lcp_num_schedule["lcp_nums"][index]
+        #         print("Updated P_update_elt_bound to: " + str(num_LCPs) + " at iteration " + str(iter))
 
         # apply update to P matrix, and parametrization Q, if applicable:
         if opt_params["grad_mode"].find("parametrization") != -1:

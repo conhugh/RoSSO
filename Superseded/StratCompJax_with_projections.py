@@ -468,8 +468,41 @@ def get_grad_func(grad_mode="MCP_parametrization"):
     else:
         raise ValueError("Invalid grad_mode specified!")
 
+_CP_jac = jacrev(compute_cap_probs_vec)
+def comp_CP_jac(Pvec, A, tau):
+    G = _CP_jac(Pvec, tau)
+    A_id = jnp.diag(A.flatten(order='F'))
+    G = jnp.matmul(G, A_id)
+    return G
+
+def comp_CPk_grad(Pvec, A, tau, k):
+    G = comp_CP_jac(Pvec, A, tau)
+    kgrad = G[k, :]
+    return kgrad
+
+def comp_CPk_grad_elt(Pvec, A, tau, k, j):
+    kgrad = comp_CPk_grad(Pvec, A, tau, k)
+    kj_elt = kgrad[j]
+    return kj_elt
+
+_CPk_hess_col = jacrev(comp_CPk_grad_elt)
+def comp_CPk_hess_col(Pvec, A, tau, k, j):
+    Hcol = _CPk_hess_col(Pvec, A, tau, k, j)
+    return Hcol
+
+def comp_CPk_hess(Pvec, A, tau, k):
+    H = jnp.full((len(Pvec), len(Pvec)), np.NaN)
+    for j in range(len(Pvec)):
+        H = H.at[:, j].set(comp_CPk_hess_col(Pvec, A, tau, k, j))
+    return H
+
+def comp_CP_jac_nz(Pvec, tau):
+    G = _CP_jac(Pvec, tau)
+    return G
+
 # Autodiff version of Min Cap Prob Gradient computation:
 _comp_MCP_grad = jacrev(compute_MCP)
+# wrapper function:
 @functools.partial(jit, static_argnames=['tau'])
 def comp_MCP_grad(P, A, F0, tau):
     G = _comp_MCP_grad(P, F0, tau)
@@ -490,7 +523,7 @@ def comp_avg_LCP_grad(P, A, F0, tau, num_LCPs=None):
 def comp_P_param(Q, A):
     P = Q*A
     P = jnp.maximum(jnp.zeros_like(P), P) # apply component-wise ReLU
-    P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize rows to generate valid prob dist
+    P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize to generate valid prob dist
     return P
 
 # Parametrization of the P matrix
@@ -498,7 +531,7 @@ def comp_P_param(Q, A):
 def comp_P_param_abs(Q, A):
     P = Q*A
     P = jnp.abs(P) # apply component-wise absolute-value
-    P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize rows to generate valid prob dist
+    P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize to generate valid prob dist
     return P
 
 # Loss function with constraints included in parametrization
@@ -512,7 +545,7 @@ def loss_MCP(Q, A, F0, tau):
 @functools.partial(jit, static_argnames=['tau'])
 def loss_MCP_abs(Q, A, F0, tau):
     P = comp_P_param_abs(Q, A)
-    mcp = compute_MCP(P, F0, tau) 
+    mcp = compute_MCP(P, F0, tau)
     return mcp
 
 # Autodiff parametrized loss function
@@ -521,6 +554,18 @@ _comp_MCP_grad_param = jacrev(loss_MCP)
 def comp_MCP_grad_param(Q, A, F0, tau):
     grad = _comp_MCP_grad_param(Q, A, F0, tau) 
     return grad
+
+# # Autodiff parametrized loss function
+# _comp_MCP_grad_param_test = grad(loss_MCP)
+# @functools.partial(jit, static_argnames=['tau'])
+# def comp_MCP_grad_param_test(Q, A, F0, tau):
+#     grad = _comp_MCP_grad_param_test(Q, A, F0, tau) 
+#     return grad
+
+# @functools.partial(jit, static_argnames=['tau'])
+# def comp_MCP_grad_param_extra(Q, A, F0, tau, num_LCPs=None):
+#     grad = _comp_MCP_grad_param(Q, A, F0, tau) 
+#     return grad
 
 # Autodiff parametrized loss function
 _comp_MCP_grad_param_abs = jacrev(loss_MCP_abs)
@@ -544,6 +589,164 @@ def comp_avg_LCP_grad_param(Q, A, F0, tau, num_LCPs=None):
     grad = jnp.mean(J, axis=0)
     return grad
 
+@jit
+def proj_onto_simplex(P):
+    """
+    Project rows of the Transition Probability Matrix `P` onto the probability simplex.
+
+    To ensure gradient-based updates to the Transition Probability Matrix maintain
+    row-stochasticity, the rows of the updated Transition Probability Matrix are projected 
+    onto the nearest point on the probability n-simplex, where `n` is the number of
+    columns of `P`.  For further explanation, see [LINK TO DOCUMENT ON GITHUB], and 
+    for more about the projection algorithm used, see https://arxiv.org/abs/1309.1541.
+
+    Parameters
+    ----------
+    P : numpy.ndarray 
+        Transition Probability Matrix after gradient update, potentially invalid. 
+    
+    Returns
+    -------
+    numpy.ndarray
+        Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
+    """
+    n = P.shape[0]
+    sort_map = jnp.fliplr(jnp.argsort(P, axis=1))
+    X = jnp.full_like(P, np.nan)
+    for i  in range (n):
+        for j in range (n):
+            X = X.at[i, j].set(P[i, sort_map[i, j]])
+    X_tmp = jnp.matmul(jnp.cumsum(X, axis=1) - 1, jnp.diag(1/jnp.arange(1, n + 1)))
+    rho_vals = jnp.sum(X > X_tmp, axis=1) - 1
+    lambda_vals = -X_tmp[jnp.arange(n), rho_vals]
+    X_new = jnp.maximum(X + jnp.outer(lambda_vals, jnp.ones(n)), jnp.zeros([n, n]))
+    P_new = jnp.full_like(P, np.nan)
+    for i in range(n):
+        for j in range(n):
+            P_new = P_new.at[i, sort_map[i, j]].set(X_new[i, j])
+    return P_new
+
+@jit
+def proj_onto_simplex_large(P):
+    """
+    Project rows of the Transition Probability Matrix `P` onto the probability simplex.
+
+    To ensure gradient-based updates to the Transition Probability Matrix maintain
+    row-stochasticity, the rows of the updated Transition Probability Matrix are projected 
+    onto the nearest point on the probability n-simplex, where `n` is the number of
+    columns of `P`.  For further explanation, see [LINK TO DOCUMENT ON GITHUB], and 
+    for more about the projection algorithm used, see https://arxiv.org/abs/1309.1541.
+
+    Parameters
+    ----------
+    P : numpy.ndarray 
+        Transition Probability Matrix after gradient update, potentially invalid. 
+    
+    Returns
+    -------
+    numpy.ndarray
+        Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
+    """
+    n = P.shape[0]
+    P_new = jnp.full_like(P, np.nan)
+    for i in range(n):
+        P_new = P_new.at[i, :].set(proj_row_onto_simplex(P[i, :]))
+    return P_new
+
+@jit
+def proj_row_onto_simplex(row):
+    """
+    Project rows of the Transition Probability Matrix `P` onto the probability simplex.
+
+    To ensure gradient-based updates to the Transition Probability Matrix maintain
+    row-stochasticity, the rows of the updated Transition Probability Matrix are projected 
+    onto the nearest point on the probability n-simplex, where `n` is the number of
+    columns of `P`.  For further explanation, see [LINK TO DOCUMENT ON GITHUB], and 
+    for more about the projection algorithm used, see https://arxiv.org/abs/1309.1541.
+
+    Parameters
+    ----------
+    P : numpy.ndarray 
+        Transition Probability Matrix after gradient update, potentially invalid. 
+    
+    Returns
+    -------
+    numpy.ndarray
+        Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
+    """
+    n = len(row)
+    sort_map = jnp.flip(jnp.argsort(row))
+    X = jnp.full_like(row, np.nan)
+    for j in range (n):
+        X = X.at[j].set(row[sort_map[j]])
+    X_tmp = jnp.matmul(jnp.cumsum(X) - 1, jnp.diag(1/jnp.arange(1, n + 1)))
+    rho = jnp.sum(X > X_tmp) - 1
+    lambda_ = -X_tmp[rho]
+    X_new = jnp.maximum(X + lambda_, jnp.zeros((n)))
+    new_row = jnp.full_like(row, np.nan)
+    for j in range(n):
+        new_row = new_row.at[sort_map[j]].set(X_new[j])
+    return new_row
+
+def proj_row_onto_simplex_test(row):
+    """
+    Project rows of the Transition Probability Matrix `P` onto the probability simplex.
+
+    To ensure gradient-based updates to the Transition Probability Matrix maintain
+    row-stochasticity, the rows of the updated Transition Probability Matrix are projected 
+    onto the nearest point on the probability n-simplex, where `n` is the number of
+    columns of `P`.  For further explanation, see [LINK TO DOCUMENT ON GITHUB], and 
+    for more about the projection algorithm used, see http://www.optimization-online.org/DB_FILE/2014/08/4498.pdf.
+
+    Parameters
+    ----------
+    P : numpy.ndarray 
+        Transition Probability Matrix after gradient update, potentially invalid. 
+    
+    Returns
+    -------
+    numpy.ndarray
+        Valid Transition Probability Matrix nearest to `P` in Euclidian sense. 
+    """
+    v = []
+    vt = []
+    v.append(row[0])
+    rho = row[0] - 1
+    # FIRST PASS:
+    for k in range(1, len(row)):
+        yn = row[k]
+        if yn > rho:
+            rho = rho + (yn - rho)/(len(v) + 1)
+            if rho > (yn - 1):
+                v.append(yn)
+            else:
+                vt.append(v)
+                v.clear()
+                v.append(yn)
+                rho = yn - 1
+    # CLEANUP PASS:
+    for k in range(len(vt)):
+        yn = vt[k]
+        if yn > rho:
+            v.append(yn)
+            rho = rho + (yn - rho)/(len(v))
+    # ELEMENT ELIMINATION LOOP:
+    len_change = True
+    while len_change:
+        v_len = len(v)
+        k = 0
+        while k < len(v):
+            if v[k] <= rho:
+                y = v.pop(k)
+                rho = rho + (rho - y)/(len(v))
+            else:
+                k = k + 1
+        if v_len == len(v):
+            len_change = False
+    tau = rho
+    # PROJECTION:
+    row = jnp.maximum(row - tau, jnp.zeros(jnp.shape(row)))
+    return row
 
 def get_closest_sym_strat_grid(P_ref, P_comp, gridrows, gridcols, sym_index=None):
     if(gridrows == gridcols):

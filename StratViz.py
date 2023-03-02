@@ -89,20 +89,6 @@ def plot_cap_probs_3D(cap_probs):
     ax.set_zlabel('Capture Probability')
     plt.show()
 
-# Plot a function in 3D
-# def plot_func_3D(X, Y, func):
-#     Z = func(X, Y)
-#     robot_locs = np.arange(cap_probs.shape[0])
-#     intruder_locs = np.arange(cap_probs.shape[1])
-#     X, Y = np.meshgrid(robot_locs, intruder_locs)
-#     fig = plt.figure()
-#     ax = plt.axes(projection='3d')
-#     ax.plot_surface(X, Y, cap_probs)
-#     ax.set_xlabel('Robot Location')
-#     ax.set_ylabel('Intruder Location')
-#     ax.set_zlabel('Capture Probability')
-#     plt.show()
-
 # Plot the capture probabilities as a function of P_ij
 def comp_CP_var_P(P, tau, i, j, resolution):
     n = P.shape[0]
