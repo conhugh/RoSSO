@@ -1,4 +1,5 @@
-# Functionality related to generating, encoding, and decoding a variety of environment graphs 
+# Functionality related to generating, encoding, and decoding binary adjacency matrices 
+# for a variety of environment graphs 
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -16,7 +17,7 @@ def gen_graph_code(A):
     -------
     String
         Unique encoding of the binary adjacency matrix.
-    
+
     """
     bin_string = "1"  # leading 1 added to avoid issues with decimal conversion in decoding
     for i in range(jnp.shape(A)[0] - 1):

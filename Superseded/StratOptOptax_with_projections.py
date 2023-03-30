@@ -92,8 +92,12 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters, grad_mode):
             updates, opt_state = optimizer.update(grad, opt_state)
             # print("--- Getting update and state took: %s seconds ---" % (time.time() - start_time))
             # start_time = time.time()
-            Q = optax.apply_updates(Q, updates)
-            P = comp_P_param(Q, A)
+            if grad_mode.find("parametrization") != -1:
+                Q = optax.apply_updates(Q, updates)
+                P = comp_P_param(Q, A)
+            else:
+                P = optax.apply_updates(P, updates)
+                P = proj_onto_simplex(P)
             # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
             # if iter % 200 == 0:
             # # if iter % 1 == 0: 
@@ -165,8 +169,12 @@ def test_optimizer_fixed_iters_test(A, tau, num_init_Ps, max_iters):
             updates, opt_state = optimizer.update(grad, opt_state)
             # print("--- Getting update and state took: %s seconds ---" % (time.time() - start_time))
             # start_time = time.time()
-            Q = optax.apply_updates(Q, updates)
-            P = comp_P_param(Q, A)
+            if grad_mode.find("parametrization") != -1:
+                Q = optax.apply_updates(Q, updates)
+                P = comp_P_param(Q, A)
+            else:
+                P = optax.apply_updates(P, updates)
+                P = proj_onto_simplex(P)
             # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
             # if iter % 200 == 0:
             # # if iter % 1 == 0: 
@@ -405,13 +413,23 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
         #         num_LCPs = lcp_num_schedule["lcp_nums"][index]
         #         print("Updated P_update_elt_bound to: " + str(num_LCPs) + " at iteration " + str(iter))
 
-        # apply update to P matrix, and parametrization Q:
-        grad = -1*grad_func(Q, A, F0, tau) # compute negative gradient
-        P_old = comp_P_param(Q, A)
-        # get update to the parametrization Q:
-        updates, opt_state = optimizer.update(grad, opt_state)
-        Q = optax.apply_updates(Q, updates)
-        P = comp_P_param(Q, A) # compute new P matrix
+        # apply update to P matrix, and parametrization Q, if applicable:
+        if opt_params["grad_mode"].find("parametrization") != -1:
+            grad = -1*grad_func(Q, A, F0, tau) # compute negative gradient
+            P_old = comp_P_param(Q, A)
+            # get update to the parametrization Q:
+            updates, opt_state = optimizer.update(grad, opt_state)
+            Q = optax.apply_updates(Q, updates)
+            P = comp_P_param(Q, A) # compute new P matrix
+        else:
+            grad = -1*grad_func(P, A, F0, tau) # compute negative gradient
+            P_old = P
+            # get update to the P matrix:
+            updates, opt_state = optimizer.update(grad, opt_state)
+            updates = jnp.minimum(updates, P_update_bound)
+            updates = jnp.maximum(updates, -1*P_update_bound)
+            P = optax.apply_updates(P, updates) 
+            P = proj_onto_simplex(P) # project rows onto simplexes to get valid new P matrix
     
         # Compute the difference between the latest P matrix and the previous one:
         P_diff = P - P_old
