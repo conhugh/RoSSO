@@ -2,6 +2,7 @@
 import os
 import time
 
+from icecream import ic
 import jax.numpy as jnp
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
@@ -436,7 +437,7 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
                             # # if np.argwhere(np.isnan(opt_P))[0] >= 1:
                             # #     input("found a nan entry in opt_P_" + str(run_num)) 
                             opt_P_mats.append(opt_P)
-                            opt_run_nums.append(run_num)
+                            opt_run_nums.append(run_num)             
             if graph_name.find("grid") != -1:
                 gridw = int(graph_name[graph_name.find("_W") + 2:graph_name.find("_H")])
                 gridh = int(graph_name[graph_name.find("_H") + 2:])
@@ -444,7 +445,8 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
                 for r in range(1, len(opt_P_mats)):
                     opt_P_mats[r], sym_ind = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw)
                     init_P_mats[r], _ = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw, sym_ind)
-            save_sym_opt_Ps(res_vis_dir, opt_P_mats, opt_run_nums)
+            # save_sym_opt_Ps(res_vis_dir, opt_P_mats, opt_run_nums)
+            save_sym_opt_Ps(res_dir, opt_P_mats, opt_run_nums)
             plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, \
                                 test_name, os.path.join(res_vis_dir, "P_plot2D")) 
             plot_opt_trans_probs_2D(opt_P_mats, res_vis_dir)
@@ -455,101 +457,71 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
             draw_opt_graphs(A, opt_P_mats, test_name, opt_run_nums, res_vis_dir)
         print_progress_bar(sub_dir_count + 1, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
 
+# Visualize MCPs from multiple tests
 def visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=False):
     test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
     MCP_dir = os.path.join(test_set_dir, "MCP_results")
     if not os.path.isdir(MCP_dir):
         os.mkdir(MCP_dir)
     MCP_data = get_MCP_data(test_set_name, num_top_MCPs)
-    plt.figure()
+    # create figures
+    avg_top_MCPs_fig, avg_top_MCPs_ax = plt.subplots()
+    top_MCPs_fig, top_MCPs_ax = plt.subplots()
+    std_dev_MCPs_fig, std_dev_MCPs_ax = plt.subplots()
+    coeff_var_MCPs_fig, coeff_var_MCPs_ax = plt.subplots()
+    # plot MCP results
     if tau_study:
-        plt.scatter(MCP_data["taus"], MCP_data["MCP_avgs"])
-        plt.xlabel("Tau")
-        if plot_best_fit:
-            m, b = np.polyfit(MCP_data["taus"], MCP_data["MCP_avgs"], 1)
-            plt.plot(MCP_data["taus"], m*MCP_data["taus"] + b, label="LSQ Fit: MCP = " + str(m)[:5] + "*tau + " + str(b)[:5] )
-            ax = plt.gca()
-            box = ax.get_position()
-            ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
-            plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    else:
-        plt.scatter(MCP_data["test_nums"], MCP_data["MCP_avgs"]) #, label="Graph: " + graph_name + ", Tau: " + tau)
-        plt.xlabel("Test Number")
-        ax = plt.gca()
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
-        plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    plt.ylabel("Average Optimized MCP")
-
-    if num_top_MCPs is not None:
-        plt.title("Averages of Top " + str(num_top_MCPs) + " MCPs")
-        plt.savefig(MCP_dir + "/avg_top" + str(num_top_MCPs) + "_MCPs",  bbox_inches = "tight")
-    else:
-        plt.title("Averages of Optimized MCP")
-        plt.savefig(MCP_dir + "/avgMCPs",  bbox_inches = "tight")
-    plt.close()
-    plt.figure()
-    if tau_study:
-        plt.xlabel("Tau")
+        # plot MCP results vs attack duration:
+        avg_top_MCPs_ax.scatter(MCP_data["taus"], MCP_data["MCP_avgs"])
         for r in range(MCP_data["final_MCP_taus"].shape[1]):
-            plt.scatter(MCP_data["final_MCP_taus"][:, r], MCP_data["final_MCPs"][:, r], marker=".", s=30, color="C" + str(r + 1))
-        if plot_best_fit:
+            top_MCPs_ax.scatter(MCP_data["final_MCP_taus"][:, r], MCP_data["final_MCPs"][:, r], marker=".", s=30, color="C" + str(r + 1))
+        std_dev_MCPs_ax.scatter(MCP_data["test_nums"], MCP_data["MCP_stddevs"])
+        coeff_var_MCPs_ax.scatter(MCP_data["test_nums"], MCP_data["MCP_stddevpercents"])
+        # plot linear fit to MCP vs attack duration:
+        if plot_best_fit: 
+            m, b = np.polyfit(MCP_data["taus"], MCP_data["MCP_avgs"], 1)
+            avg_top_MCPs_ax.plot(MCP_data["taus"], m*MCP_data["taus"] + b, label="LSQ Fit: MCP = " + str(m)[:5] + "*tau + " + str(b)[:5] )
             m, b = np.polyfit(MCP_data["final_MCP_taus"].flatten(), MCP_data["final_MCPs"].flatten(), 1)
-            plt.plot(MCP_data["taus"], m*MCP_data["taus"] + b, label="LSQ Fit: MCP = " + str(m)[:5] + "*tau + " + str(b)[:5])
-            ax = plt.gca()
-            box = ax.get_position()
-            ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
-            plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    else:
-        plt.xlabel("Test Number")
+            top_MCPs_ax.plot(MCP_data["taus"], m*MCP_data["taus"] + b, label="LSQ Fit: MCP = " + str(m)[:5] + "*tau + " + str(b)[:5])
+        # add x-axis labels:
+        for axes in [avg_top_MCPs_ax, top_MCPs_ax, std_dev_MCPs_ax, coeff_var_MCPs_ax]:
+            axes.set_xlabel("Tau")
+    else: 
+        # plot MCP results vs test number:
+        avg_top_MCPs_ax.scatter(MCP_data["test_nums"], MCP_data["MCP_avgs"])
         for r in range(MCP_data["final_MCP_test_nums"].shape[1]):
-            plt.scatter(MCP_data["final_MCP_test_nums"][:, r], MCP_data["final_MCPs"][:, r], marker=".", s=30, color="C" + str(r + 1))
-    plt.ylabel("Optimized MCPs")
+            top_MCPs_ax.scatter(MCP_data["final_MCP_test_nums"][:, r], MCP_data["final_MCPs"][:, r], marker=".", s=30, color="C" + str(r + 1))
+        std_dev_MCPs_ax.scatter(MCP_data["test_nums"], MCP_data["MCP_stddevs"])
+        coeff_var_MCPs_ax.scatter(MCP_data["test_nums"], MCP_data["MCP_stddevpercents"])
+        # add x-axis labels:
+        for axes in [avg_top_MCPs_ax, top_MCPs_ax, std_dev_MCPs_ax, coeff_var_MCPs_ax]:
+            axes.set_xlabel("Test Number")
+    # format plots, add y-axis labels, titles, and legends:
+    y_labels = ["Average Optimized MCP", "Optimized MCPs", "Std Deviation of Optimized MCPs", "(Std Deviation/Avg) of Optimized MCPs (%)"]
+    all_MCP_titles = ["Averages of Optimized MCPs", "Optimized MCPs", "Std Deviation of Optimized MCPs", "Coefficient of Variation of Optimized MCPs"]
+    num_top_MCP_titles = ["Averages of Top " + str(num_top_MCPs) + " MCPs", "Top " + str(num_top_MCPs) + " Optimized MCPs", \
+                          "Std Deviation of Top " + str(num_top_MCPs) + " MCPs", "Coefficient of Variation of Top " + str(num_top_MCPs) + " MCPs"]
+    for idx, axes in enumerate([avg_top_MCPs_ax, top_MCPs_ax, std_dev_MCPs_ax, coeff_var_MCPs_ax]):
+        box = axes.get_position()
+        axes.set_position([box.x0, box.y0, box.width * 0.9, box.height])
+        axes.legend(loc='upper left', bbox_to_anchor=(1, 1))
+        axes.set_ylabel(y_labels[idx])
+        if num_top_MCPs is not None:
+            axes.set_title(num_top_MCP_titles[idx])
+        else:
+            axes.set_title(all_MCP_titles[idx])
+    # save figures:
     if num_top_MCPs is not None:
-        plt.title("Top " + str(num_top_MCPs) + " Optimized MCPs")
-        plt.savefig(MCP_dir + "/top" + str(num_top_MCPs) + "_MCPs",  bbox_inches = "tight")
+        avg_top_MCPs_fig.savefig(MCP_dir + "/avg_top" + str(num_top_MCPs) + "_MCPs",  bbox_inches = "tight")
+        top_MCPs_fig.savefig(MCP_dir + "/top" + str(num_top_MCPs) + "_MCPs",  bbox_inches = "tight")
+        std_dev_MCPs_fig.savefig(MCP_dir + "/stddev_top" + str(num_top_MCPs) + "_MCPs",  bbox_inches = "tight")
+        coeff_var_MCPs_fig.savefig(MCP_dir + "/stddevperc_top" + str(num_top_MCPs) + "_MCPs",  bbox_inches = "tight")
     else:
-        plt.title("Optimized MCPs")
-        plt.savefig(MCP_dir + "/MCPs",  bbox_inches = "tight")
-    plt.close()
-    plt.figure()
-    if tau_study:
-        plt.xlabel("Tau")
-        plt.scatter(MCP_data["taus"], MCP_data["MCP_stddevs"])
-    else:
-        plt.xlabel("Test Number")
-        plt.scatter(MCP_data["test_nums"], MCP_data["MCP_stddevs"]) #, label="Graph: " + graph_name + ", Tau: " + tau)
-        ax = plt.gca()
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
-        plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    plt.ylabel("Std Deviation of Optimized MCPs")
-    if num_top_MCPs is not None:
-        plt.title("Std Deviation of Top " + str(num_top_MCPs) + " MCPs")
-        plt.savefig(MCP_dir + "/stddev_top" + str(num_top_MCPs) + "_MCPs",  bbox_inches = "tight")
-    else:
-        plt.title("Std Deviation of Optimized MCPs")
-        plt.savefig(MCP_dir + "/stddevMCPs", bbox_inches = "tight")
-    plt.close()
-    plt.figure()
-    if tau_study:
-        plt.xlabel("Tau")
-        plt.scatter(MCP_data["taus"], MCP_data["MCP_stddevpercents"])
-    else:
-        plt.xlabel("Test Number")
-        plt.scatter(MCP_data["test_nums"], MCP_data["MCP_stddevpercents"]) #, label="Graph: " + graph_name + ", Tau: " + tau)
-        ax = plt.gca()
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
-        plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    plt.ylabel("(Std Deviation/Avg) of Optimized MCPs (%)")
-    if num_top_MCPs is not None:
-        plt.title("Coefficient of Variation of Top " + str(num_top_MCPs) + " MCPs")
-        plt.savefig(MCP_dir + "/stddevperc_top" + str(num_top_MCPs) + "_MCPs",  bbox_inches = "tight")
-    else:
-        plt.title("Coefficient of Variation of Optimized MCPs")
-        plt.savefig(MCP_dir + "/stddevpercMCPs",  bbox_inches = "tight")
-    plt.close()
+        avg_top_MCPs_fig.savefig(MCP_dir + "/avgMCPs",  bbox_inches = "tight")
+        top_MCPs_fig.savefig(MCP_dir + "/MCPs",  bbox_inches = "tight")
+        std_dev_MCPs_fig.savefig(MCP_dir + "/stddevMCPs", bbox_inches = "tight")
+        coeff_var_MCPs_fig.savefig(MCP_dir + "/stddevpercMCPs",  bbox_inches = "tight")
+
 
 def get_MCP_data(test_set_name, num_top_MCPs=None):
     test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
@@ -728,13 +700,17 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
 # TESTING -------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 
-    test_set_name = "InitP250_Study_XD_TreeGraphs1"
+    # test_set_name = "InitP250_Study_XD_TreeGraphs1"
+    # test_set_name = "Quick_Setup_Test"
+    test_set_name = "Tau_Study_3x3Grid1"
 
     # visualize_metrics_retro(test_set_name, overlay=True)
-    visualize_results(test_set_name, num_top_MCP_runs=10)
-    visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=None, plot_best_fit=False)
+    visualize_results(test_set_name, num_top_MCP_runs=5)
+    # visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=None, plot_best_fit=False)
+    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
-    # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
-    visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=25, plot_best_fit=False)
+    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
+    # visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=25, plot_best_fit=False)
     # plot_optimizer_comparison_retro(test_set_name)
 
+    

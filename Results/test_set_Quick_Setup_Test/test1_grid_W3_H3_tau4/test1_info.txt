@@ -12,7 +12,7 @@ Optimizer Parameters from Test Specification:
     "optimizer_name": "sgd",
     "num_init_Ps": 5,
     "conv_test_mode": "P_update",
-    "conv_radius": 0.0025,
+    "conv_radius": 0.005,
     "conv_window_size": 200,
     "num_rec_P_diffs": 200,
     "P_update_elt_bound": 0.05,
@@ -39,6 +39,6 @@ P_update_elt_bound_schedule:
 Optimizer Parameters computed during testing:
 Scaled Learning Rates = [0.32826906 2.3931248  0.6947982  0.82718587 0.71207505]
 Max absolute-value elements of initial MCP gradients = [0.15231408 0.02089318 0.07196335 0.06044591 0.07021732]
-Final MCPs achieved = [0.15815246 0.15784521 0.15809552 0.15796462 0.15438463]
-Number of iterations required = [20001, 825, 20001, 18545, 17314]
-Optimization Times Required (seconds) = [19.872262001037598, 0.7734823226928711, 18.799957275390625, 17.660072326660156, 16.163077116012573]
+Final MCPs achieved = [0.1580882  0.13582474 0.15473971 0.14900395 0.15437393]
+Number of iterations required = [648, 291, 301, 670, 606]
+Optimization Times Required (seconds) = [1.106424331665039, 0.17689776420593262, 0.1828446388244629, 0.449127197265625, 0.42534518241882324]

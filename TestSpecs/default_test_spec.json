@@ -6,7 +6,7 @@
         "params": {
             "optimizer_name": "sgd",
             "grad_mode": "MCP_parametrization",
-            "num_init_Ps": 5,
+            "num_init_Ps": 10,
             "conv_test_mode": "P_update", 
             "conv_radius": 0.005,
             "conv_window_size": 200,
@@ -48,7 +48,8 @@
         "MCP_inds",
         "MCPs",
         "final_MCP",
-        "final_iters"
+        "final_iters",
+        "diam_pair_CP_variance"
     ],
     "graph_names": {
         "test1": "grid_W3_H3",
