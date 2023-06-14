@@ -46,7 +46,7 @@ def init_rand_P_key(A, key):
 
     Parameters
     ----------
-    A : numpy.ndarray 
+    A : jaxlib.xla_extension.DeviceArray 
         Binary adjacency matrix of the environment graph.
     key : int 
         Jax PRNGKeyArray for random number generation.
@@ -68,7 +68,7 @@ def init_rand_Ps(A, num):
 
     Parameters
     ----------
-    A : numpy.ndarray 
+    A : jaxlib.xla_extension.DeviceArray
         Binary adjacency matrix of the environment graph.
     num : int 
         Number of initial transition probability matrices to generate.
@@ -83,7 +83,7 @@ def init_rand_Ps(A, num):
     init_rand_P_key
     """
     key = jax.random.PRNGKey(0)
-    initPs = jnp.zeros((A.shape[0], A.shape[1], num),  dtype='float32')
+    initPs = jnp.zeros((jnp.shape(A)[0], jnp.shape(A)[1], num),  dtype='float32')
     for k in range(num):
         key, subkey = jax.random.split(key)
         initPs = initPs.at[:, : , k].set(init_rand_P_key(A, subkey))

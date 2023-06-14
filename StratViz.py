@@ -12,7 +12,7 @@ import pygraphviz as pgv
 
 from StratCompJax import *
 import GraphGen
-import TestSpec as ts
+from TestSpec import TestSpec
 
 # Plot transition probabilities for each pair of nodes for the given P matrices
 # Takes a list of initial and optimized P matrices
@@ -432,10 +432,6 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
                     if(filename.find("opt_P") != -1):
                         with open(f) as opt_P:
                             opt_P = np.loadtxt(opt_P, delimiter = ',')
-                            # print("run_num = " + str(run_num))
-                            # print(np.argwhere(np.isnan(opt_P)))
-                            # # if np.argwhere(np.isnan(opt_P))[0] >= 1:
-                            # #     input("found a nan entry in opt_P_" + str(run_num)) 
                             opt_P_mats.append(opt_P)
                             opt_run_nums.append(run_num)             
             if graph_name.find("grid") != -1:
@@ -445,7 +441,6 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
                 for r in range(1, len(opt_P_mats)):
                     opt_P_mats[r], sym_ind = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw)
                     init_P_mats[r], _ = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw, sym_ind)
-            # save_sym_opt_Ps(res_vis_dir, opt_P_mats, opt_run_nums)
             save_sym_opt_Ps(res_dir, opt_P_mats, opt_run_nums)
             plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, \
                                 test_name, os.path.join(res_vis_dir, "P_plot2D")) 
@@ -556,8 +551,6 @@ def get_MCP_data(test_set_name, num_top_MCPs=None):
                 while line:
                     line = info.readline()
                     if(line.find("Final MCPs achieved") != -1):
-                        # MCP_string = line.strip("[]")
-                        # print(MCP_string)
                         MCP_string = line[line.find("[") + 1:line.find("]")]
                         MCPs = MCP_string.split()
                         MCPs = list(map(float, MCPs))
@@ -578,7 +571,7 @@ def get_MCP_data(test_set_name, num_top_MCPs=None):
     MCP_data["final_MCP_taus"] = np.asarray(MCP_data["final_MCP_taus"], dtype=float)
     return MCP_data
 
-# Plot runtimes vs MCPs for each optimizer (inline with optimization):
+# Plot runtimes vs final MCPs for each optimizer (inline with optimization):
 def plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, final_MCPs):
     avg_run_times = []
     avg_iters = []
@@ -591,7 +584,6 @@ def plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, f
         avg_iters.append(np.mean(iters[max_MCP_inds]))
         times = np.asarray(run_times[i])
         avg_run_times.append(np.mean(times[max_MCP_inds]))
-
     plt.figure()
     ax = plt.gca()
     for i in range(test_spec.num_tests):
@@ -614,7 +606,7 @@ def plot_optimizer_comparison_retro(test_set_name):
     avg_MCPs = []
     test_nums = []
     test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
-    test_spec = ts.TestSpec(test_spec_filepath=test_set_dir + "/test_spec.json")
+    test_spec = TestSpec(test_spec_filepath=test_set_dir + "/test_spec.json")
     sub_dir_num = len(os.listdir(test_set_dir))
     print("Generating Optimizer Comparison Visualization...")
     print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)

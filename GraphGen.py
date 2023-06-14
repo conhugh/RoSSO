@@ -213,7 +213,7 @@ def gen_rand_NUDEL_star_G(n, edge_len_UB, edge_len_LB=1):
     n : int 
         Number of nodes in the star graph.
     edge_len_LB : int
-        Lower bound on the travel time for edges in the graph (excl. self-loops).  
+        Lower bound on the travel time for edges in the graph (excl. self-loops).
     edge_len_UB : int
         Upper bound on the travel time for edges in the graph.    
 
