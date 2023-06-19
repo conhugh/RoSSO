@@ -158,7 +158,7 @@ def gen_grid_G(grid_rows, grid_cols):
             A = A.at[k, k - 1].set(1)
     return A, graph_name
 
-def gen_holy_grid_G(grid_rows, grid_cols, missing_nodes):
+def gen_grid_with_holes_G(grid_rows, grid_cols, missing_nodes):
     """
     Generate binary adjacency matrix for a grid graph with holes. 
 
