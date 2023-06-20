@@ -1,10 +1,10 @@
 # Script for defining new test specifications
 import os
 
-from GraphGen import *
-from StratCompJax import *
-from StratViz import draw_env_graph
-import TestSpec as ts
+from graph_gen import *
+from strat_comp import *
+from strat_viz import draw_env_graph
+import test_spec as ts
 
 test_spec_name = "InitP250_Study_XD_Tree_Graphs_Test_Specification"
 

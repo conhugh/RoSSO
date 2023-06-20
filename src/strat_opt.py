@@ -1,7 +1,6 @@
 # Optimization of the performance of stochastic surveillance strategies
 from collections import deque
 import json
-import pydoc
 import os
 import shutil
 import time
@@ -10,10 +9,11 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from GraphGen import *
-from StratCompJax import *
-from StratViz import *
-from TestSpec import TestSpec
+from graph_gen import *
+from graph_comp import *
+from strat_comp import *
+from strat_viz import *
+from test_spec import TestSpec
 
 
 def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):

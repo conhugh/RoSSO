@@ -1,18 +1,14 @@
 # Visualization of the performance of stochastic surveillance strategies
 import os
-import time
 
-from icecream import ic
 import jax.numpy as jnp
-from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pygraphviz as pgv
 
-from StratCompJax import *
-import GraphGen
-from TestSpec import TestSpec
+from strat_comp import *
+from test_spec import TestSpec
 
 # Plot transition probabilities for each pair of nodes for the given P matrices
 # Takes a list of initial and optimized P matrices

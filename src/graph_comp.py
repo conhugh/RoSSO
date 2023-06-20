@@ -1,5 +1,4 @@
 # Functionality related to analyzing, encoding, and decoding binary adjacency matrices for a variety of environment graphs 
-import jax
 import jax.numpy as jnp
 import numpy as np
 

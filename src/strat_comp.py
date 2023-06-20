@@ -6,7 +6,7 @@ from jax import grad, jacrev, jit
 import jax.numpy as jnp
 import numpy as np
 
-import GraphGen as gg
+import graph_comp
 
 def init_rand_P(A):
     """
@@ -332,9 +332,9 @@ def compute_SPCPs(A, FHT_mats, node_pairs):
     See Also
     --------
     compute_FHT_probs
-    GraphGen.get_shortest_path_distances
+    graph_comp.get_shortest_path_distances
     """
-    node_pair_SPDs = gg.get_shortest_path_distances(A, node_pairs)
+    node_pair_SPDs = graph_comp.get_shortest_path_distances(A, node_pairs)
     SPCPs = jnp.full((jnp.shape(node_pairs)[0], 3), np.NaN)
     for k in range(jnp.shape(node_pairs)[0]):
         SPCPs = SPCPs.at[k, :2].set(node_pairs[k, :])
@@ -363,7 +363,7 @@ def compute_diam_pair_cap_probs(F, diam_pairs):
     See Also
     --------
     compute_cap_probs
-    GraphGen.get_diametric_pairs
+    graph_comp.get_diametric_pairs
     """
     dp_cap_probs = jnp.full((jnp.shape(diam_pairs)[0], 3), np.NaN)
     for k in range(jnp.shape(diam_pairs)[0]):
