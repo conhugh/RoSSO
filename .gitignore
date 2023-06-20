@@ -1,3 +1,4 @@
 __pycache__/
 *.py[cod]
 .jax_env/
+.robo_env/
