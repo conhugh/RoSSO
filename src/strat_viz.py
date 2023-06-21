@@ -17,7 +17,7 @@ def plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, ti
 
     The x-axis is the index of the transition probabilities within the 
     flattened P-matrix wherein columns are stacked. The y-axis indicates
-    the transition probability. 
+    the transition probability.
 
     Parameters
     ----------
@@ -185,14 +185,43 @@ def plot_MCP_var_P(P0, tau, rows, cols, resolution):
     plt.title("Capture Probabilities for tau = " + str(tau) + " and varying P")
     plt.savefig(os.getcwd() + "/test_CP_plot.png")
 
-# Generate a NetworkX graph from adjacency matrix A
+
 def gen_NXgraph(A):
+    """
+    Generate a NetworkX graph from binary adjacency matrix A.
+    
+    Parameters
+    ----------
+    A : 2D array-like
+        Binary adjacency matrix. 
+    
+    Returns
+    -------
+    nx.DiGraph
+        NetworkX DiGraph corresponding to binary adjacency matrix 'A'.
+    """
     temp = nx.DiGraph()
-    G = nx.from_numpy_matrix(A, create_using=temp)
+    G = nx.from_numpy_matrix(np.asarray(A), create_using=temp)
     return G
 
 # Set the length of all edges in the graph
-def set_edge_length(G, A, len):
+def set_visual_edge_length(G, A, len):
+    """
+    Set length of all edges in NetworkX graph (for visualization only).
+    
+    Parameters
+    ----------
+    G : nx.DiGraph
+        NetworkX DiGraph corresponding to binary adjacency matrix 'A'. 
+    A : 2D array-like
+        Binary adjacency matrix.
+    len : 
+    
+    Returns
+    -------
+    nx.DiGraph
+        NetworkX DiGraph corresponding to provided binary adjacency matrix.
+    """
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             if A[i, j] != 0:
@@ -203,7 +232,7 @@ def set_edge_length(G, A, len):
 def draw_env_graph(A, graph_name, folder_path, show_edge_lens=False, save=True):
     G = gen_NXgraph(A)
     G_viz = nx.nx_agraph.to_agraph(G)
-    set_edge_length(G_viz, A, 2)
+    set_visual_edge_length(G_viz, A, 2)
     G_viz.graph_attr["nodesep"] = 0.5
     if show_edge_lens:
         for i in range(A.shape[0]):
@@ -708,8 +737,6 @@ def plot_optimizer_comparison_retro(test_set_name):
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.savefig(test_set_dir + "/OptimizerComparison.png", bbox_inches = "tight")
     plt.close()
-
-
 
 # Print iterations progress
 def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', print_end = "\r"):
