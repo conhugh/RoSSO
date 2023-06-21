@@ -23,7 +23,7 @@ def gen_star_G(n):
     A = A.at[:, 0].set(jnp.ones(n))
     return A, graph_name
 
-def gen_rand_NUDEL_star_G(n, edge_len_UB, edge_len_LB=1):
+def gen_rand_weighted_star_G(n, edge_len_UB, edge_len_LB=1):
     """
     Generate binary adjacency matrix for a star graph with `n` nodes.
 
@@ -51,7 +51,7 @@ def gen_rand_NUDEL_star_G(n, edge_len_UB, edge_len_LB=1):
         raise ValueError("Lower bound on travel time cannot be less than 1.")
     if edge_len_LB > edge_len_UB:
         raise ValueError("Upper bound on travel time must be greater than or equal to the lower bound.")
-    graph_name = "nudel_star_N" + str(n)
+    graph_name = "weighted_star_N" + str(n)
     A, _ = gen_star_G(n)
     seed = np.random.randint(1000)
     # seed = 1
@@ -190,7 +190,7 @@ def gen_grid_with_holes_G(grid_rows, grid_cols, missing_nodes):
     return A_holy, graph_name
 
 
-def gen_NUDEL_grid_G(width_vec, height_vec):
+def gen_weighted_grid_G(width_vec, height_vec):
     """
     Generate binary adjacency matrix for a grid graph. 
 
@@ -211,7 +211,7 @@ def gen_NUDEL_grid_G(width_vec, height_vec):
     width = len(width_vec) + 1
     height = len(height_vec) + 1
     A, _ = gen_grid_G(width, height)
-    graph_name = "NUDEL_grid_W" + str(width) + "_H" + str(height)
+    graph_name = "weighted_grid_W" + str(width) + "_H" + str(height)
     n = width*height
     W = jnp.identity(n)
     # W = W + jnp.diag(jnp.ones(n - height), height)
