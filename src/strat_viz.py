@@ -11,9 +11,29 @@ import graph_comp
 import strat_comp
 from test_spec import TestSpec
 
-# Plot transition probabilities for each pair of nodes for the given P matrices
-# Takes a list of initial and optimized P matrices
 def plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, title, path):
+    """
+    Generate 2D plot of initial and optimized transition probabilities.
+
+    The x-axis is the index of the transition probabilities within the 
+    flattened P-matrix wherein columns are stacked. The y-axis indicates
+    the transition probability. 
+
+    Parameters
+    ----------
+    init_P_mats : List[array-like] 
+        List of initial transition probability matrices.
+    opt_P_mats : List[array-like] 
+        List of optimized transition probability matrices.
+    init_run_nums : List[int]
+        List of run numbers from test set, corresponding to 'init_P_mats'.
+    opt_run_nums : List[int]
+        List of run numbers from test set, corresponding to 'opt_P_mats'.
+    title: String
+        Title to use for the plot of transition probabilities. 
+    path : String
+        File path to use for saving the plot. 
+    """
     n = init_P_mats[0].shape[0]
     probs = np.linspace(1, n**2, n**2)
     init_P_mats = np.asarray(init_P_mats)
@@ -40,10 +60,24 @@ def plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, ti
     plt.savefig(path, bbox_inches = "tight")
     plt.close()
 
-# Plot transition probabilities for each pair of nodes for the given P matrices,
-# averaged across the results of each optimization for varying initial P
-# Takes a list of initial and optimized P matrices
+
 def plot_opt_trans_probs_2D(opt_P_mats, folder_path):
+    """
+    Generate three 2D plots showing statistics of optimized transition probabilities.
+
+    The x-axis for each plot is the index of the transition probabilities 
+    within the flattened P-matrix wherein columns are stacked. For the first
+    plot, the y-axis indicates the average of the transition probability across
+    the set of 'opt_P_mats', for the second plot it is the standard deviation,
+    and for the third plot it is the coefficient of variation (as a percentage). 
+
+    Parameters
+    ----------
+    opt_P_mats : List[array-like] 
+        List of optimized transition probability matrices.
+    folder_path : String
+        Path to directory where plots will be saved.
+    """
     n = opt_P_mats[0].shape[0]
     probs = np.linspace(1, n**2, n**2)
     avg_opt_P_mat = np.mean(opt_P_mats, axis=0)
@@ -74,8 +108,21 @@ def plot_opt_trans_probs_2D(opt_P_mats, folder_path):
     plt.savefig(folder_path + "/stddevpercopt_P")
     plt.close()
 
-# Plot capture probabilities for each pair of nodes for fixed P matrix
-def plot_cap_probs_3D(cap_probs):
+def plot_cap_probs_3D(cap_probs, path):
+    """
+    Generate 3D plot showing capture probabilities for each node pair.
+
+    The x and y-axes represent the node number corresponding to the robot 
+    and intruder locations, respectively. The z-axis represents the capture
+    probability corresponding to each node pair. 
+
+    Parameters
+    ----------
+    cap_probs : 2D array-like
+        Capture probability matrix. 
+    path : String
+        File path to use for saving the plot. 
+    """
     robot_locs = np.arange(cap_probs.shape[0])
     intruder_locs = np.arange(cap_probs.shape[1])
     X, Y = np.meshgrid(robot_locs, intruder_locs)
@@ -85,7 +132,8 @@ def plot_cap_probs_3D(cap_probs):
     ax.set_xlabel('Robot Location')
     ax.set_ylabel('Intruder Location')
     ax.set_zlabel('Capture Probability')
-    plt.show()
+    plt.savefig(path)
+    
 
 # Plot the capture probabilities as a function of P_ij
 def plot_CP_var_P(P, tau, i, j, resolution):
