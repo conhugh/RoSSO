@@ -117,7 +117,7 @@ def set_learning_rate(Q0, A, F0, tau, num_LCPs, nominal_LR, grad_mode):
 
     See Also
     -------
-    StratCompJax.get_grad_func
+    strat_comp.get_grad_func
     """
     grad_func = strat_comp.get_grad_func(grad_mode)
     if "LCP" in grad_mode:
@@ -143,7 +143,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
 
     See Also
     -------
-    TestSpec
+    test_spec.TestSpec
     run_test
     """
     if type(test_spec) != TestSpec:
@@ -229,7 +229,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
     
     See Also
     -------
-    TestSpec
+    test_spec.TestSpec
     run_optimizer
     """
     # Create directory for saving the results for the given graph and tau value:
@@ -356,7 +356,7 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
     
     See Also
     -------
-    TestSpec
+    test_spec
     """
     check_time = time.time()
     n = P0.shape[0]
@@ -453,8 +453,20 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
     tracked_vals["final_iters"].append(iter)
     return P, F, tracked_vals
 
-# Initialize Optax gradient-based optimizer from opt_params
 def setup_optimizer(opt_params):
+    """
+    Initialize Optax optimizer from given optimization parameters.
+
+    Parameters
+    ----------
+    opt_params : dict
+        Optimization parameters. 
+    
+    Returns
+    ----------
+    Optax GradientTransformation
+        Optax optimizer with specified parameters. 
+    """
     if opt_params["optimizer_name"] == "sgd":
         if opt_params["use_momentum"]:
             optimizer = optax.sgd(opt_params["scaled_learning_rate"], momentum=opt_params["mom_decay_rate"], nesterov=opt_params["use_nesterov"])
@@ -471,8 +483,28 @@ def setup_optimizer(opt_params):
             optimizer = optax.rmsprop(opt_params["scaled_learning_rate"])
     return optimizer
 
-# Check for convergence in moving average of chosen convergence metric:
 def conv_check(iter, new_val, conv_test_vals, opt_params):
+    """
+    Check for convergence based on trailing average of chosen metric.
+
+    Parameters
+    ----------
+    iter : int
+        Current iteration number of optimzation process. 
+    new_val
+        Value of convergence metric for most recent iteration. 
+    conv_test_vals : deque
+        Set of convergence metric values from recent iterations. 
+    opt_params : dict
+        Optimization parameters.
+    
+    Returns
+    ----------
+    bool
+        Flag indicating whether convergence has been reached.
+    deque
+        Updated set of convergence metric values.
+    """
     conv_test_vals.append(new_val)
     if iter > opt_params["conv_window_size"]:
         conv_test_vals.popleft()
