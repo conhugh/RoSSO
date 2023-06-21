@@ -1,8 +1,8 @@
 # Script for defining new test specifications
 import os
 
-from graph_gen import *
-from strat_comp import *
+import graph_comp
+import graph_gen
 from strat_viz import draw_env_graph
 import test_spec as ts
 
@@ -43,14 +43,14 @@ tree_dicts = {
 # graph, graph_name = gen_line_G(3)
 # graph_code = gen_graph_code(graph)
 for i in range(2):
-    graph, graph_name = gen_tree_G(node_nums[i], tree_dicts["tree_dict" + str(i + 1)])
-    graph_code = gen_graph_code(graph)
+    graph, graph_name = graph_gen.gen_tree_G(node_nums[i], tree_dicts["tree_dict" + str(i + 1)])
+    graph_code = graph_comp.gen_graph_code(graph)
     test_graphs.append(graph)
     draw_env_graph(graph, graph_name, os.getcwd())
     for t in range(3):
         test_graph_names["test" + str(i*3 + t + 1)] = graph_name
         test_graph_codes["test" + str(i*3 + t + 1)] = graph_code
-        test_taus["test" + str(i*3 + t + 1)] = graph_diam(graph) + t
+        test_taus["test" + str(i*3 + t + 1)] = graph_comp.graph_diam(graph) + t
 
 
 

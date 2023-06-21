@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 
 import graph_gen as gg
 import strat_comp as scj
-import strat_opt as so
 import strat_viz as sv
 
 def NUDEL_FHT_TESTS(test_grid=True, test_star=True, test_JIT=True):

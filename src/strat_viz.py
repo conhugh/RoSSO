@@ -7,7 +7,8 @@ import networkx as nx
 import numpy as np
 import pygraphviz as pgv
 
-from strat_comp import *
+import graph_comp
+import strat_comp
 from test_spec import TestSpec
 
 # Plot transition probabilities for each pair of nodes for the given P matrices
@@ -87,7 +88,7 @@ def plot_cap_probs_3D(cap_probs):
     plt.show()
 
 # Plot the capture probabilities as a function of P_ij
-def comp_CP_var_P(P, tau, i, j, resolution):
+def plot_CP_var_P(P, tau, i, j, resolution):
     n = P.shape[0]
     cap_probs = jnp.full([n, n, resolution + 1], np.NaN)
     for k in range(resolution + 1):
@@ -99,7 +100,7 @@ def comp_CP_var_P(P, tau, i, j, resolution):
             if col != j:
                 P = P.at[i, col].set(P[i, col]*(1 - P[i, j])/rem_row_sum)
         F0 = jnp.full((n, n, tau), np.NaN)
-        cap_probs = cap_probs.at[:, :, k].set(compute_cap_probs(P, F0, tau))
+        cap_probs = cap_probs.at[:, :, k].set(strat_comp.compute_cap_probs(P, F0, tau))
     P_range = jnp.linspace(0, 1, resolution + 1)
     for row in range(jnp.shape(P)[0]):
         for col in range(jnp.shape(P)[1]):
@@ -112,7 +113,7 @@ def comp_CP_var_P(P, tau, i, j, resolution):
     return cap_probs
 
 # Plot the capture probabilities as a function of P_ij
-def comp_MCP_var_P_test(P0, tau, rows, cols, resolution):
+def plot_MCP_var_P(P0, tau, rows, cols, resolution):
     n = P0.shape[0]
     MCPs = jnp.full([resolution + 1], np.NaN)
     for ind in range(len(rows)):
@@ -128,7 +129,7 @@ def comp_MCP_var_P_test(P0, tau, rows, cols, resolution):
                 if col != j:
                     P = P.at[i, col].set(P[i, col]*(1 - P[i, j])/rem_row_sum)
             F0 = jnp.full((n, n, tau), np.NaN)
-            MCPs = MCPs.at[k].set(compute_MCP(P, F0, tau))
+            MCPs = MCPs.at[k].set(strat_comp.compute_MCP(P, F0, tau))
         P_range = jnp.linspace(0, 1, resolution + 1)
         plt.plot(P_range, MCPs)
     plt.xlabel("P_ij value")
@@ -205,7 +206,7 @@ def draw_avg_opt_graph(A, avg_opt_P_mat, tau, folder_path, save=True):
     G_viz = draw_env_graph(A, None, folder_path, save=False)
     n = jnp.shape(A)[0]
     F0 = jnp.full((n, n, tau), np.NaN)
-    F = compute_cap_probs(avg_opt_P_mat, F0, tau)
+    F = strat_comp.compute_cap_probs(avg_opt_P_mat, F0, tau)
     MCP = np.min(F)
     MCP_indices = np.where(F == MCP)
     G_viz.graph_attr["labelloc"] = "t"
@@ -240,7 +241,7 @@ def draw_avg_opt_graph(A, avg_opt_P_mat, tau, folder_path, save=True):
 def plot_CP_avg_opt_P(avg_opt_P_mat, tau, folder_path):
     n = avg_opt_P_mat.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
-    F = compute_cap_probs(avg_opt_P_mat, F0, tau)
+    F = strat_comp.compute_cap_probs(avg_opt_P_mat, F0, tau)
     np.savetxt(folder_path + "/avg_opt_Pcap_probs.csv", F, delimiter=',')
     F_vec = F.flatten('F')
     probs = np.linspace(1, n**2, n**2)
@@ -435,8 +436,8 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
                 gridh = int(graph_name[graph_name.find("_H") + 2:])
                 P_ref = opt_P_mats[0]
                 for r in range(1, len(opt_P_mats)):
-                    opt_P_mats[r], sym_ind = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw)
-                    init_P_mats[r], _ = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw, sym_ind)
+                    opt_P_mats[r], sym_ind = graph_comp.get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw)
+                    init_P_mats[r], _ = graph_comp.get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw, sym_ind)
             save_sym_opt_Ps(res_dir, opt_P_mats, opt_run_nums)
             plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, \
                                 test_name, os.path.join(res_vis_dir, "P_plot2D")) 

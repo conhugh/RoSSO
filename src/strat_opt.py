@@ -9,10 +9,9 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from graph_gen import *
-from graph_comp import *
-from strat_comp import *
-from strat_viz import *
+import graph_comp
+import strat_comp
+import strat_viz
 from test_spec import TestSpec
 
 
@@ -40,11 +39,11 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
     numpy.ndarray
         Capture Probability matrix corresponding to optimized strategy.
     """
-    init_Ps = init_rand_Ps(A, num_init_Ps)
+    init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
     num_LCPs=1
     nominal_learning_rate = 0.0001
     grad_mode = "MCP_parametrization"
-    grad_func = get_grad_func(grad_mode)
+    grad_func = strat_comp.get_grad_func(grad_mode)
     print("grad_func id:")
     print(id(grad_func))
     n = A.shape[0]
@@ -73,7 +72,7 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
             # print("--- Getting update and state took: %s seconds ---" % (time.time() - start_time))
             # start_time = time.time()
             Q = optax.apply_updates(Q, updates)
-            P = comp_P_param(Q, A)
+            P = strat_comp.comp_P_param(Q, A)
             # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
             # if iter % 200 == 0:
             # # if iter % 1 == 0: 
@@ -120,7 +119,7 @@ def set_learning_rate(Q0, A, F0, tau, num_LCPs, nominal_LR, grad_mode):
     -------
     StratCompJax.get_grad_func
     """
-    grad_func = get_grad_func(grad_mode)
+    grad_func = strat_comp.get_grad_func(grad_mode)
     if "LCP" in grad_mode:
         init_grad = grad_func(Q0, A, F0, tau, num_LCPs)
     else:
@@ -174,7 +173,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
         test_name = "test" + str(test_num)
         graph_name = test_spec.graph_names[test_name]
         graph_code = test_spec.graph_codes[test_name]
-        A = graph_decode(graph_code)
+        A = graph_comp.graph_decode(graph_code)
         tau = test_spec.taus[test_name]
         trackers = test_spec.trackers
         if test_spec.optimizer_params["varying_optimizer_params"]:
@@ -194,7 +193,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
         final_MCPs.append(MCPs)
     # generate performance comparison for optimizers used in test set:
     if(opt_comparison):
-        plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, final_MCPs)
+        strat_viz.plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, final_MCPs)
 
 def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, trackers):
     """
@@ -248,7 +247,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
     n = A.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
     num_init_Ps = opt_params["num_init_Ps"]
-    init_Ps = init_rand_Ps(A, num_init_Ps)
+    init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
     learning_rates = []
     lr_scales = []
     conv_times = []
@@ -279,9 +278,9 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
                 opt_metrics[track].extend(tracked_vals[track])
     # Save results from optimization processes:
     np.savetxt(test_dir + "/A.csv", np.asarray(A).astype(int), delimiter=',')  # Save the env graph binary adjacency matrix
-    draw_env_graph(A, graph_name, test_dir)  # Save a drawing of the env graph
-    visualize_metrics(opt_metrics, test_name, test_dir, show_legend=False) # Save plots of the optimization metrics tracked
-    graph_code = gen_graph_code(A)  # Generate unique graph code
+    strat_viz.draw_env_graph(A, graph_name, test_dir)  # Save a drawing of the env graph
+    strat_viz.visualize_metrics(opt_metrics, test_name, test_dir, show_legend=False) # Save plots of the optimization metrics tracked
+    graph_code = graph_comp.gen_graph_code(A)  # Generate unique graph code
     # Save all optimization metrics which were tracked:
     for metric_name in opt_metrics.keys():
         metric_path = os.path.join(metrics_dir, metric_name + ".txt")
@@ -364,10 +363,10 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
     P = P0 
     Q = P0
     old_MCP = 0
-    diam_pairs = gg.get_diametric_pairs(A)
+    diam_pairs = graph_comp.get_diametric_pairs(A)
     optimizer = setup_optimizer(opt_params)
     opt_state = optimizer.init(P0)
-    grad_func = get_grad_func(opt_params["grad_mode"])
+    grad_func = strat_comp.get_grad_func(opt_params["grad_mode"])
     conv_test_vals = deque()  # queue storing recent values of desired metric, for checking convergence
     P_update_bound = jnp.full((n, n), opt_params["P_update_elt_bound"])
     num_LCPs = opt_params["num_LCPs"]
@@ -409,10 +408,10 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
                 print("Updated P_update_elt_bound to: " + str(num_LCPs) + " at iteration " + str(iter))
         # apply update to P matrix, and parametrization Q:
         grad = -1*grad_func(Q, A, F0, tau) # compute negative gradient
-        P_old = comp_P_param(Q, A)
+        P_old = strat_comp.comp_P_param(Q, A)
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
-        P = comp_P_param(Q, A) # compute new P matrix
+        P = strat_comp.comp_P_param(Q, A) # compute new P matrix
         # Compute the difference between the latest P matrix and the previous one:
         P_diff = P - P_old
         abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
@@ -421,8 +420,8 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
             tracked_vals["iters"].append(iter)
             tracked_vals["P_diff_sums"].append(abs_P_diff_sum)
             tracked_vals["P_diff_max_elts"].append(jnp.max(jnp.abs(P_diff)))
-            F = compute_cap_probs(P, F0, tau)
-            tracked_vals["diam_pair_CP_variance"].append(compute_diam_pair_CP_variance(F, diam_pairs))
+            F = strat_comp.compute_cap_probs(P, F0, tau)
+            tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
             F = F.reshape((n**2), order='F')
             tracked_vals["MCP_inds"].append(jnp.argmin(F))
             tracked_vals["MCPs"].append(jnp.min(F))
@@ -437,7 +436,7 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
         if opt_params["conv_test_mode"] == "P_update":
             converged, conv_test_vals = conv_check(iter, abs_P_diff_sum, conv_test_vals, opt_params)
         elif opt_params["conv_test_mode"] == "MCP_diff":
-            MCP =  compute_MCP(P, F0, tau)
+            MCP =  strat_comp.compute_MCP(P, F0, tau)
             MCP_diff = MCP - old_MCP
             converged, conv_test_vals = conv_check(iter, MCP_diff, conv_test_vals, opt_params)
             old_MCP = MCP
@@ -446,7 +445,7 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
             converged = True
         iter = iter + 1
     # convergence or max iteration count has been reached...
-    F = compute_cap_probs(P, F0, tau)
+    F = strat_comp.compute_cap_probs(P, F0, tau)
     final_MCP = jnp.min(F)
     tracked_vals["final_MCP"].append(final_MCP)
     print("Minimum Capture Probability at iteration " + str(iter) + ":")
