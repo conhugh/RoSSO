@@ -1,22 +1,39 @@
 # Visualization of the performance of stochastic surveillance strategies
 import os
-import time
 
-from icecream import ic
 import jax.numpy as jnp
-from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pygraphviz as pgv
 
-from StratCompJax import *
-import GraphGen
-from TestSpec import TestSpec
+import graph_comp
+import strat_comp
+from test_spec import TestSpec
 
-# Plot transition probabilities for each pair of nodes for the given P matrices
-# Takes a list of initial and optimized P matrices
 def plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, title, path):
+    """
+    Generate 2D plot of initial and optimized transition probabilities.
+
+    The x-axis is the index of the transition probabilities within the 
+    flattened P-matrix wherein columns are stacked. The y-axis indicates
+    the transition probability.
+
+    Parameters
+    ----------
+    init_P_mats : List[array-like] 
+        List of initial transition probability matrices.
+    opt_P_mats : List[array-like] 
+        List of optimized transition probability matrices.
+    init_run_nums : List[int]
+        List of run numbers from test set, corresponding to 'init_P_mats'.
+    opt_run_nums : List[int]
+        List of run numbers from test set, corresponding to 'opt_P_mats'.
+    title: String
+        Title to use for the plot of transition probabilities. 
+    path : String
+        File path to use for saving the plot. 
+    """
     n = init_P_mats[0].shape[0]
     probs = np.linspace(1, n**2, n**2)
     init_P_mats = np.asarray(init_P_mats)
@@ -43,10 +60,24 @@ def plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, ti
     plt.savefig(path, bbox_inches = "tight")
     plt.close()
 
-# Plot transition probabilities for each pair of nodes for the given P matrices,
-# averaged across the results of each optimization for varying initial P
-# Takes a list of initial and optimized P matrices
+
 def plot_opt_trans_probs_2D(opt_P_mats, folder_path):
+    """
+    Generate three 2D plots showing statistics of optimized transition probabilities.
+
+    The x-axis for each plot is the index of the transition probabilities 
+    within the flattened P-matrix wherein columns are stacked. For the first
+    plot, the y-axis indicates the average of the transition probability across
+    the set of 'opt_P_mats', for the second plot it is the standard deviation,
+    and for the third plot it is the coefficient of variation (as a percentage). 
+
+    Parameters
+    ----------
+    opt_P_mats : List[array-like] 
+        List of optimized transition probability matrices.
+    folder_path : String
+        Path to directory where plots will be saved.
+    """
     n = opt_P_mats[0].shape[0]
     probs = np.linspace(1, n**2, n**2)
     avg_opt_P_mat = np.mean(opt_P_mats, axis=0)
@@ -77,8 +108,21 @@ def plot_opt_trans_probs_2D(opt_P_mats, folder_path):
     plt.savefig(folder_path + "/stddevpercopt_P")
     plt.close()
 
-# Plot capture probabilities for each pair of nodes for fixed P matrix
-def plot_cap_probs_3D(cap_probs):
+def plot_cap_probs_3D(cap_probs, path):
+    """
+    Generate 3D plot showing capture probabilities for each node pair.
+
+    The x and y-axes represent the node number corresponding to the robot 
+    and intruder locations, respectively. The z-axis represents the capture
+    probability corresponding to each node pair. 
+
+    Parameters
+    ----------
+    cap_probs : 2D array-like
+        Capture probability matrix. 
+    path : String
+        File path to use for saving the plot. 
+    """
     robot_locs = np.arange(cap_probs.shape[0])
     intruder_locs = np.arange(cap_probs.shape[1])
     X, Y = np.meshgrid(robot_locs, intruder_locs)
@@ -88,10 +132,11 @@ def plot_cap_probs_3D(cap_probs):
     ax.set_xlabel('Robot Location')
     ax.set_ylabel('Intruder Location')
     ax.set_zlabel('Capture Probability')
-    plt.show()
+    plt.savefig(path)
+    
 
 # Plot the capture probabilities as a function of P_ij
-def comp_CP_var_P(P, tau, i, j, resolution):
+def plot_CP_var_P(P, tau, i, j, resolution):
     n = P.shape[0]
     cap_probs = jnp.full([n, n, resolution + 1], np.NaN)
     for k in range(resolution + 1):
@@ -103,7 +148,7 @@ def comp_CP_var_P(P, tau, i, j, resolution):
             if col != j:
                 P = P.at[i, col].set(P[i, col]*(1 - P[i, j])/rem_row_sum)
         F0 = jnp.full((n, n, tau), np.NaN)
-        cap_probs = cap_probs.at[:, :, k].set(compute_cap_probs(P, F0, tau))
+        cap_probs = cap_probs.at[:, :, k].set(strat_comp.compute_cap_probs(P, F0, tau))
     P_range = jnp.linspace(0, 1, resolution + 1)
     for row in range(jnp.shape(P)[0]):
         for col in range(jnp.shape(P)[1]):
@@ -116,7 +161,7 @@ def comp_CP_var_P(P, tau, i, j, resolution):
     return cap_probs
 
 # Plot the capture probabilities as a function of P_ij
-def comp_MCP_var_P_test(P0, tau, rows, cols, resolution):
+def plot_MCP_var_P(P0, tau, rows, cols, resolution):
     n = P0.shape[0]
     MCPs = jnp.full([resolution + 1], np.NaN)
     for ind in range(len(rows)):
@@ -132,7 +177,7 @@ def comp_MCP_var_P_test(P0, tau, rows, cols, resolution):
                 if col != j:
                     P = P.at[i, col].set(P[i, col]*(1 - P[i, j])/rem_row_sum)
             F0 = jnp.full((n, n, tau), np.NaN)
-            MCPs = MCPs.at[k].set(compute_MCP(P, F0, tau))
+            MCPs = MCPs.at[k].set(strat_comp.compute_MCP(P, F0, tau))
         P_range = jnp.linspace(0, 1, resolution + 1)
         plt.plot(P_range, MCPs)
     plt.xlabel("P_ij value")
@@ -140,14 +185,43 @@ def comp_MCP_var_P_test(P0, tau, rows, cols, resolution):
     plt.title("Capture Probabilities for tau = " + str(tau) + " and varying P")
     plt.savefig(os.getcwd() + "/test_CP_plot.png")
 
-# Generate a NetworkX graph from adjacency matrix A
+
 def gen_NXgraph(A):
+    """
+    Generate a NetworkX graph from binary adjacency matrix A.
+    
+    Parameters
+    ----------
+    A : 2D array-like
+        Binary adjacency matrix. 
+    
+    Returns
+    -------
+    nx.DiGraph
+        NetworkX DiGraph corresponding to binary adjacency matrix 'A'.
+    """
     temp = nx.DiGraph()
-    G = nx.from_numpy_matrix(A, create_using=temp)
+    G = nx.from_numpy_matrix(np.asarray(A), create_using=temp)
     return G
 
 # Set the length of all edges in the graph
-def set_edge_length(G, A, len):
+def set_visual_edge_length(G, A, len):
+    """
+    Set length of all edges in NetworkX graph (for visualization only).
+    
+    Parameters
+    ----------
+    G : nx.DiGraph
+        NetworkX DiGraph corresponding to binary adjacency matrix 'A'. 
+    A : 2D array-like
+        Binary adjacency matrix.
+    len : 
+    
+    Returns
+    -------
+    nx.DiGraph
+        NetworkX DiGraph corresponding to provided binary adjacency matrix.
+    """
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             if A[i, j] != 0:
@@ -158,7 +232,7 @@ def set_edge_length(G, A, len):
 def draw_env_graph(A, graph_name, folder_path, show_edge_lens=False, save=True):
     G = gen_NXgraph(A)
     G_viz = nx.nx_agraph.to_agraph(G)
-    set_edge_length(G_viz, A, 2)
+    set_visual_edge_length(G_viz, A, 2)
     G_viz.graph_attr["nodesep"] = 0.5
     if show_edge_lens:
         for i in range(A.shape[0]):
@@ -209,7 +283,7 @@ def draw_avg_opt_graph(A, avg_opt_P_mat, tau, folder_path, save=True):
     G_viz = draw_env_graph(A, None, folder_path, save=False)
     n = jnp.shape(A)[0]
     F0 = jnp.full((n, n, tau), np.NaN)
-    F = compute_cap_probs(avg_opt_P_mat, F0, tau)
+    F = strat_comp.compute_cap_probs(avg_opt_P_mat, F0, tau)
     MCP = np.min(F)
     MCP_indices = np.where(F == MCP)
     G_viz.graph_attr["labelloc"] = "t"
@@ -244,7 +318,7 @@ def draw_avg_opt_graph(A, avg_opt_P_mat, tau, folder_path, save=True):
 def plot_CP_avg_opt_P(avg_opt_P_mat, tau, folder_path):
     n = avg_opt_P_mat.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
-    F = compute_cap_probs(avg_opt_P_mat, F0, tau)
+    F = strat_comp.compute_cap_probs(avg_opt_P_mat, F0, tau)
     np.savetxt(folder_path + "/avg_opt_Pcap_probs.csv", F, delimiter=',')
     F_vec = F.flatten('F')
     probs = np.linspace(1, n**2, n**2)
@@ -439,8 +513,8 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
                 gridh = int(graph_name[graph_name.find("_H") + 2:])
                 P_ref = opt_P_mats[0]
                 for r in range(1, len(opt_P_mats)):
-                    opt_P_mats[r], sym_ind = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw)
-                    init_P_mats[r], _ = get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw, sym_ind)
+                    opt_P_mats[r], sym_ind = graph_comp.get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw)
+                    init_P_mats[r], _ = graph_comp.get_closest_sym_strat_grid(P_ref, opt_P_mats[r], gridh, gridw, sym_ind)
             save_sym_opt_Ps(res_dir, opt_P_mats, opt_run_nums)
             plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, \
                                 test_name, os.path.join(res_vis_dir, "P_plot2D")) 
@@ -663,8 +737,6 @@ def plot_optimizer_comparison_retro(test_set_name):
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.savefig(test_set_dir + "/OptimizerComparison.png", bbox_inches = "tight")
     plt.close()
-
-
 
 # Print iterations progress
 def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', print_end = "\r"):

@@ -1,5 +1,4 @@
 # Functionality related to analyzing, encoding, and decoding binary adjacency matrices for a variety of environment graphs 
-import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -184,19 +183,52 @@ def get_shortest_path_distances(A, node_pairs):
     return node_pair_SPDs
 
 def get_closest_sym_strat_grid(P_ref, P_comp, gridrows, gridcols, sym_index=None):
+    """
+    Find closest grid-graph strategy which is equivalent under grid symmetry.
+
+    The grid-graph strategy 'P_comp' should be considered equivalent to other
+    strategies or adjacency matrices wherein the graph's nodes are renumbered 
+    such that the grid is transformed according to any of its symmetries. If 
+    sym_index is not provided, this function generates the full set of 
+    symmetry-equivalent strategies for 'P_comp', and returns the strategy which 
+    most closely matches strategy 'P_ref'. If 'sym_index' is provided, rather 
+    than computing the closest match to 'P_ref' among all symmetries of 'P_comp',
+    only the specific symmetry of 'P_comp' corresponding to 'sym_index' is
+    computed and returned.
+    
+
+    Parameters
+    ----------
+    P_ref : jaxlib.xla_extension.DeviceArray
+        Strategy (transition probability matrix) for a grid graph.
+    P_comp : jaxlib.xla_extension.DeviceArray
+        Strategy (transition probability matrix) for a grid graph.
+    gridrows : int
+        The number of rows in the grid graph.
+    gridcols : int
+        The number of columns in the grid graph.
+    sym_index : (int, optional)
+        The index of the grid symmetry of 'P_comp' to compute.
+
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Grid-graph strategy equivalent to P_comp. 
+    int
+        The index of the symmetry corresponding to the returned strategy.
+    """
     if(gridrows == gridcols):
-        P_syms = jnp.stack([P_comp, sq_grid_rot90(P_comp, gridrows, gridcols), grid_rot180(P_comp), \
-                sq_grid_rot270(P_comp, gridrows, gridcols), grid_row_reflect(P_comp, gridrows, gridcols), \
-                grid_col_reflect(P_comp, gridrows, gridcols), sq_grid_transpose(P_comp, gridrows, gridcols), \
-                sq_grid_antitranspose(P_comp, gridrows, gridcols)
-                ])
+        P_syms = jnp.stack([P_comp, sq_grid_rot90(P_comp, gridrows, gridcols), grid_rot180(P_comp), 
+                            sq_grid_rot270(P_comp, gridrows, gridcols), grid_row_reflect(P_comp, gridrows, gridcols), 
+                            grid_col_reflect(P_comp, gridrows, gridcols), sq_grid_transpose(P_comp, gridrows, gridcols), 
+                            sq_grid_antitranspose(P_comp, gridrows, gridcols)])
         sum_sq_diffs = jnp.full(8, np.Inf)
     elif(gridrows == 1 or gridcols == 1):
         P_syms = jnp.stack([P_comp, grid_rot180(P_comp)])
         sum_sq_diffs = jnp.full(2, np.Inf)
     else:
-        P_syms = jnp.stack([P_comp, grid_rot180(P_comp), grid_row_reflect(P_comp, gridrows, gridcols), \
-                                grid_col_reflect(P_comp, gridrows, gridcols)])
+        P_syms = jnp.stack([P_comp, grid_rot180(P_comp), grid_row_reflect(P_comp, gridrows, gridcols), 
+                            grid_col_reflect(P_comp, gridrows, gridcols)])
         sum_sq_diffs = jnp.full(4, np.Inf)
 
     if sym_index is not None:
@@ -209,6 +241,29 @@ def get_closest_sym_strat_grid(P_ref, P_comp, gridrows, gridcols, sym_index=None
     return P_closest, sym_index
 
 def grid_row_reflect(M, gridrows, gridcols):
+    """
+    Generate equivalent grid-graph strategy with grid rows reflected.
+
+    The grid-graph strategy (or binary adjacency matrix) 'M' should be
+    considered equivalent to another strategy or adjacency matrix 
+    wherein the graph's nodes are renumbered such that the grid is 
+    "flipped about its horizontal axis". This function generates that 
+    equivalent strategy or adjacency matrix.
+
+    Parameters
+    ----------
+    M : jaxlib.xla_extension.DeviceArray
+        Strategy or binary adjacency matrix for a grid graph.
+    gridrows : int
+        The number of rows in the grid graph.
+    gridcols : int
+        The number of columns in the grid graph.
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Grid-graph strategy or binary adjacency matrix equivalent to M. 
+    """
     grid_perm = jnp.flipud(jnp.identity(gridrows)) # antidiagonal permutation matrix
     block = jnp.identity(gridcols)
     M_perm = jnp.kron(grid_perm, block)
@@ -217,6 +272,29 @@ def grid_row_reflect(M, gridrows, gridcols):
     return M
 
 def grid_col_reflect(M, gridrows, gridcols):
+    """
+    Generate equivalent grid-graph strategy with grid columns reflected.
+
+    The grid-graph strategy (or binary adjacency matrix) 'M' should be
+    considered equivalent to another strategy or adjacency matrix 
+    wherein the graph's nodes are renumbered such that the grid is 
+    "flipped about its vertical axis". This function generates that 
+    equivalent strategy or adjacency matrix.
+
+    Parameters
+    ----------
+    M : jaxlib.xla_extension.DeviceArray
+        Strategy or binary adjacency matrix for a grid graph.
+    gridrows : int
+        The number of rows in the grid graph.
+    gridcols : int
+        The number of columns in the grid graph.
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Grid-graph strategy or binary adjacency matrix equivalent to M. 
+    """
     grid_perm = jnp.flipud(jnp.identity(gridrows)) # antidiagonal permutation matrix
     block = jnp.identity(gridcols)
     M_perm = jnp.kron(block, grid_perm)
@@ -225,33 +303,143 @@ def grid_col_reflect(M, gridrows, gridcols):
     return M
 
 def grid_rot180(M):  
+    """
+    Generate equivalent grid-graph strategy with grid rotated 180 degrees.
+
+    The grid-graph strategy (or binary adjacency matrix) 'M' should be
+    considered equivalent to another strategy or adjacency matrix 
+    wherein the graph's nodes are renumbered such that the grid is 
+    "rotated 180 degrees about its center". This function generates 
+    that equivalent strategy or adjacency matrix.
+
+    Parameters
+    ----------
+    M : jaxlib.xla_extension.DeviceArray
+        Strategy or binary adjacency matrix for a grid graph.
+
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Grid-graph strategy or binary adjacency matrix equivalent to M. 
+    """
     M = jnp.fliplr(M)
     M = jnp.flipud(M)
     return M
 
 def sq_grid_transpose(M, gridrows, gridcols):
+    """
+    Generate equivalent square-grid-graph strategy with grid transposed.
+
+    For square grid graphs, the strategy (or binary adjacency matrix) 'M' 
+    should be considered equivalent to another strategy or adjacency matrix 
+    wherein the graph's nodes are renumbered such that the grid is transposed.
+    This function generates that equivalent strategy or adjacency matrix.
+
+    Parameters
+    ----------
+    M : jaxlib.xla_extension.DeviceArray
+        Strategy or binary adjacency matrix for a grid graph.
+    gridrows : int
+        The number of rows in the grid graph.
+    gridcols : int
+        The number of columns in the grid graph.
+        
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Grid-graph strategy or binary adjacency matrix equivalent to M. 
+    """
     n = gridrows*gridcols
     M_reflect = jnp.full((n, n), np.NaN)
-    identity_map = jnp.stack([jnp.outer(jnp.arange(n, dtype=int), jnp.ones(n, dtype=int)), \
-                                jnp.outer(jnp.ones(n, dtype=int), jnp.arange(n, dtype=int))])
+    identity_map = jnp.stack([jnp.outer(jnp.arange(n, dtype=int), jnp.ones(n, dtype=int)), 
+                              jnp.outer(jnp.ones(n, dtype=int), jnp.arange(n, dtype=int))])
     node_map = jnp.flipud(jnp.arange(0, n).reshape(gridrows, gridcols))
     ref_map = jnp.flipud(jnp.transpose(node_map)).flatten()
-    reflect_map = jnp.stack([jnp.outer(ref_map, jnp.ones(n, dtype=int)), \
-                                jnp.outer(jnp.ones(n, dtype=int), ref_map)])
+    reflect_map = jnp.stack([jnp.outer(ref_map, jnp.ones(n, dtype=int)), 
+                             jnp.outer(jnp.ones(n, dtype=int), ref_map)])
     M_reflect = M_reflect.at[identity_map[0, :, :], identity_map[1, :, :]].set(M[reflect_map[0, :, :], reflect_map[1, :, :]])
     return M_reflect
 
 def sq_grid_antitranspose(M, gridrows, gridcols):
+    """
+    Generate equivalent square-grid-graph strategy with grid antitransposed.
+
+    For square grid graphs, the strategy (or binary adjacency matrix) 'M' 
+    should be considered equivalent to another strategy or adjacency matrix 
+    wherein the graph's nodes are renumbered such that grid is antitransposed,
+    that is, the grid is flipped about the anti-diagonal. This function 
+    generates that equivalent strategy or adjacency matrix.
+
+    Parameters
+    ----------
+    M : jaxlib.xla_extension.DeviceArray
+        Strategy or binary adjacency matrix for a grid graph.
+    gridrows : int
+        The number of rows in the grid graph.
+    gridcols : int
+        The number of columns in the grid graph.
+        
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Grid-graph strategy or binary adjacency matrix equivalent to M. 
+    """
     M = sq_grid_transpose(M, gridrows, gridcols)
     M = grid_rot180(M)
     return M
 
 def sq_grid_rot90(M, gridrows, gridcols):
+    """
+    Generate equivalent square-grid-graph strategy with grid rotated 90 degrees.
+
+    For square grid graphs, the strategy (or binary adjacency matrix) 'M' 
+    should be considered equivalent to another strategy or adjacency matrix 
+    wherein the graph's nodes are renumbered such that grid is rotated 90 degrees
+    about its center. This function generates that equivalent strategy or 
+    adjacency matrix.
+
+    Parameters
+    ----------
+    M : jaxlib.xla_extension.DeviceArray
+        Strategy or binary adjacency matrix for a grid graph.
+    gridrows : int
+        The number of rows in the grid graph.
+    gridcols : int
+        The number of columns in the grid graph.
+        
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Grid-graph strategy or binary adjacency matrix equivalent to M. 
+    """
     M = sq_grid_transpose(M, gridrows, gridcols)
     M = grid_row_reflect(M, gridrows, gridcols)
     return M
 
 def sq_grid_rot270(M, gridrows, gridcols):
+    """
+    Generate equivalent square-grid-graph strategy with grid rotated 270 degrees.
+
+    For square grid graphs, the strategy (or binary adjacency matrix) 'M' 
+    should be considered equivalent to another strategy or adjacency matrix 
+    wherein the graph's nodes are renumbered such that grid is rotated 270 degrees
+    about its center. This function generates that equivalent strategy or 
+    adjacency matrix.
+
+    Parameters
+    ----------
+    M : jaxlib.xla_extension.DeviceArray
+        Strategy or binary adjacency matrix for a grid graph.
+    gridrows : int
+        The number of rows in the grid graph.
+    gridcols : int
+        The number of columns in the grid graph.
+        
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Grid-graph strategy or binary adjacency matrix equivalent to M. 
+    """
     M = grid_row_reflect(M, gridrows, gridcols)
     M = sq_grid_transpose(M, gridrows, gridcols)
     return M
