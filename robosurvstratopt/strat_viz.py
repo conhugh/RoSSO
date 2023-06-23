@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import pygraphviz as pgv
+# import pygraphviz as pgv
 
 import graph_comp
 import strat_comp
@@ -396,7 +396,7 @@ def visualize_metrics(metrics, test_name, test_dir, show_legend=True, overlay=Tr
 
 # Visualize metrics related to the optimization process (after all tests have completed):
 def visualize_metrics_retro(test_set_name, overlay=False):
-    test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
+    test_set_dir = "../results/local/test_set_" + test_set_name
     sub_dir_num = len(os.listdir(test_set_dir))
     print("Generating Metrics Visualization...")
     print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
@@ -467,7 +467,8 @@ def save_sym_opt_Ps(res_vis_dir, opt_P_mats, opt_P_run_nums):
 
 # Visualize initial and optimized P matrices: 
 def visualize_results(test_set_name, num_top_MCP_runs=None):
-    test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
+    # test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
+    test_set_dir = "../results/local/test_set_" + test_set_name
     sub_dir_num = len(os.listdir(test_set_dir))
     print("Generating Results Visualization...")
     print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
@@ -528,7 +529,7 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
 
 # Visualize MCPs from multiple tests
 def visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=False):
-    test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
+    test_set_dir = "../results/local/test_set_" + test_set_name
     MCP_dir = os.path.join(test_set_dir, "MCP_results")
     if not os.path.isdir(MCP_dir):
         os.mkdir(MCP_dir)
@@ -593,7 +594,7 @@ def visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_f
 
 
 def get_MCP_data(test_set_name, num_top_MCPs=None):
-    test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
+    test_set_dir = "../results/local/test_set_" + test_set_name
     MCP_dir = os.path.join(test_set_dir, "MCP_results")
     if not os.path.isdir(MCP_dir):
         os.mkdir(MCP_dir)
@@ -679,7 +680,7 @@ def plot_optimizer_comparison_retro(test_set_name):
     avg_iters = []
     avg_MCPs = []
     test_nums = []
-    test_set_dir = os.path.join(os.getcwd(), "Results/test_set_" + test_set_name)
+    test_set_dir = "../results/local/test_set_" + test_set_name
     test_spec = TestSpec(test_spec_filepath=test_set_dir + "/test_spec.json")
     sub_dir_num = len(os.listdir(test_set_dir))
     print("Generating Optimizer Comparison Visualization...")
@@ -765,15 +766,15 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
 if __name__ == '__main__':
 
     # test_set_name = "InitP250_Study_XD_TreeGraphs1"
-    # test_set_name = "Quick_Setup_Test"
-    test_set_name = "Tau_Study_3x3Grid1"
+    test_set_name = "Quick_Setup_Test"
+    # test_set_name = "Tau_Study_3x3Grid1"
 
     # visualize_metrics_retro(test_set_name, overlay=True)
     visualize_results(test_set_name, num_top_MCP_runs=5)
     # visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=None, plot_best_fit=False)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
-    visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=5, plot_best_fit=True)
+    visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=5, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=25, plot_best_fit=False)
     # plot_optimizer_comparison_retro(test_set_name)
 

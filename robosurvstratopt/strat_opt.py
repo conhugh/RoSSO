@@ -151,8 +151,9 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
     else:
         test_spec.validate_test_spec()
     # create directory for saving results:
-    project_dir = os.getcwd()
-    test_set_dir = os.path.join(project_dir, "Results/test_set_" + str(test_set_name))
+    # project_dir = os.getcwd()
+    # test_set_dir = os.path.join(project_dir, "results/local/test_set_" + str(test_set_name))
+    test_set_dir = "../results/local/test_set_" + str(test_set_name)
     if os.path.isdir(test_set_dir):
         input("WARNING! Results from a test with the same name have been saved previously, press ENTER to overwrite existing results.")
         for files in os.listdir(test_set_dir):
@@ -523,8 +524,8 @@ if __name__ == '__main__':
 
     # test_set_name = "Default_Setup_Test"
     test_set_name = "Quick_Setup_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/default_test_spec.json")
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/TestSpecs/quick_test_spec.json")
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/test_specs/default_test_spec.json")
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/test_specs/quick_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
