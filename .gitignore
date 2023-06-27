@@ -1,4 +1,6 @@
 __pycache__/
 *.py[cod]
 .jax_env/
-.venv/
+.robo_env/
+results/local/
+results/shared/workflow_notes.txt
