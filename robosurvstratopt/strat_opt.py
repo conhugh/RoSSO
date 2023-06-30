@@ -42,10 +42,7 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
     init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
     num_LCPs=1
     nominal_learning_rate = 0.0001
-    grad_mode = "MCP_parametrization"
-    grad_func = strat_comp.get_grad_func(grad_mode)
-    print("grad_func id:")
-    print(id(grad_func))
+    grad_func = strat_comp.comp_avg_LCP_grad_param
     n = A.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
     time_avgs = []
@@ -55,7 +52,7 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
         P = P0
         Q = P0
         # print("P0 shape = " + str(jnp.shape(P0)) + ", F0 shape = " + str(jnp.shape(F0)) + ", A shape = " + str(jnp.shape(A)))
-        scaled_learning_rate, _ = set_learning_rate(P0, A, F0, tau, num_LCPs, nominal_learning_rate, grad_mode)
+        scaled_learning_rate, _ = set_learning_rate(P0, A, F0, tau, num_LCPs, nominal_learning_rate, grad_func)
         # print("scaled_learning_rate = " + str(scaled_learning_rate))
         # optimizer = optax.rmsprop(scaled_learning_rate)
         # optimizer = optax.rmsprop(scaled_learning_rate, momentum=0.9, nesterov=False)
@@ -87,7 +84,7 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
         # print(compute_MCP(P, F0, tau))
     return time_avgs
 
-def set_learning_rate(Q0, A, F0, tau, num_LCPs, nominal_LR, grad_mode):
+def set_learning_rate(Q0, A, F0, tau, num_LCPs, nominal_LR, grad_func):
     """
     Set learning rate based on magnitude of initial gradient. 
 
@@ -105,8 +102,6 @@ def set_learning_rate(Q0, A, F0, tau, num_LCPs, nominal_LR, grad_mode):
         Number of lowest cap probs for which to compute gradients, if applicable.
     nominal_LR : float
         Nominal learning rate, to be scaled by intial gradient magnitude. 
-    grad_mode : String
-        Type of gradient computation to be used.
     
     Returns
     -------
@@ -115,15 +110,8 @@ def set_learning_rate(Q0, A, F0, tau, num_LCPs, nominal_LR, grad_mode):
     float
         Scaling factor applied to nominal learning rate.
 
-    See Also
-    -------
-    strat_comp.get_grad_func
     """
-    grad_func = strat_comp.get_grad_func(grad_mode)
-    if "LCP" in grad_mode:
-        init_grad = grad_func(Q0, A, F0, tau, num_LCPs)
-    else:
-        init_grad = grad_func(Q0, A, F0, tau)
+    init_grad = grad_func(Q0, A, F0, tau, num_LCPs)
     LR_scale = jnp.max(jnp.abs(init_grad))
     LR = nominal_LR/LR_scale
     return LR, LR_scale
@@ -153,7 +141,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
     # create directory for saving results:
     # project_dir = os.getcwd()
     # test_set_dir = os.path.join(project_dir, "results/local/test_set_" + str(test_set_name))
-    test_set_dir = "../results/local/test_set_" + str(test_set_name)
+    test_set_dir = "/results/local/test_set_" + str(test_set_name)
     if os.path.isdir(test_set_dir):
         input("WARNING! Results from a test with the same name have been saved previously, press ENTER to overwrite existing results.")
         for files in os.listdir(test_set_dir):
@@ -367,7 +355,7 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
     diam_pairs = graph_comp.get_diametric_pairs(A)
     optimizer = setup_optimizer(opt_params)
     opt_state = optimizer.init(P0)
-    grad_func = strat_comp.get_grad_func(opt_params["grad_mode"])
+    grad_func = strat_comp.comp_avg_LCP_grad_param
     conv_test_vals = deque()  # queue storing recent values of desired metric, for checking convergence
     P_update_bound = jnp.full((n, n), opt_params["P_update_elt_bound"])
     num_LCPs = opt_params["num_LCPs"]
@@ -437,7 +425,8 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
         if opt_params["conv_test_mode"] == "P_update":
             converged, conv_test_vals = conv_check(iter, abs_P_diff_sum, conv_test_vals, opt_params)
         elif opt_params["conv_test_mode"] == "MCP_diff":
-            MCP =  strat_comp.compute_MCP(P, F0, tau)
+            num_LCPs = 1
+            MCP =  strat_comp.compute_LCPs(P, F0, tau, num_LCPs)
             MCP_diff = MCP - old_MCP
             converged, conv_test_vals = conv_check(iter, MCP_diff, conv_test_vals, opt_params)
             old_MCP = MCP
@@ -524,8 +513,8 @@ if __name__ == '__main__':
 
     # test_set_name = "Default_Setup_Test"
     test_set_name = "Quick_Setup_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/test_specs/default_test_spec.json")
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/test_specs/quick_test_spec.json")
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec.json")
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/quick_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
