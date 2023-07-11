@@ -21,14 +21,11 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
 
     Parameters
     ----------
-    P0 : numpy.ndarray 
-        Random initial transition probability matrix. 
-    F0 : numpy.ndarray
-        Placeholder for storing FHT probability matrices. 
+    A : 
     tau : int
         Intruder's attack duration. 
-    eps0 : float
-        Learning rate.
+    num_init_Ps : int
+        Number of random initializations.
     max_iters : int
         Total number of iterations.
     
@@ -40,48 +37,37 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
         Capture Probability matrix corresponding to optimized strategy.
     """
     init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
-    num_LCPs=1
-    nominal_learning_rate = 0.0001
+    num_LCPs = 1
+    nominal_learning_rate = 0.001
     grad_func = strat_comp.comp_avg_LCP_grad
     n = A.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
     time_avgs = []
     for k in range(num_init_Ps):
-        # print("---------------------Optimizing with initial P matrix number " + str(k + 1) + "----------------------------")
-        P0 = init_Ps[:, :, k]
-        P = P0
-        Q = P0
-        # print("P0 shape = " + str(jnp.shape(P0)) + ", F0 shape = " + str(jnp.shape(F0)) + ", A shape = " + str(jnp.shape(A)))
-        scaled_learning_rate, _ = set_learning_rate(P0, A, F0, tau, num_LCPs, nominal_learning_rate, grad_func)
-        # print("scaled_learning_rate = " + str(scaled_learning_rate))
-        # optimizer = optax.rmsprop(scaled_learning_rate)
-        # optimizer = optax.rmsprop(scaled_learning_rate, momentum=0.9, nesterov=False)
-        optimizer = optax.sgd(scaled_learning_rate, momentum=0.99, nesterov=True)
-        opt_state = optimizer.init(P0)
+        Q = init_Ps[:, :, k]
+        scaled_learning_rate, _ = set_learning_rate(Q, A, F0, tau, num_LCPs, nominal_learning_rate, grad_func)
+        schedule = optax.constant_schedule(scaled_learning_rate)
+        # optimizer = optax.rmsprop(schedule)
+        # optimizer = optax.rmsprop(schedule, momentum=0.9, nesterov=False)
+        optimizer = optax.sgd(schedule, momentum=0.99, nesterov=True)
+        opt_state = optimizer.init(Q)
         check_time = time.time()
         for iter in range(max_iters + 1):
             # start_time = time.time()
-            grad = -1*grad_func(Q, A, F0, tau)
-            # grad = grad_comp_test(P, Q, A, F0, tau, num_LCPs, grad_mode)
+            grad = -1*grad_func(Q, A, F0, tau, num_LCPs)
             # print("--- Getting grad took: %s seconds ---" % (time.time() - start_time))
             # start_time = time.time()
             updates, opt_state = optimizer.update(grad, opt_state)
             # print("--- Getting update and state took: %s seconds ---" % (time.time() - start_time))
             # start_time = time.time()
             Q = optax.apply_updates(Q, updates)
-            P = strat_comp.comp_P_param(Q, A)
             # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
-            # if iter % 200 == 0:
-            # # if iter % 1 == 0: 
-            #     print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time)[:7] + "-------")
-            #     print("grad 1-norm = " + str(jnp.sum(jnp.abs(grad))))
-            #     print("grad inf norm = " + str(jnp.max(jnp.abs(grad))))
-            #     print("MCP = " + str(compute_MCP(P, F0, tau)))
+        P = strat_comp.comp_P_param(Q, A)
+        print(P)
         opt_time = time.time() - check_time
         time_avgs.append(opt_time)
         print("Optimizing P matrix number " + str(k + 1) + " over " + str(max_iters) + " iterations took: " + str(opt_time)[:7] + " seconds")
-        # print("Final MCP:")
-        # print(compute_MCP(P, F0, tau))
+        print("Final MCP: " + str(strat_comp.compute_LCPs(P, F0, tau, num_LCPs)))
     return time_avgs
 
 def set_learning_rate(Q0, A, F0, tau, num_LCPs, nominal_LR, grad_func):
@@ -102,7 +88,8 @@ def set_learning_rate(Q0, A, F0, tau, num_LCPs, nominal_LR, grad_func):
         Number of lowest cap probs for which to compute gradients, if applicable.
     nominal_LR : float
         Nominal learning rate, to be scaled by intial gradient magnitude. 
-    
+    grad_func : 
+        
     Returns
     -------
     float

@@ -32,8 +32,8 @@ def init_rand_Ps(A, num, seed=0):
         P0 = A*jax.random.uniform(subkey, A_shape)
         P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0) 
         initPs = initPs.at[:, : , k].set(P0)
-    if num == 1:
-        initPs = jnp.squeeze(initPs)
+    # if num == 1:
+    #     initPs = jnp.squeeze(initPs)
     return initPs
 
 @functools.partial(jit, static_argnames=['tau'])
@@ -240,15 +240,17 @@ def compute_LCPs(P, F0, tau, num_LCPs=1):
 def loss_LCP(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
     P = comp_P_param(Q, A, use_abs_param)
     lcps = compute_LCPs(P, F0, tau, num_LCPs)
-    return lcps
+    # return lcps
+    return jnp.mean(lcps)
 
 # Autodiff parametrized loss function
 _comp_LCP_grads = jacrev(loss_LCP)
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
 def comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
     J = _comp_LCP_grads(Q, A, F0, tau, num_LCPs, use_abs_param) 
-    grad = jnp.mean(J, axis=0)
-    return grad
+    # grad = jnp.mean(J, axis=0)
+    # return grad
+    return J
 
 ############################################################
 # Auxiliary strategy analysis functions below

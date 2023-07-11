@@ -255,6 +255,7 @@ if __name__ == '__main__':
     n = 3
     tau = 2
     A = jnp.ones([n,n])
-    num_init_Ps = 4
-    max_iters = 100
+    num_init_Ps = 2
+    max_iters = 1000
+    # print(scj.init_rand_Ps(A, num_init_Ps))
     soo.test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
