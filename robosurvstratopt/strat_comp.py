@@ -189,8 +189,19 @@ def compute_cap_probs_NF0(P, tau):
     cap_probs = jnp.sum(F, axis=2)
     return cap_probs
     
+# Parametrization of the P matrix
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_P_param(Q, A, use_abs_param=True):
+    P = Q*A
+    if use_abs_param:
+        P = jnp.abs(P) # apply component-wise absolute-value
+    else:
+        P = jnp.maximum(jnp.zeros_like(P), P) # apply component-wise ReLU   
+    P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize rows to generate valid prob dist 
+    return P
+
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
-def compute_LCPs(P, F0, tau, num_LCPs):
+def compute_LCPs(P, F0, tau, num_LCPs=1):
     """
     Compute Lowest `num_LCPs` Capture Probabilities.
 
@@ -224,26 +235,6 @@ def compute_LCPs(P, F0, tau, num_LCPs):
         raise ValueError("Invalid num_LCPs specified!")
     return lcps
 
-# Autodiff version of Lowest Cap Probs Gradient computation:
-_comp_LCP_grads = jacrev(compute_LCPs)
-@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
-def comp_avg_LCP_grad(P, A, F0, tau, num_LCPs=1):
-    G = _comp_LCP_grads(P, F0, tau, num_LCPs)
-    G = G*A
-    G_avg = jnp.mean(G, axis=0)
-    return G_avg
-
-# Parametrization of the P matrix
-@functools.partial(jit, static_argnames=['use_abs_param'])
-def comp_P_param(Q, A, use_abs_param=True):
-    P = Q*A
-    if use_abs_param:
-        P = jnp.abs(P) # apply component-wise absolute-value
-    else:
-        P = jnp.maximum(jnp.zeros_like(P), P) # apply component-wise ReLU   
-    P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize rows to generate valid prob dist 
-    return P
-
 # Loss function with constraints included in parametrization
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
 def loss_LCP(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
@@ -252,10 +243,10 @@ def loss_LCP(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
     return lcps
 
 # Autodiff parametrized loss function
-_comp_LCP_grads_param = jacrev(loss_LCP)
+_comp_LCP_grads = jacrev(loss_LCP)
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
-def comp_avg_LCP_grad_param(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
-    J = _comp_LCP_grads_param(Q, A, F0, tau, num_LCPs, use_abs_param) 
+def comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
+    J = _comp_LCP_grads(Q, A, F0, tau, num_LCPs, use_abs_param) 
     grad = jnp.mean(J, axis=0)
     return grad
 

@@ -42,7 +42,7 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
     init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
     num_LCPs=1
     nominal_learning_rate = 0.0001
-    grad_func = strat_comp.comp_avg_LCP_grad_param
+    grad_func = strat_comp.comp_avg_LCP_grad
     n = A.shape[0]
     F0 = jnp.full((n, n, tau), np.NaN)
     time_avgs = []
