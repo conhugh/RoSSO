@@ -258,4 +258,8 @@ if __name__ == '__main__':
     num_init_Ps = 1
     max_iters = 1000
     # print(scj.init_rand_Ps(A, num_init_Ps))
-    soo.test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
+    # soo.test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
+    P = scj.init_rand_Ps(A, num_init_Ps)
+    print(P)
+    print(scj.loss_MHT(P, A))
+    print(scj.compute_MHT(P))

@@ -34,6 +34,20 @@ def init_rand_Ps(A, num, seed=0):
         initPs = initPs.at[:, : , k].set(P0)
     return initPs
 
+# Parametrization of the P matrix
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_P_param(Q, A, use_abs_param=True):
+    P = Q*A
+    if use_abs_param:
+        P = jnp.abs(P) # apply component-wise absolute-value
+    else:
+        P = jnp.maximum(jnp.zeros_like(P), P) # apply component-wise ReLU   
+    P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize rows to generate valid prob dist 
+    return P
+
+############################################################
+# Stackelberg formulation
+############################################################
 @functools.partial(jit, static_argnames=['tau'])
 def compute_FHT_probs(P, F0, tau):
     """
@@ -62,80 +76,6 @@ def compute_FHT_probs(P, F0, tau):
     return F0
 
 @functools.partial(jit, static_argnames=['tau'])
-def compute_FHT_probs_NF0(P, tau):
-    """
-    Compute First Hitting Time (FHT) Probability matrices.
-
-    To compute the Capture Probability Matrix, we must sum the FHT
-    Probability matrices from 1 up to `tau` time steps. 
-
-    Parameters
-    ----------
-    P : jaxlib.xla_extension.DeviceArray
-        Transition probability matrix. 
-    tau : int
-        Intruder's attack duration. 
-    
-    Returns
-    -------
-    jaxlib.xla_extension.DeviceArray
-        Array of `tau` distinct First Hitting Time Probability matrices. 
-    """
-    n = jnp.shape(P)[0]
-    F0 = jnp.full((n, n, tau), np.NaN)
-    F0 = F0.at[:, :, 0].set(P)
-    for i in range(1, tau):
-        F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
-    return F0
-
-@functools.partial(jit, static_argnames=['w_max', 'tau']) 
-def compute_weighted_FHT_probs_vec(P, W, w_max, tau):
-    """
-    Compute First Hitting Time (FHT) Probability matrices.
-
-    To compute the Capture Probability Matrix, we must sum the FHT
-    Probability matrices from 1 up to `tau` time steps. This function
-    computes these matrices in the case where the environment graph
-    has integer (as opposed to unit) edge lengths. 
-
-    Parameters
-    ----------
-    P : jaxlib.xla_extension.DeviceArray
-        Transition probability matrix. 
-    W : jaxlib.xla_extension.DeviceArray
-        Integer-valued travel time matrix. 
-    F0 : jaxlib.xla_extension.DeviceArray 
-        Placeholder to be populated with FHT Probability matrices.
-    tau : int
-        Intruder's attack duration. 
-    
-    Returns
-    -------
-    jaxlib.xla_extension.DeviceArray
-        Array of `tau` distinct First Hitting Time Probability matrices. 
-    """
-    n = jnp.shape(P)[0]
-    F_vecs = jnp.zeros((n**2, tau + w_max))
-    I = jnp.identity(n)
-
-    for k in range(tau):
-        indic_mat = ((k + 1)*jnp.ones((n, n)) == W)
-        P_direct = P*indic_mat
-        P_direct_vec = jnp.reshape(P_direct, n**2, order='F')
-
-        multi_step_probs = jnp.zeros(n**2)
-        for i in range(n):
-            for j in range(n):
-                E_j = jnp.diag(jnp.ones(n) - I[:, j])
-                E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
-                multi_step_probs = multi_step_probs + P[i, j]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int)])
-                
-        F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
-        
-    F_v = F_vecs[:, w_max:]
-    return F_v
-
-@functools.partial(jit, static_argnames=['tau'])
 def compute_cap_probs(P, F0, tau):
     """
     Compute Capture Probability Matrix.
@@ -161,42 +101,6 @@ def compute_cap_probs(P, F0, tau):
     F = compute_FHT_probs(P, F0, tau)
     cap_probs = jnp.sum(F, axis=2)
     return cap_probs
-
-@functools.partial(jit, static_argnames=['tau'])
-def compute_cap_probs_NF0(P, tau):
-    """
-    Compute Capture Probability Matrix.
-
-    Parameters
-    ----------
-    P : jaxlib.xla_extension.DeviceArray 
-        Transition probability matrix.
-    tau : int
-        Intruder's attack duration. 
-    
-    Returns
-    -------
-    jaxlib.xla_extension.DeviceArray
-        Capture Probability matrix. 
-    
-    See Also
-    --------
-    compute_FHT_probs
-    """
-    F = compute_FHT_probs_NF0(P, tau)
-    cap_probs = jnp.sum(F, axis=2)
-    return cap_probs
-    
-# Parametrization of the P matrix
-@functools.partial(jit, static_argnames=['use_abs_param'])
-def comp_P_param(Q, A, use_abs_param=True):
-    P = Q*A
-    if use_abs_param:
-        P = jnp.abs(P) # apply component-wise absolute-value
-    else:
-        P = jnp.maximum(jnp.zeros_like(P), P) # apply component-wise ReLU   
-    P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize rows to generate valid prob dist 
-    return P
 
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
 def compute_LCPs(P, F0, tau, num_LCPs=1):
@@ -245,6 +149,78 @@ _comp_LCP_grads = jacrev(loss_LCP)
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
 def comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
     grad = _comp_LCP_grads(Q, A, F0, tau, num_LCPs, use_abs_param) 
+    return grad
+
+############################################################
+# Weighted Stackelberg formulation
+############################################################
+@functools.partial(jit, static_argnames=['w_max', 'tau']) 
+def compute_weighted_FHT_probs_vec(P, W, w_max, tau):
+    """
+    Compute First Hitting Time (FHT) Probability matrices.
+
+    To compute the Capture Probability Matrix, we must sum the FHT
+    Probability matrices from 1 up to `tau` time steps. This function
+    computes these matrices in the case where the environment graph
+    has integer (as opposed to unit) edge lengths. 
+
+    Parameters
+    ----------
+    P : jaxlib.xla_extension.DeviceArray
+        Transition probability matrix. 
+    W : jaxlib.xla_extension.DeviceArray
+        Integer-valued travel time matrix. 
+    w_max : 
+    tau : int
+        Intruder's attack duration. 
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Array of `tau` distinct First Hitting Time Probability matrices. 
+    """
+    n = jnp.shape(P)[0]
+    F_vecs = jnp.zeros((n**2, tau + w_max))
+    I = jnp.identity(n)
+
+    for k in range(tau):
+        indic_mat = ((k + 1)*jnp.ones((n, n)) == W)
+        P_direct = P*indic_mat
+        P_direct_vec = jnp.reshape(P_direct, n**2, order='F')
+
+        multi_step_probs = jnp.zeros(n**2)
+        for i in range(n):
+            for j in range(n):
+                E_j = jnp.diag(jnp.ones(n) - I[:, j])
+                E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
+                multi_step_probs = multi_step_probs + P[i, j]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int)])
+                
+        F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
+        
+    F_v = F_vecs[:, w_max:]
+    return F_v
+
+############################################################
+# Mean Hitting Time formulation
+############################################################
+@jit
+def compute_MHT(P):
+    eigs = jnp.linalg.eigvals(jnp.squeeze(P))
+    sorted_eigs = eigs[jnp.argsort(jnp.abs(eigs))]
+    M = 1 + jnp.sum(1 / (1 - sorted_eigs[:-1]))
+    return jnp.real(M)
+
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def loss_MHT(Q, A, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    M = compute_MHT(P)
+    return M
+
+# Autodiff parametrized loss function
+_comp_MHT_grads = jacrev(loss_MHT)
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_MHT_grad(Q, A, use_abs_param=True):
+    grad = _comp_MHT_grads(Q, A, use_abs_param) 
     return grad
 
 ############################################################

@@ -123,13 +123,9 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
             opt_params = test_spec.optimizer_params[test_name].copy()
         else:
             opt_params = test_spec.optimizer_params["params"].copy()
-        if test_spec.schedules["varying_schedules"]:
-            schedules = test_spec.schedules[test_name]
-        else:
-            schedules = test_spec.schedules["schedules"]
         print("-------- Working on Graph " + graph_name + " with tau = " + str(tau) + "----------")
         test_start_time = time.time()
-        times, iters, MCPs = run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, trackers)
+        times, iters, MCPs = run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, trackers)
         print("Running test number " + str(test_num) + " took " + str(time.time() - test_start_time) + " seconds to complete.")
         run_times.append(times)
         final_iters.append(iters)
@@ -139,7 +135,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
     if(opt_comparison):
         strat_viz.plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, final_MCPs)
 
-def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, trackers):
+def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and number of initial strategies.
 
@@ -157,8 +153,6 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
         Short name indicating structure and size of environment graph.
     opt_params : dict
         Parameters defining the optimization processes to run. 
-    schedules : dict
-        Schedules for applicable optimization parameters. 
     trackers : List[String]
         Quantities to track throughout optimization processes. 
     
@@ -201,7 +195,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
         print("Optimizing with initial P matrix number " + str(k + 1) + "...")
         print("Using optimizer: " + opt_params["optimizer_name"])
         P0 = init_Ps[:, :, k]
-        init_grad = strat_comp.comp_avg_LCP_grad(P0, A, F0, tau, opt_params["num_LCPs"], opt_params["use_abs_param"])
+        init_grad = strat_comp.comp_avg_LCP_grad(P0, A, F0, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         lr_scale = jnp.max(jnp.abs(init_grad))
         lr = opt_params["nominal_learning_rate"]/lr_scale
         lr_scales.append(lr_scale)
@@ -209,7 +203,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
         opt_params["scaled_learning_rate"] = lr
 
         start_time = time.time()
-        P, F, tracked_vals = run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers)
+        P, F, tracked_vals = run_optimizer(P0, A, F0, tau, opt_params, trackers)
         cnvg_time = time.time() - start_time
         cnvg_times.append(cnvg_time)
         print("--- Optimization took: %s seconds ---" % (cnvg_time))
@@ -253,10 +247,8 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
         info.write("\nOptimizer Parameters from Test Specification:\n")
         del opt_params["scaled_learning_rate"]
         info.write(json.dumps(opt_params, sort_keys=False, indent=4) + "\n")
-        if(opt_params["use_num_LCPs_schedule"]):
-            info.write("\nSchedules used:\n")
-            info.write("num_LCPs_schedule:\n")
-            info.write(json.dumps(schedules["lcp_num_schedule"]) + "\n")
+        # info.write("num_LCPs_schedule:\n")
+        # info.write(json.dumps(opt_) + "\n")
         info.write("\nOptimizer Parameters computed during testing:\n")
         info.write("Scaled Learning Rates = " + str(np.asarray(learning_rates)) + "\n")
         info.write("Max absolute-value elements of initial MCP gradients = " + str(np.asarray(lr_scales)) + "\n")
@@ -266,7 +258,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, schedules, 
     info.close()
     return cnvg_times, opt_metrics["final_iters"], opt_metrics["final_MCP"]
 
-def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
+def run_optimizer(P0, A, F0, tau, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and initial strategy.
 
@@ -308,25 +300,19 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
     diam_pairs = graph_comp.get_diametric_pairs(A)
     optimizer = setup_optimizer(opt_params)
     opt_state = optimizer.init(P0)
-    grad_func = strat_comp.comp_avg_LCP_grad
     cnvg_test_vals = deque()  # queue storing recent values of desired metric, for checking convergence
-    num_LCPs = opt_params["num_LCPs"]
     tracked_vals = {track_val : [] for track_val in trackers}
-    # initialize parameter schedules, if specified:
-    if opt_params["use_num_LCPs_schedule"]:
-        lcp_num_schedule = schedules["lcp_num_schedule"]
+    # convert keys of map from string to int
+    num_LCPs_schedule = {int(key): value for key, value in opt_params["num_LCPs_schedule"].items()}
+    num_LCPs_schedule = optax.piecewise_constant_schedule(opt_params["num_init_LCPs"], num_LCPs_schedule)
 
     # Run gradient-based optimization process:
     iter = 0 
     converged = False
     while not converged:
-        if opt_params["use_num_LCPs_schedule"]:
-            if lcp_num_schedule["iters"].count(iter) != 0:
-                index = lcp_num_schedule["iters"].index(iter)
-                num_LCPs = lcp_num_schedule["lcp_nums"][index]
-                print("Updated P_update_elt_bound to: " + str(num_LCPs) + " at iteration " + str(iter))
+        num_LCPs = int(num_LCPs_schedule(iter))
         # apply update to P matrix, and parametrization Q:
-        grad = -1*grad_func(Q, A, F0, tau) # compute negative gradient
+        grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"]) # compute negative gradient
         P_old = strat_comp.comp_P_param(Q, A)
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
@@ -354,12 +340,12 @@ def run_optimizer(P0, A, F0, tau, opt_params, schedules, trackers):
         # check for convergence:
         if opt_params["cnvg_test_mode"] == "P_update":
             converged, cnvg_test_vals = cnvg_check(iter, abs_P_diff_sum, cnvg_test_vals, opt_params)
-        elif opt_params["cnvg_test_mode"] == "MCP_diff":
-            num_LCPs = 1
-            MCP =  strat_comp.compute_LCPs(P, F0, tau, num_LCPs)
-            MCP_diff = MCP - old_MCP
-            converged, cnvg_test_vals = cnvg_check(iter, MCP_diff, cnvg_test_vals, opt_params)
-            old_MCP = MCP
+        # elif opt_params["cnvg_test_mode"] == "MCP_diff":
+        #     num_LCPs = 1
+        #     MCP =  strat_comp.compute_LCPs(P, F0, tau, num_LCPs)
+        #     MCP_diff = MCP - old_MCP
+        #     converged, cnvg_test_vals = cnvg_check(iter, MCP_diff, cnvg_test_vals, opt_params)
+        #     old_MCP = MCP
         # terminate optimization if maximum iteration count reached:
         if iter == opt_params["max_iters"]:
             converged = True
@@ -461,9 +447,9 @@ if __name__ == '__main__':
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/quick_test_spec.json")
 
     test_set_name = "Default_Setup_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec.json")
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec.json")
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec_2.json")
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec_3.json")
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec_3.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)

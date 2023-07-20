@@ -5,8 +5,12 @@
         "varying_optimizer_params": false,
         "params": {
             "num_init_Ps": 10,
-            "num_LCPs": 4,
-            "use_num_LCPs_schedule": false,
+            "num_init_LCPs": 4,
+            "num_LCPs_schedule": {
+                "0": 1,
+                "100": 0.5,
+                "200": 0.5
+            },
             "use_abs_param": true,
             "max_iters": 5000,
             "optimizer_name": "sgd",
@@ -21,15 +25,6 @@
             "cnvg_window_size": 200,
             "iters_per_printout": 200,
             "iters_per_trackvals": 10
-        }
-    },
-    "schedules": {
-        "varying_schedules": false,
-        "schedules": {
-            "lcp_num_schedule": {
-                "iters": null,
-                "lcp_nums": null
-            }
         }
     },
     "trackers": [

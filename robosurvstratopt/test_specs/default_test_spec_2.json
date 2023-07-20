@@ -5,8 +5,10 @@
         "varying_optimizer_params": false,
         "params": {
             "num_init_Ps": 10,
-            "num_LCPs": 4,
-            "use_num_LCPs_schedule": false,
+            "num_init_LCPs": 4,
+            "num_LCPs_schedule": {
+                "0": 1
+            },
             "use_abs_param": true,
             "max_iters": 5000,
             "optimizer_name": "sgd",
@@ -14,8 +16,8 @@
             "lr_schedule_type": "piecewise",
             "lr_schedule_args": {
                 "500": 0.5,
-                "1000": 0.2,
-                "1500": 0.1 
+                "1000": 0.5,
+                "1500": 0.5 
             },
             "use_momentum": true,
             "mom_decay_rate": 0.99,
