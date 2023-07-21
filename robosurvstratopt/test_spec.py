@@ -5,7 +5,7 @@ import os
 class TestSpec:
     default_test_spec_filepath = os.getcwd() + "/TestSpecs/default_test_spec.json"
 
-    def __init__(self, test_spec_filepath=None, test_spec_name=None, num_tests=None, optimizer_params=None, schedules=None, trackers=None, graph_names=None, taus=None, graph_codes=None):
+    def __init__(self, test_spec_filepath=None, test_spec_name=None, num_tests=None, optimizer_params=None, trackers=None, graph_names=None, taus=None, graph_codes=None):
         if test_spec_filepath != None:
             if os.path.exists(test_spec_filepath):
                 # instantiate test_spec object from JSON file:
@@ -15,18 +15,16 @@ class TestSpec:
                     self.test_spec_name = test_spec_dict["test_spec_name"]
                     self.num_tests = test_spec_dict["num_tests"]
                     self.optimizer_params = test_spec_dict["optimizer_params"]
-                    self.schedules = test_spec_dict["schedules"]
                     self.trackers = test_spec_dict["trackers"]
                     self.graph_names = test_spec_dict["graph_names"]
                     self.taus = test_spec_dict["taus"]
                     self.graph_codes = test_spec_dict["graph_codes"]
             else:
                 raise ValueError("Test specification file was not found at provided path.")
-        elif all(arg is not None for arg in (test_spec_name, num_tests, optimizer_params, schedules, trackers, graph_names, taus, graph_codes)): 
+        elif all(arg is not None for arg in (test_spec_name, num_tests, optimizer_params, trackers, graph_names, taus, graph_codes)): 
             self.test_spec_name = test_spec_name
             self.num_tests = num_tests
             self.optimizer_params = optimizer_params
-            self.schedules = schedules
             self.trackers = trackers
             self.graph_names = graph_names
             self.taus = taus
@@ -40,7 +38,6 @@ class TestSpec:
                 self.test_spec_name = default_test_spec_dict["test_spec_name"]
                 self.num_tests = default_test_spec_dict["num_tests"]
                 self.optimizer_params = default_test_spec_dict["optimizer_params"]
-                self.schedules = default_test_spec_dict["schedules"]
                 self.trackers = default_test_spec_dict["trackers"]
                 self.graph_names = default_test_spec_dict["graph_names"]
                 self.taus = default_test_spec_dict["taus"]
@@ -58,7 +55,7 @@ class TestSpec:
             json_file.write(json_string)
 
     def validate_test_spec(self):
-        required_fields = ["test_spec_name", "num_tests", "optimizer_params", "schedules", "trackers", "graph_names", "taus", "graph_codes"]
+        required_fields = ["test_spec_name", "num_tests", "optimizer_params", "trackers", "graph_names", "taus", "graph_codes"]
         missing_fields = []
         complete_fields = True
         for field in required_fields:
@@ -73,10 +70,4 @@ class TestSpec:
             raise ValueError("Test specification must have num_tests match the number of graph names, graph codes, and taus.")
         if self.optimizer_params["varying_optimizer_params"]:
             if any("test" + str(tnum + 1) not in self.optimizer_params.keys() for tnum in range(self.num_tests)):
-                raise ValueError("If using varying optimizer params, must provide one set of params for each test, see varying_params_test_spec_example.json for required format.")
-        if self.schedules["varying_schedules"]:
-            if any("test" + str(tnum + 1) not in self.schedules.keys() for tnum in range(self.num_tests)):
-                raise ValueError("If using varying schedules, must provide one set of schedules for each test, see varying_params_test_spec_example.json for required format.")
-        
-        
-
+                raise ValueError("If using varying optimizer params, must provide one set of params for each test, see varying_params_test_spec_example.json for required format.")        

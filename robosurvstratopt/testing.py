@@ -4,11 +4,13 @@ import os
 import time
 
 import numpy as np
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 import graph_gen as gg
 import strat_comp as scj
+import strat_opt as soo
 import strat_viz as sv
 
 def NUDEL_FHT_TESTS(test_grid=True, test_star=True, test_JIT=True):
@@ -246,8 +248,18 @@ if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
     # NUDEL_FHT_TESTS()
     # HOLY_GRID_TESTS()
-    F0_REQ_TESTS()
+    # F0_REQ_TESTS()
     # CSV_RW_TEST()
     # GET_LEAF_CP_TEST()
     # COMPARE_SPD_SPCP_TAUCP()
-
+    n = 3
+    tau = 2
+    A = jnp.ones([n,n])
+    num_init_Ps = 1
+    max_iters = 1000
+    # print(scj.init_rand_Ps(A, num_init_Ps))
+    # soo.test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
+    P = scj.init_rand_Ps(A, num_init_Ps)
+    print(P)
+    print(scj.loss_MHT(P, A))
+    print(scj.compute_MHT(P))
