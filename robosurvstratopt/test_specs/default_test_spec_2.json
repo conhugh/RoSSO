@@ -7,16 +7,18 @@
             "num_init_Ps": 10,
             "num_init_LCPs": 4,
             "num_LCPs_schedule": {
-                "0": 1,
-                "100": 0.5,
-                "200": 0.5
+                "0": 1
             },
             "use_abs_param": true,
             "max_iters": 5000,
             "optimizer_name": "sgd",
             "nominal_learning_rate": 0.01,
-            "lr_schedule_type": "constant",
-            "lr_schedule_args": null,
+            "lr_schedule_type": "piecewise",
+            "lr_schedule_args": {
+                "500": 0.5,
+                "1000": 0.5,
+                "1500": 0.5 
+            },
             "use_momentum": true,
             "mom_decay_rate": 0.99,
             "use_nesterov": true,
@@ -25,6 +27,15 @@
             "cnvg_window_size": 200,
             "iters_per_printout": 200,
             "iters_per_trackvals": 10
+        }
+    },
+    "schedules": {
+        "varying_schedules": false,
+        "schedules": {
+            "lcp_num_schedule": {
+                "iters": null,
+                "lcp_nums": null
+            }
         }
     },
     "trackers": [

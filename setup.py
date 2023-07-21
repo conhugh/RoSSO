@@ -15,7 +15,7 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/conhugh/RoboSurvStratOpt',
-    packages=['src'],
+    packages=['robosurvstratopt'],
     install_requires=requirements,
     classifiers=[
         'Development Status :: 3 - Alpha',
