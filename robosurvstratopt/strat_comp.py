@@ -224,6 +224,29 @@ def comp_MHT_grad(Q, A, use_abs_param=True):
     return grad
 
 ############################################################
+# Weighted Mean Hitting Time formulation
+############################################################
+@jit
+def compute_weighted_MHT(P,W,pi):
+    n = P.shape[0]
+    M = compute_MHT(P)
+    sclr = jnp.matmul(pi,jnp.matmul(P*W,jnp.ones((n,))))
+    return sclr*M
+
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def loss_weighted_MHT(Q, A, W, pi, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    M = compute_weighted_MHT(P,W,pi)
+    return M
+
+# Autodiff parametrized loss function
+_comp_weighted_MHT_grads = jacrev(loss_weighted_MHT)
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param=True):
+    grad = _comp_weighted_MHT_grads(Q, A, W, pi, use_abs_param)
+    return grad
+
+############################################################
 # Auxiliary strategy analysis functions below
 ############################################################
 
