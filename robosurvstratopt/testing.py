@@ -255,11 +255,15 @@ if __name__ == '__main__':
     n = 3
     tau = 2
     A = jnp.ones([n,n])
+    W = jnp.ones([n,n])
+    lower_bound = 0.0
+    upper_bound = 1.0
+    pi = jax.random.uniform(key=jax.random.PRNGKey(10), shape=(1, n), minval=lower_bound, maxval=upper_bound)
     num_init_Ps = 1
     max_iters = 1000
     # print(scj.init_rand_Ps(A, num_init_Ps))
     # soo.test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
     P = scj.init_rand_Ps(A, num_init_Ps)
     print(P)
-    print(scj.loss_MHT(P, A))
-    print(scj.compute_MHT(P))
+    print(scj.loss_weighted_MHT(P, A, W, pi))
+    print(scj.compute_weighted_MHT(P,W,pi))
