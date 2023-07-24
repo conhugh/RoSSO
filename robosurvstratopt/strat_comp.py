@@ -230,7 +230,7 @@ def comp_MHT_grad(Q, A, use_abs_param=True):
 def compute_weighted_MHT(P,W,pi):
     n = P.shape[0]
     M = compute_MHT(P)
-    sclr = jnp.matmul(pi,jnp.matmul(P*W,jnp.ones((n,))))
+    sclr = jnp.dot(pi,jnp.dot(jnp.squeeze(P)*W,jnp.ones((n,))))
     return sclr*M
 
 @functools.partial(jit, static_argnames=['use_abs_param'])
