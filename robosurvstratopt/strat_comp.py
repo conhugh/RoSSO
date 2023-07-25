@@ -145,10 +145,10 @@ def loss_LCP(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
     return jnp.mean(lcps)
 
 # Autodiff parametrized loss function
-_comp_LCP_grads = jacrev(loss_LCP)
+_comp_LCP_grad = jacrev(loss_LCP)
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
 def comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
-    grad = _comp_LCP_grads(Q, A, F0, tau, num_LCPs, use_abs_param) 
+    grad = _comp_LCP_grad(Q, A, F0, tau, num_LCPs, use_abs_param) 
     return grad
 
 ############################################################
@@ -197,8 +197,82 @@ def compute_weighted_FHT_probs_vec(P, W, w_max, tau):
                 
         F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
         
-    F_v = F_vecs[:, w_max:]
-    return F_v
+    return F_vecs[:, w_max:]
+
+@functools.partial(jit, static_argnames=['w_max', 'tau'])
+def compute_weighted_cap_probs(P, W, w_max, tau):
+    """
+    Compute Capture Probability Matrix.
+
+    Parameters
+    ----------
+    P : jaxlib.xla_extension.DeviceArray 
+        Transition probability matrix.
+    F0 : jaxlib.xla_extension.DeviceArray 
+        Placeholder to be populated with FHT Probability matrices. 
+    tau : int
+        Intruder's attack duration. 
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Capture Probability matrix. 
+    
+    See Also
+    --------
+    compute_FHT_probs
+    """
+    F_vecs = compute_weighted_FHT_probs_vec(P, W, w_max, tau)
+    cap_probs = jnp.sum(F_vecs, axis=1)
+    return cap_probs
+
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs'])
+def compute_weighted_LCPs(P, W, w_max, tau, num_LCPs=1):
+    """
+    Compute Lowest `num_LCPs` Capture Probabilities.
+
+    Parameters
+    ----------
+    P : jaxlib.xla_extension.DeviceArray 
+        Transition probability matrix. 
+    F0 : jaxlib.xla_extension.DeviceArray 
+        Placeholder to be populated with FHT Probability matrices.
+    tau : int
+        Intruder's attack duration. 
+    num_LCPs : int
+        Number of the lowest capture probabilities to compute. 
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Set of `num_LCPs` lowest capture probabilities. 
+    
+    See Also
+    --------
+    compute_cap_probs
+    """
+    cap_probs = compute_weighted_cap_probs(P, W, w_max, tau)
+    if num_LCPs == 1:
+        lcps = jnp.min(cap_probs)
+    elif num_LCPs > 1:
+        lcps = jnp.sort(cap_probs)[0:num_LCPs]
+    else:
+        raise ValueError("Invalid num_LCPs specified!")
+    return lcps
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+def loss_weighted_LCP(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_weighted_LCPs(P, W, w_max, tau, num_LCPs)
+    return jnp.mean(lcps)
+
+# Autodiff parametrized loss function
+_comp_weighted_LCP_grad = jacrev(loss_weighted_LCP)
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+def comp_avg_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+    grad = _comp_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs, use_abs_param)
+    return grad
 
 ############################################################
 # Mean Hitting Time formulation
@@ -217,10 +291,10 @@ def loss_MHT(Q, A, use_abs_param=True):
     return M
 
 # Autodiff parametrized loss function
-_comp_MHT_grads = jacrev(loss_MHT)
+_comp_MHT_grad = jacrev(loss_MHT)
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_MHT_grad(Q, A, use_abs_param=True):
-    grad = _comp_MHT_grads(Q, A, use_abs_param) 
+    grad = _comp_MHT_grad(Q, A, use_abs_param) 
     return grad
 
 ############################################################
@@ -240,11 +314,37 @@ def loss_weighted_MHT(Q, A, W, pi, use_abs_param=True):
     return M
 
 # Autodiff parametrized loss function
-_comp_weighted_MHT_grads = jacrev(loss_weighted_MHT)
+_comp_weighted_MHT_grad = jacrev(loss_weighted_MHT)
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param=True):
-    grad = _comp_weighted_MHT_grads(Q, A, W, pi, use_abs_param)
+    grad = _comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param)
     return grad
+
+############################################################
+# Entropy Rate formulation
+############################################################
+@jit
+def compute_ER(P, pi):
+    entropy_rate_matrix = P*jnp.log(P)
+    entropy_rate = -jnp.dot(pi,jnp.sum(entropy_rate_matrix, axis=0))
+    return entropy_rate
+
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def loss_ER(Q, A, pi, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    loss = compute_ER(P, pi)
+    return loss
+
+# Autodiff parametrized loss function
+_comp_ER_grad = jacrev(loss_ER)
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_ER_grad(Q, A, pi, use_abs_param=True):
+    grad = _comp_ER_grad(Q, A, pi, use_abs_param)
+    return grad
+
+############################################################
+# Return-Time Entropy formulation
+############################################################
 
 ############################################################
 # Auxiliary strategy analysis functions below

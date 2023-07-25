@@ -256,6 +256,7 @@ if __name__ == '__main__':
     tau = 2
     A = jnp.ones([n,n])
     W = jnp.ones([n,n])
+    w_max = 1
     lower_bound = 0.0
     upper_bound = 1.0
     pi = jax.random.uniform(key=jax.random.PRNGKey(10), shape=(1, n), minval=lower_bound, maxval=upper_bound)
@@ -264,6 +265,13 @@ if __name__ == '__main__':
     # print(scj.init_rand_Ps(A, num_init_Ps))
     # soo.test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
     P = scj.init_rand_Ps(A, num_init_Ps)
-    print(P)
-    print(scj.loss_weighted_MHT(P, A, W, pi))
-    print(scj.compute_weighted_MHT(P,W,pi))
+    P = jnp.squeeze(P)
+    # print(scj.compute_weighted_FHT_probs_vec(P, W, w_max, tau))
+    # print(scj.compute_weighted_cap_probs(P, W, w_max, tau))
+    # print(scj.compute_weighted_LCPs(P, W, w_max, tau))
+    # print(scj.loss_weighted_LCP(P, A, W, w_max, tau))
+    # print(scj.comp_avg_weighted_LCP_grad(P, A, W, w_max, tau))
+
+    print(scj.compute_ER(P, pi))
+    print(scj.loss_ER(P, A, pi))
+    print(scj.comp_ER_grad(P, A, pi))
