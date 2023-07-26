@@ -255,23 +255,32 @@ if __name__ == '__main__':
     n = 3
     tau = 2
     A = jnp.ones([n,n])
-    W = jnp.ones([n,n])
-    w_max = 1
     lower_bound = 0.0
     upper_bound = 1.0
     pi = jax.random.uniform(key=jax.random.PRNGKey(10), shape=(1, n), minval=lower_bound, maxval=upper_bound)
+    lower_bound = 1
+    upper_bound = 3
+    W = jax.random.randint(key=jax.random.PRNGKey(10), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
+    print(W)
+    w_max = int(jnp.max(W))
     num_init_Ps = 1
     max_iters = 1000
-    # print(scj.init_rand_Ps(A, num_init_Ps))
-    # soo.test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
+    eta = 0.2
+
     P = scj.init_rand_Ps(A, num_init_Ps)
     P = jnp.squeeze(P)
-    # print(scj.compute_weighted_FHT_probs_vec(P, W, w_max, tau))
-    # print(scj.compute_weighted_cap_probs(P, W, w_max, tau))
-    # print(scj.compute_weighted_LCPs(P, W, w_max, tau))
-    # print(scj.loss_weighted_LCP(P, A, W, w_max, tau))
-    # print(scj.comp_avg_weighted_LCP_grad(P, A, W, w_max, tau))
+    print(P)
 
-    print(scj.compute_ER(P, pi))
-    print(scj.loss_ER(P, A, pi))
-    print(scj.comp_ER_grad(P, A, pi))
+    eigenvalues, eigenvectors = jnp.linalg.eig(P)
+    index_largest_magnitude = jnp.argmax(jnp.abs(eigenvalues))
+    eigenvector_largest_magnitude = jnp.real(eigenvectors[:, index_largest_magnitude])
+    pi = eigenvector_largest_magnitude / jnp.sum(eigenvector_largest_magnitude)
+    print(pi)
+
+    N_eta = int(jnp.ceil(w_max/(eta*jnp.min(pi))) - 1)
+    print(N_eta)
+
+    # print(scj.compute_weighted_RTE(P, W, w_max, pi, N_eta))
+    # print(scj.loss_weighted_RTE(P, A, W, w_max, pi, N_eta))
+    # print(scj.comp_weighted_RTE_grad(P, A, W, w_max, pi, N_eta))
+    print(scj.comp_RTE_grad(P, A, pi, N_eta))

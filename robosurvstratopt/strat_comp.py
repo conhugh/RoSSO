@@ -326,7 +326,7 @@ def comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param=True):
 @jit
 def compute_ER(P, pi):
     entropy_rate_matrix = P*jnp.log(P)
-    entropy_rate = -jnp.dot(pi,jnp.sum(entropy_rate_matrix, axis=0))
+    entropy_rate = -jnp.dot(pi,jnp.sum(entropy_rate_matrix, axis=1))
     return entropy_rate
 
 @functools.partial(jit, static_argnames=['use_abs_param'])
@@ -345,6 +345,73 @@ def comp_ER_grad(Q, A, pi, use_abs_param=True):
 ############################################################
 # Return-Time Entropy formulation
 ############################################################
+@functools.partial(jit, static_argnames=['N_eta'])
+def compute_RTE(P, pi, N_eta):
+    n = jnp.shape(P)[0]
+    F_vecs = jnp.zeros((n**2, N_eta))
+    F_vecs = F_vecs.at[:, 0].set(jnp.ravel(P, order='F'))
+    I_n = jnp.identity(n)
+    I_n2 = jnp.identity(n**2)
+    for k in range(1, N_eta):
+        big_mat = jnp.matmul(jnp.kron(I_n, P), I_n2 - jnp.diag(jnp.ravel(I_n, order='F')))
+        vec = jnp.dot(big_mat, F_vecs[:, k-1])
+        F_vecs = F_vecs.at[:, k].set(vec)
+    F_vecs_sum = jnp.sum(F_vecs*jnp.log(F_vecs), axis=1)
+    F_sum_mat = jnp.reshape(F_vecs_sum, (n, n), order='F')
+    return -jnp.dot(pi, jnp.diagonal(F_sum_mat))
+
+@functools.partial(jit, static_argnames=['N_eta', 'use_abs_param'])
+def loss_RTE(Q, A, pi, N_eta, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    loss = compute_RTE(P, pi, N_eta)
+    return loss
+
+# Autodiff parametrized loss function
+_comp_RTE_grad = jacrev(loss_RTE)
+@functools.partial(jit, static_argnames=['N_eta', 'use_abs_param'])
+def comp_RTE_grad(Q, A, pi, N_eta, use_abs_param=True):
+    grad = _comp_RTE_grad(Q, A, pi, N_eta, use_abs_param)
+    return grad
+
+############################################################
+# Weighted Return-Time Entropy formulation
+############################################################
+@functools.partial(jit, static_argnames=['w_max', 'N_eta'])
+def compute_weighted_RTE(P, W, w_max, pi, N_eta):
+    n = jnp.shape(P)[0]
+    F_vecs = jnp.zeros((n**2, N_eta + w_max))
+    I = jnp.identity(n)
+    for k in range(N_eta):
+        indic_mat = ((k + 1)*jnp.ones((n, n)) == W)
+        P_direct = P*indic_mat
+        P_direct_vec = jnp.ravel(P_direct, order='F')
+
+        multi_step_probs = jnp.zeros(n**2)
+        for i in range(n):
+            for j in range(n):
+                E_j = jnp.diag(jnp.ones(n) - I[:, j])
+                E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
+                multi_step_probs = multi_step_probs + P[i, j]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int)])
+
+        F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
+
+    F_vecs = F_vecs[:, w_max:]
+    F_vecs_sum = jnp.sum(F_vecs*jnp.log(jnp.where(F_vecs == 0, 1, F_vecs)), axis=1)
+    F_sum_mat = jnp.reshape(F_vecs_sum, (n, n), order='F')
+    return -jnp.dot(pi, jnp.diagonal(F_sum_mat))
+
+@functools.partial(jit, static_argnames=['w_max', 'N_eta', 'use_abs_param'])
+def loss_weighted_RTE(Q, A, W, w_max, pi, N_eta, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    loss = compute_weighted_RTE(P, W, w_max, pi, N_eta)
+    return loss
+
+# Autodiff parametrized loss function
+_comp_weighted_RTE_grad = jacrev(loss_weighted_RTE)
+@functools.partial(jit, static_argnames=['w_max', 'N_eta', 'use_abs_param'])
+def comp_weighted_RTE_grad(Q, A, W, w_max, pi, N_eta, use_abs_param=True):
+    grad = _comp_weighted_RTE_grad(Q, A, W, w_max, pi, N_eta, use_abs_param)
+    return grad
 
 ############################################################
 # Auxiliary strategy analysis functions below
