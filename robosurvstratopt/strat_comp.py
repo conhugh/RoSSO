@@ -1,5 +1,6 @@
 # Computation of quantities relevant to optimization of stochastic surveillance strategies
 import functools
+import itertools
 
 import jax
 from jax import grad, jacrev, jit
@@ -318,6 +319,45 @@ _comp_weighted_MHT_grad = jacrev(loss_weighted_MHT)
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param=True):
     grad = _comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param)
+    return grad
+
+############################################################
+# Multi-Agent Mean Hitting Time formulation
+############################################################
+@jit
+def compute_multi_MHT(Ps):
+    n = Ps.shape[0]
+    N = Ps.shape[2]
+    big_I = jnp.identity(n**(N+1))
+
+    mat = jnp.identity(n)
+    for i in range(N):
+        mat = jnp.kron(mat, Ps[:, :, i])
+
+    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
+    jax_combinations = jnp.array(combinations)
+    last_entry = jax_combinations[:, -1]
+    other_entries = jax_combinations[:, :-1]
+    e = jnp.any(last_entry[:, None] == other_entries, axis=1).astype(jnp.int32)
+
+    big_mat = big_I - jnp.matmul(mat, big_I - jnp.diag(e))
+    M_vec = jnp.linalg.solve(big_mat, jnp.ones(n**(N+1)))
+    return jnp.reshape(M_vec, (n**N, n), order='F')
+
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def loss_multi_MHT(Qs, As, use_abs_param=True):
+    N = Qs.shape[2]
+    Ps = jnp.zeros_like(Qs)
+    for i in range(N):
+        P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
+        Ps = Ps.at[:, :, i].set(P)
+    return jnp.mean(compute_multi_MHT(Ps))
+
+# Autodiff parametrized loss function
+_comp_multi_MHT_grad = jacrev(loss_multi_MHT)
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_multi_MHT_grad(Qs, As, use_abs_param=True):
+    grad = _comp_multi_MHT_grad(Qs, As, use_abs_param) 
     return grad
 
 ############################################################
