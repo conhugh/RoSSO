@@ -226,6 +226,57 @@ def comp_avg_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=Tr
     return grad
 
 ############################################################
+# Multi-Agent Stackelberg formulation
+############################################################
+@functools.partial(jit, static_argnames=['tau'])
+def compute_multi_cap_probs(Ps, F0s, tau):
+    n = jnp.shape(Ps)[0]
+    N = Ps.shape[2]
+    for r in range(N):
+        F0s = F0s.at[:, :, 0, r].set(Ps[:, :, r])
+        for i in range(1, tau):
+            F0s = F0s.at[:, :, i, r].set(jnp.matmul(Ps, (F0s[:, :, i - 1, r] - jnp.diag(jnp.diag(F0s[:, :, i - 1, r])))))
+        indiv_cap_probs = jnp.sum(F0s, axis=2)
+
+    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
+    jax_combinations = jnp.array(combinations)
+    cap_probs = jnp.zeros(len(jax_combinations))
+    for i in range(len(jax_combinations)):
+        idx_vec = jax_combinations[i]
+        not_cap_prob = jnp.prod(1 - indiv_cap_probs[idx_vec[:-1], idx_vec[-1], jnp.arange(N)])
+        cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
+
+    return jnp.reshape(cap_probs, (n**N, n), order='F')
+
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
+def compute_multi_LCPs(Ps, F0s, tau, num_LCPs=1):
+    cap_probs = compute_multi_cap_probs(Ps, F0s, tau)
+    if num_LCPs == 1:
+        lcps = jnp.min(cap_probs)
+    elif num_LCPs > 1:
+        lcps = jnp.sort(cap_probs)[0:num_LCPs]
+    else:
+        raise ValueError("Invalid num_LCPs specified!")
+    return lcps
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
+def loss_multi_LCP(Qs, As, F0s, tau, num_LCPs=1, use_abs_param=True):
+    N = Qs.shape[2]
+    Ps = jnp.zeros_like(Qs)
+    for i in range(N):
+        P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
+        Ps = Ps.at[:, :, i].set(P)
+    return jnp.mean(compute_multi_LCPs(Ps, F0s, tau, num_LCPs))
+
+# Autodiff parametrized loss function
+_comp_multi_LCP_grad = jacrev(loss_multi_LCP)
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
+def comp_avg_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs=1, use_abs_param=True):
+    grad = _comp_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs, use_abs_param)
+    return grad
+
+############################################################
 # Mean Hitting Time formulation
 ############################################################
 @jit
