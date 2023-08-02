@@ -340,12 +340,12 @@ def run_optimizer(P0, A, F0, tau, opt_params, trackers):
         # check for convergence:
         if opt_params["cnvg_test_mode"] == "P_update":
             converged, cnvg_test_vals = cnvg_check(iter, abs_P_diff_sum, cnvg_test_vals, opt_params)
-        # elif opt_params["cnvg_test_mode"] == "MCP_diff":
-        #     num_LCPs = 1
-        #     MCP =  strat_comp.compute_LCPs(P, F0, tau, num_LCPs)
-        #     MCP_diff = MCP - old_MCP
-        #     converged, cnvg_test_vals = cnvg_check(iter, MCP_diff, cnvg_test_vals, opt_params)
-        #     old_MCP = MCP
+        elif opt_params["cnvg_test_mode"] == "MCP_diff":
+            num_LCPs = 1
+            MCP =  strat_comp.compute_LCPs(P, F0, tau, num_LCPs)
+            MCP_diff = MCP - old_MCP
+            converged, cnvg_test_vals = cnvg_check(iter, MCP_diff, cnvg_test_vals, opt_params)
+            old_MCP = MCP
         # terminate optimization if maximum iteration count reached:
         if iter == opt_params["max_iters"]:
             converged = True
