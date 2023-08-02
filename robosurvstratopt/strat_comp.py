@@ -1,5 +1,6 @@
 # Computation of quantities relevant to optimization of stochastic surveillance strategies
 import functools
+import itertools
 
 import jax
 from jax import grad, jacrev, jit
@@ -32,6 +33,8 @@ def init_rand_Ps(A, num, seed=0):
         P0 = A*jax.random.uniform(subkey, A_shape)
         P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0) 
         initPs = initPs.at[:, : , k].set(P0)
+    if num == 1:
+        initPs = jnp.squeeze(initPs)
     return initPs
 
 # Parametrization of the P matrix
@@ -48,33 +51,6 @@ def comp_P_param(Q, A, use_abs_param=True):
 ############################################################
 # Stackelberg formulation
 ############################################################
-@functools.partial(jit, static_argnames=['tau'])
-def compute_FHT_probs(P, F0, tau):
-    """
-    Compute First Hitting Time (FHT) Probability matrices.
-
-    To compute the Capture Probability Matrix, we must sum the FHT
-    Probability matrices from 1 up to `tau` time steps. 
-
-    Parameters
-    ----------
-    P : jaxlib.xla_extension.DeviceArray
-        Transition probability matrix. 
-    F0 : jaxlib.xla_extension.DeviceArray
-        Placeholder to be populated with FHT Probability matrices.
-    tau : int
-        Intruder's attack duration. 
-    
-    Returns
-    -------
-    jaxlib.xla_extension.DeviceArray
-        Array of `tau` distinct First Hitting Time Probability matrices. 
-    """
-    F0 = F0.at[:, :, 0].set(P)
-    for i in range(1, tau):
-        F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
-    return F0
-
 @functools.partial(jit, static_argnames=['tau'])
 def compute_cap_probs(P, F0, tau):
     """
@@ -98,8 +74,10 @@ def compute_cap_probs(P, F0, tau):
     --------
     compute_FHT_probs
     """
-    F = compute_FHT_probs(P, F0, tau)
-    cap_probs = jnp.sum(F, axis=2)
+    F0 = F0.at[:, :, 0].set(P)
+    for i in range(1, tau):
+        F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
+    cap_probs = jnp.sum(F0, axis=2)
     return cap_probs
 
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
@@ -145,39 +123,37 @@ def loss_LCP(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
     return jnp.mean(lcps)
 
 # Autodiff parametrized loss function
-_comp_LCP_grads = jacrev(loss_LCP)
+_comp_LCP_grad = jacrev(loss_LCP)
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
 def comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
-    grad = _comp_LCP_grads(Q, A, F0, tau, num_LCPs, use_abs_param) 
+    grad = _comp_LCP_grad(Q, A, F0, tau, num_LCPs, use_abs_param) 
     return grad
 
 ############################################################
 # Weighted Stackelberg formulation
 ############################################################
-@functools.partial(jit, static_argnames=['w_max', 'tau']) 
-def compute_weighted_FHT_probs_vec(P, W, w_max, tau):
+@functools.partial(jit, static_argnames=['w_max', 'tau'])
+def compute_weighted_cap_probs(P, W, w_max, tau):
     """
-    Compute First Hitting Time (FHT) Probability matrices.
-
-    To compute the Capture Probability Matrix, we must sum the FHT
-    Probability matrices from 1 up to `tau` time steps. This function
-    computes these matrices in the case where the environment graph
-    has integer (as opposed to unit) edge lengths. 
+    Compute Capture Probability Matrix.
 
     Parameters
     ----------
-    P : jaxlib.xla_extension.DeviceArray
-        Transition probability matrix. 
-    W : jaxlib.xla_extension.DeviceArray
-        Integer-valued travel time matrix. 
-    w_max : 
+    P : jaxlib.xla_extension.DeviceArray 
+        Transition probability matrix.
+    F0 : jaxlib.xla_extension.DeviceArray 
+        Placeholder to be populated with FHT Probability matrices. 
     tau : int
         Intruder's attack duration. 
     
     Returns
     -------
     jaxlib.xla_extension.DeviceArray
-        Array of `tau` distinct First Hitting Time Probability matrices. 
+        Capture Probability matrix. 
+    
+    See Also
+    --------
+    compute_FHT_probs
     """
     n = jnp.shape(P)[0]
     F_vecs = jnp.zeros((n**2, tau + w_max))
@@ -196,16 +172,116 @@ def compute_weighted_FHT_probs_vec(P, W, w_max, tau):
                 multi_step_probs = multi_step_probs + P[i, j]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int)])
                 
         F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
-        
-    F_v = F_vecs[:, w_max:]
-    return F_v
+
+    F_vecs = F_vecs[:, w_max:]
+    cap_probs = jnp.sum(F_vecs, axis=1)
+    return cap_probs
+
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs'])
+def compute_weighted_LCPs(P, W, w_max, tau, num_LCPs=1):
+    """
+    Compute Lowest `num_LCPs` Capture Probabilities.
+
+    Parameters
+    ----------
+    P : jaxlib.xla_extension.DeviceArray 
+        Transition probability matrix. 
+    F0 : jaxlib.xla_extension.DeviceArray 
+        Placeholder to be populated with FHT Probability matrices.
+    tau : int
+        Intruder's attack duration. 
+    num_LCPs : int
+        Number of the lowest capture probabilities to compute. 
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Set of `num_LCPs` lowest capture probabilities. 
+    
+    See Also
+    --------
+    compute_cap_probs
+    """
+    cap_probs = compute_weighted_cap_probs(P, W, w_max, tau)
+    if num_LCPs == 1:
+        lcps = jnp.min(cap_probs)
+    elif num_LCPs > 1:
+        lcps = jnp.sort(cap_probs)[0:num_LCPs]
+    else:
+        raise ValueError("Invalid num_LCPs specified!")
+    return lcps
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+def loss_weighted_LCP(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_weighted_LCPs(P, W, w_max, tau, num_LCPs)
+    return jnp.mean(lcps)
+
+# Autodiff parametrized loss function
+_comp_weighted_LCP_grad = jacrev(loss_weighted_LCP)
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+def comp_avg_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+    grad = _comp_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs, use_abs_param)
+    return grad
+
+############################################################
+# Multi-Agent Stackelberg formulation
+############################################################
+@functools.partial(jit, static_argnames=['tau'])
+def compute_multi_cap_probs(Ps, F0s, tau):
+    n = jnp.shape(Ps)[0]
+    N = Ps.shape[2]
+    for r in range(N):
+        F0s = F0s.at[:, :, 0, r].set(Ps[:, :, r])
+        for i in range(1, tau):
+            F0s = F0s.at[:, :, i, r].set(jnp.matmul(Ps, (F0s[:, :, i - 1, r] - jnp.diag(jnp.diag(F0s[:, :, i - 1, r])))))
+        indiv_cap_probs = jnp.sum(F0s, axis=2)
+
+    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
+    jax_combinations = jnp.array(combinations)
+    cap_probs = jnp.zeros(len(jax_combinations))
+    for i in range(len(jax_combinations)):
+        idx_vec = jax_combinations[i]
+        not_cap_prob = jnp.prod(1 - indiv_cap_probs[idx_vec[:-1], idx_vec[-1], jnp.arange(N)])
+        cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
+
+    return jnp.reshape(cap_probs, (n**N, n), order='F')
+
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
+def compute_multi_LCPs(Ps, F0s, tau, num_LCPs=1):
+    cap_probs = compute_multi_cap_probs(Ps, F0s, tau)
+    if num_LCPs == 1:
+        lcps = jnp.min(cap_probs)
+    elif num_LCPs > 1:
+        lcps = jnp.sort(cap_probs)[0:num_LCPs]
+    else:
+        raise ValueError("Invalid num_LCPs specified!")
+    return lcps
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
+def loss_multi_LCP(Qs, As, F0s, tau, num_LCPs=1, use_abs_param=True):
+    N = Qs.shape[2]
+    Ps = jnp.zeros_like(Qs)
+    for i in range(N):
+        P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
+        Ps = Ps.at[:, :, i].set(P)
+    return jnp.mean(compute_multi_LCPs(Ps, F0s, tau, num_LCPs))
+
+# Autodiff parametrized loss function
+_comp_multi_LCP_grad = jacrev(loss_multi_LCP)
+@functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
+def comp_avg_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs=1, use_abs_param=True):
+    grad = _comp_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs, use_abs_param)
+    return grad
 
 ############################################################
 # Mean Hitting Time formulation
 ############################################################
 @jit
 def compute_MHT(P):
-    eigs = jnp.linalg.eigvals(jnp.squeeze(P))
+    eigs = jnp.linalg.eigvals(P)
     sorted_eigs = eigs[jnp.argsort(jnp.abs(eigs))]
     M = 1 + jnp.sum(1 / (1 - sorted_eigs[:-1]))
     return jnp.real(M)
@@ -217,16 +293,170 @@ def loss_MHT(Q, A, use_abs_param=True):
     return M
 
 # Autodiff parametrized loss function
-_comp_MHT_grads = jacrev(loss_MHT)
+_comp_MHT_grad = jacrev(loss_MHT)
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_MHT_grad(Q, A, use_abs_param=True):
-    grad = _comp_MHT_grads(Q, A, use_abs_param) 
+    grad = _comp_MHT_grad(Q, A, use_abs_param) 
+    return grad
+
+############################################################
+# Weighted Mean Hitting Time formulation
+############################################################
+@jit
+def compute_weighted_MHT(P,W,pi):
+    n = P.shape[0]
+    M = compute_MHT(P)
+    sclr = jnp.dot(pi,jnp.dot(P*W,jnp.ones((n,))))
+    return jnp.squeeze(sclr*M)
+
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def loss_weighted_MHT(Q, A, W, pi, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    M = compute_weighted_MHT(P,W,pi)
+    return M
+
+# Autodiff parametrized loss function
+_comp_weighted_MHT_grad = jacrev(loss_weighted_MHT)
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param=True):
+    grad = _comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param)
+    return grad
+
+############################################################
+# Multi-Agent Mean Hitting Time formulation
+############################################################
+@jit
+def compute_multi_MHT(Ps):
+    n = Ps.shape[0]
+    N = Ps.shape[2]
+    big_I = jnp.identity(n**(N+1))
+
+    mat = jnp.identity(n)
+    for i in range(N):
+        mat = jnp.kron(mat, Ps[:, :, i])
+
+    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
+    jax_combinations = jnp.array(combinations)
+    last_entry = jax_combinations[:, -1]
+    other_entries = jax_combinations[:, :-1]
+    e = jnp.any(last_entry[:, None] == other_entries, axis=1).astype(jnp.int32)
+
+    big_mat = big_I - jnp.matmul(mat, big_I - jnp.diag(e))
+    M_vec = jnp.linalg.solve(big_mat, jnp.ones(n**(N+1)))
+    return jnp.reshape(M_vec, (n**N, n), order='F')
+
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def loss_multi_MHT(Qs, As, use_abs_param=True):
+    N = Qs.shape[2]
+    Ps = jnp.zeros_like(Qs)
+    for i in range(N):
+        P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
+        Ps = Ps.at[:, :, i].set(P)
+    return jnp.mean(compute_multi_MHT(Ps))
+
+# Autodiff parametrized loss function
+_comp_multi_MHT_grad = jacrev(loss_multi_MHT)
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_multi_MHT_grad(Qs, As, use_abs_param=True):
+    grad = _comp_multi_MHT_grad(Qs, As, use_abs_param) 
+    return grad
+
+############################################################
+# Entropy Rate formulation
+############################################################
+@jit
+def compute_ER(P, pi):
+    entropy_rate_matrix = P*jnp.log(P)
+    entropy_rate = -jnp.dot(pi,jnp.sum(entropy_rate_matrix, axis=1))
+    return jnp.squeeze(entropy_rate)
+
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def loss_ER(Q, A, pi, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    loss = compute_ER(P, pi)
+    return loss
+
+# Autodiff parametrized loss function
+_comp_ER_grad = jacrev(loss_ER)
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_ER_grad(Q, A, pi, use_abs_param=True):
+    grad = _comp_ER_grad(Q, A, pi, use_abs_param)
+    return grad
+
+############################################################
+# Return-Time Entropy formulation
+############################################################
+@functools.partial(jit, static_argnames=['N_eta'])
+def compute_RTE(P, pi, N_eta):
+    n = jnp.shape(P)[0]
+    F_vecs = jnp.zeros((n**2, N_eta))
+    F_vecs = F_vecs.at[:, 0].set(jnp.ravel(P, order='F'))
+    I_n = jnp.identity(n)
+    I_n2 = jnp.identity(n**2)
+    for k in range(1, N_eta):
+        big_mat = jnp.matmul(jnp.kron(I_n, P), I_n2 - jnp.diag(jnp.ravel(I_n, order='F')))
+        vec = jnp.dot(big_mat, F_vecs[:, k-1])
+        F_vecs = F_vecs.at[:, k].set(vec)
+    F_vecs_sum = jnp.sum(F_vecs*jnp.log(F_vecs), axis=1)
+    F_sum_mat = jnp.reshape(F_vecs_sum, (n, n), order='F')
+    return -jnp.squeeze(jnp.dot(pi, jnp.diagonal(F_sum_mat)))
+
+@functools.partial(jit, static_argnames=['N_eta', 'use_abs_param'])
+def loss_RTE(Q, A, pi, N_eta, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    loss = compute_RTE(P, pi, N_eta)
+    return loss
+
+# Autodiff parametrized loss function
+_comp_RTE_grad = jacrev(loss_RTE)
+@functools.partial(jit, static_argnames=['N_eta', 'use_abs_param'])
+def comp_RTE_grad(Q, A, pi, N_eta, use_abs_param=True):
+    grad = _comp_RTE_grad(Q, A, pi, N_eta, use_abs_param)
+    return grad
+
+############################################################
+# Weighted Return-Time Entropy formulation
+############################################################
+@functools.partial(jit, static_argnames=['w_max', 'N_eta'])
+def compute_weighted_RTE(P, W, w_max, pi, N_eta):
+    n = jnp.shape(P)[0]
+    F_vecs = jnp.zeros((n**2, N_eta + w_max))
+    I = jnp.identity(n)
+    for k in range(N_eta):
+        indic_mat = ((k + 1)*jnp.ones((n, n)) == W)
+        P_direct = P*indic_mat
+        P_direct_vec = jnp.ravel(P_direct, order='F')
+
+        multi_step_probs = jnp.zeros(n**2)
+        for i in range(n):
+            for j in range(n):
+                E_j = jnp.diag(jnp.ones(n) - I[:, j])
+                E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
+                multi_step_probs = multi_step_probs + P[i, j]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int)])
+
+        F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
+
+    F_vecs = F_vecs[:, w_max:]
+    F_vecs_sum = jnp.sum(F_vecs*jnp.log(jnp.where(F_vecs == 0, 1, F_vecs)), axis=1)
+    F_sum_mat = jnp.reshape(F_vecs_sum, (n, n), order='F')
+    return -jnp.squeeze(jnp.dot(pi, jnp.diagonal(F_sum_mat)))
+
+@functools.partial(jit, static_argnames=['w_max', 'N_eta', 'use_abs_param'])
+def loss_weighted_RTE(Q, A, W, w_max, pi, N_eta, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    loss = compute_weighted_RTE(P, W, w_max, pi, N_eta)
+    return loss
+
+# Autodiff parametrized loss function
+_comp_weighted_RTE_grad = jacrev(loss_weighted_RTE)
+@functools.partial(jit, static_argnames=['w_max', 'N_eta', 'use_abs_param'])
+def comp_weighted_RTE_grad(Q, A, W, w_max, pi, N_eta, use_abs_param=True):
+    grad = _comp_weighted_RTE_grad(Q, A, W, w_max, pi, N_eta, use_abs_param)
     return grad
 
 ############################################################
 # Auxiliary strategy analysis functions below
 ############################################################
-
 # @jit
 def compute_SPCPs(A, FHT_mats, node_pairs):
     """
