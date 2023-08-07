@@ -123,9 +123,15 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
             opt_params = test_spec.optimizer_params[test_name].copy()
         else:
             opt_params = test_spec.optimizer_params["params"].copy()
+        if opt_params["use_edge_weights"]:
+            W = jnp.array(test_spec.weight_matrices[test_name])
+            w_max = int(jnp.max(W))
+        else:
+            W = jnp.nan
+            w_max = jnp.nan
         print("-------- Working on Graph " + graph_name + " with tau = " + str(tau) + "----------")
         test_start_time = time.time()
-        times, iters, MCPs = run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, trackers)
+        times, iters, MCPs = run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, trackers)
         print("Running test number " + str(test_num) + " took " + str(time.time() - test_start_time) + " seconds to complete.")
         run_times.append(times)
         final_iters.append(iters)
@@ -135,7 +141,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
     if(opt_comparison):
         strat_viz.plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, final_MCPs)
 
-def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, trackers):
+def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and number of initial strategies.
 
@@ -195,7 +201,10 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, trackers):
         print("Optimizing with initial P matrix number " + str(k + 1) + "...")
         print("Using optimizer: " + opt_params["optimizer_name"])
         P0 = init_Ps[:, :, k]
-        init_grad = strat_comp.comp_avg_LCP_grad(P0, A, F0, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
+        if jnp.isnan(w_max):
+            init_grad = strat_comp.comp_avg_LCP_grad(P0, A, F0, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
+        else:
+            init_grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, W, w_max, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         lr_scale = jnp.max(jnp.abs(init_grad))
         lr = opt_params["nominal_learning_rate"]/lr_scale
         lr_scales.append(lr_scale)
@@ -203,7 +212,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, trackers):
         opt_params["scaled_learning_rate"] = lr
 
         start_time = time.time()
-        P, F, tracked_vals = run_optimizer(P0, A, F0, tau, opt_params, trackers)
+        P, F, tracked_vals = run_optimizer(P0, A, W, w_max, F0, tau, opt_params, trackers)
         cnvg_time = time.time() - start_time
         cnvg_times.append(cnvg_time)
         print("--- Optimization took: %s seconds ---" % (cnvg_time))
@@ -258,7 +267,7 @@ def run_test(A, tau, test_set_dir, test_num, graph_name, opt_params, trackers):
     info.close()
     return cnvg_times, opt_metrics["final_iters"], opt_metrics["final_MCP"]
 
-def run_optimizer(P0, A, F0, tau, opt_params, trackers):
+def run_optimizer(P0, A, W, w_max, F0, tau, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and initial strategy.
 
@@ -312,7 +321,10 @@ def run_optimizer(P0, A, F0, tau, opt_params, trackers):
     while not converged:
         num_LCPs = int(num_LCPs_schedule(iter))
         # apply update to P matrix, and parametrization Q:
-        grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"]) # compute negative gradient
+        if jnp.isnan(w_max):
+            grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"]) # compute negative gradient
+        else:
+            grad = -1*strat_comp.comp_avg_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs, opt_params["use_abs_param"]) # compute negative gradient
         P_old = strat_comp.comp_P_param(Q, A)
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
@@ -446,10 +458,13 @@ if __name__ == '__main__':
     # test_set_name = "Quick_Setup_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/quick_test_spec.json")
 
-    test_set_name = "Default_Setup_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec.json")
+    # test_set_name = "Default_Setup_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec.json")
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec_2.json")
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec_3.json")
+
+    test_set_name = "SF_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
