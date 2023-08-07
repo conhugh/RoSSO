@@ -5,7 +5,7 @@ import os
 class TestSpec:
     default_test_spec_filepath = os.getcwd() + "/TestSpecs/default_test_spec.json"
 
-    def __init__(self, test_spec_filepath=None, test_spec_name=None, num_tests=None, optimizer_params=None, trackers=None, graph_names=None, taus=None, graph_codes=None):
+    def __init__(self, test_spec_filepath=None, test_spec_name=None, num_tests=None, optimizer_params=None, trackers=None, graph_names=None, taus=None, graph_codes=None, weight_matrices=None):
         if test_spec_filepath != None:
             if os.path.exists(test_spec_filepath):
                 # instantiate test_spec object from JSON file:
@@ -19,9 +19,10 @@ class TestSpec:
                     self.graph_names = test_spec_dict["graph_names"]
                     self.taus = test_spec_dict["taus"]
                     self.graph_codes = test_spec_dict["graph_codes"]
+                    self.weight_matrices = test_spec_dict["weight_matrices"]
             else:
                 raise ValueError("Test specification file was not found at provided path.")
-        elif all(arg is not None for arg in (test_spec_name, num_tests, optimizer_params, trackers, graph_names, taus, graph_codes)): 
+        elif all(arg is not None for arg in (test_spec_name, num_tests, optimizer_params, trackers, graph_names, taus, graph_codes, weight_matrices)): 
             self.test_spec_name = test_spec_name
             self.num_tests = num_tests
             self.optimizer_params = optimizer_params
@@ -29,6 +30,7 @@ class TestSpec:
             self.graph_names = graph_names
             self.taus = taus
             self.graph_codes = graph_codes
+            self.weight_matrices = weight_matrices
         elif os.path.exists(TestSpec.default_test_spec_filepath):
             print("WARNING: If no test specification filepath is provided, values must be given for all other keyword arguments.")
             input("Press enter to initializing default test specification from " + TestSpec.default_test_spec_filepath + " ...")
@@ -42,6 +44,7 @@ class TestSpec:
                 self.graph_names = default_test_spec_dict["graph_names"]
                 self.taus = default_test_spec_dict["taus"]
                 self.graph_codes = default_test_spec_dict["graph_codes"]
+                self.weight_matrices = default_test_spec_dict["weight_matrices"]
         else:
             raise ValueError("No test specification filepath provided, missing values for other keyword arguments, and could not find default test specification file at " + TestSpec.default_test_spec_filepath)
         

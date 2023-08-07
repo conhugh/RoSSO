@@ -33,8 +33,8 @@ def init_rand_Ps(A, num, seed=0):
         P0 = A*jax.random.uniform(subkey, A_shape)
         P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0) 
         initPs = initPs.at[:, : , k].set(P0)
-    if num == 1:
-        initPs = jnp.squeeze(initPs)
+    # if num == 1:
+    #     initPs = jnp.squeeze(initPs)
     return initPs
 
 # Parametrization of the P matrix
@@ -274,6 +274,70 @@ _comp_multi_LCP_grad = jacrev(loss_multi_LCP)
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
 def comp_avg_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs=1, use_abs_param=True):
     grad = _comp_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs, use_abs_param)
+    return grad
+
+############################################################
+# Weighted Multi-Agent Stackelberg formulation
+############################################################
+@functools.partial(jit, static_argnames=['w_max', 'tau'])
+def compute_weighted_multi_cap_probs(Ps, W, w_max, tau):
+    n = jnp.shape(Ps)[0]
+    N = Ps.shape[2]
+    F_vecs = jnp.zeros((n**2, tau + w_max, N))
+    I = jnp.identity(n)
+
+    for r in range(N):
+        for k in range(tau):
+            indic_mat = ((k + 1)*jnp.ones((n, n)) == W)
+            P_direct = Ps[:, :, r]*indic_mat
+            P_direct_vec = jnp.reshape(P_direct, n**2, order='F')
+
+            multi_step_probs = jnp.zeros(n**2)
+            for i in range(n):
+                for j in range(n):
+                    E_j = jnp.diag(jnp.ones(n) - I[:, j])
+                    E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
+                    multi_step_probs = multi_step_probs + Ps[i, j, r]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int), r])
+                    
+            F_vecs = F_vecs.at[:, k + w_max, r].set(P_direct_vec + multi_step_probs)
+    F_vecs = F_vecs[:, w_max:, :]
+    indiv_cap_probs = jnp.reshape(jnp.sum(F_vecs, axis=1), (n, n, N), order='F')
+
+    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
+    jax_combinations = jnp.array(combinations)
+    cap_probs = jnp.zeros(len(jax_combinations))
+    for i in range(len(jax_combinations)):
+        idx_vec = jax_combinations[i]
+        not_cap_prob = jnp.prod(1 - indiv_cap_probs[idx_vec[:-1], idx_vec[-1], jnp.arange(N)])
+        cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
+    return jnp.reshape(cap_probs, (n**N, n), order='F')
+
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs'])
+def compute_weighted_multi_LCPs(Ps, W, w_max, tau, num_LCPs=1):
+    cap_probs = compute_weighted_multi_cap_probs(Ps, W, w_max, tau)
+    if num_LCPs == 1:
+        lcps = jnp.min(cap_probs)
+    elif num_LCPs > 1:
+        lcps = jnp.sort(cap_probs)[0:num_LCPs]
+    else:
+        raise ValueError("Invalid num_LCPs specified!")
+    return lcps
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+def loss_weighted_multi_LCP(Qs, As, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+    N = Qs.shape[2]
+    Ps = jnp.zeros_like(Qs)
+    for i in range(N):
+        P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
+        Ps = Ps.at[:, :, i].set(P)
+    return jnp.mean(compute_weighted_multi_LCPs(Ps, W, w_max, tau, num_LCPs))
+
+# Autodiff parametrized loss function
+_comp_weighted_multi_LCP_grad = jacrev(loss_weighted_multi_LCP)
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+def comp_avg_weighted_multi_LCP_grad(Qs, As, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+    grad = _comp_weighted_multi_LCP_grad(Qs, As, W, w_max, tau, num_LCPs, use_abs_param)
     return grad
 
 ############################################################

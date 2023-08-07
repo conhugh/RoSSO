@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 import graph_gen as gg
+import graph_comp as gc
 import strat_comp as scj
 import strat_opt as soo
 import strat_viz as sv
@@ -251,55 +252,28 @@ if __name__ == '__main__':
     # F0_REQ_TESTS()
     # CSV_RW_TEST()
     # GET_LEAF_CP_TEST()
-    # COMPARE_SPD_SPCP_TAUCP()
-    n = 3
-    tau = 1
+    # # COMPARE_SPD_SPCP_TAUCP()
+    # n = 3
+    # tau = 1
     # lower_bound = 1
     # upper_bound = 3
     # W = jax.random.randint(key=jax.random.PRNGKey(10), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
+    # # W = jnp.ones((n, n))
+    # print(W)
     # w_max = int(jnp.max(W))
-    num_init_Ps = 2
-    As = jnp.ones([n, n, num_init_Ps])
-    # max_iters = 1000
-    # eta = 1
-
-    # P = jnp.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], dtype=jnp.float32)
-    # P = (1/n)*jnp.ones((n, n))
-    # W = jnp.ones((n, n))
-    # w_max = int(jnp.max(W))
-    # A = jnp.ones((n, n))
-    # pi = (1/n)*jnp.ones((1, n))
-    # F0 = jnp.zeros((n, n, tau))
-    # print(scj.loss_weighted_LCP(P, A, W, w_max, tau))
+    # print(w_max)
+    # num_init_Ps = 2
+    # As = jnp.ones([n, n, num_init_Ps])
+    # # max_iters = 1000
+    # # eta = 1
     
-    N = 2
+    # N = 2
     # Ps = (1/n)*jnp.ones((n, n, N))
-    Ps = scj.init_rand_Ps(As[:, :, 0], num_init_Ps)
-    F0s = jnp.zeros((n, n, tau, N))
-    print(scj.compute_multi_cap_probs(Ps, F0s, tau))
+    # # Ps = scj.init_rand_Ps(As[:, :, 0], num_init_Ps)
+    # # F0s = jnp.zeros((n, n, tau, N))
 
-    # Ps = (1/n)*jnp.ones((n, n, 1))
-    # print(scj.loss_multi_MHT(Ps, As))
-    # print(scj.compute_ER(P, pi))
-    # print(scj.comp_ER_grad(P, A, pi))
-
-    # Ps = scj.init_rand_Ps(As[:, :, 0], num_init_Ps)
-    # P = jnp.squeeze(P)
-
-    # eigenvalues, eigenvectors = jnp.linalg.eig(P)
-    # index_largest_magnitude = jnp.argmax(jnp.abs(eigenvalues))
-    # eigenvector_largest_magnitude = jnp.real(eigenvectors[:, index_largest_magnitude])
-    # pi = eigenvector_largest_magnitude / jnp.sum(eigenvector_largest_magnitude)
-    # print(pi)
-
-    # N_eta = int(jnp.ceil(w_max/(eta*jnp.min(pi))) - 1)
-    # print(N_eta)
-
-    # print(scj.compute_RTE(P, pi, N_eta))
-    # print(scj.compute_weighted_RTE(P, W, w_max, pi, N_eta))
-    # print(scj.loss_weighted_RTE(P, A, W, w_max, pi, N_eta))
-    # print(scj.comp_weighted_RTE_grad(P, A, W, w_max, pi, N_eta))
-    
-    # print(scj.compute_multi_MHT(Ps))
-    # print(scj.loss_multi_MHT(Ps, As))
-    # print(scj.comp_multi_MHT_grad(Ps, As))
+    n = 12
+    A, graph_name = gg.gen_complete_G(n)
+    print(graph_name)
+    graph_code = gc.gen_graph_code(A)
+    print(graph_code)
