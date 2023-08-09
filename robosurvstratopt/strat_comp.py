@@ -33,8 +33,8 @@ def init_rand_Ps(A, num, seed=0):
         P0 = A*jax.random.uniform(subkey, A_shape)
         P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0) 
         initPs = initPs.at[:, : , k].set(P0)
-    # if num == 1:
-    #     initPs = jnp.squeeze(initPs)
+    if num == 1:
+        initPs = jnp.squeeze(initPs)
     return initPs
 
 # Parametrization of the P matrix
@@ -206,12 +206,13 @@ def compute_weighted_LCPs(P, W, w_max, tau, num_LCPs=1):
     if num_LCPs == 1:
         lcps = jnp.min(cap_probs)
     elif num_LCPs > 1:
-        lcps = jnp.sort(cap_probs)[0:num_LCPs]
+        lcps = jnp.sort(cap_probs)[:num_LCPs]
     else:
         raise ValueError("Invalid num_LCPs specified!")
     return lcps
 
 # Loss function with constraints included in parametrization
+# @functools.partial(jit, static_argnames=['W', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
 @functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
 def loss_weighted_LCP(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=True):
     P = comp_P_param(Q, A, use_abs_param)
@@ -220,6 +221,7 @@ def loss_weighted_LCP(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=True):
 
 # Autodiff parametrized loss function
 _comp_weighted_LCP_grad = jacrev(loss_weighted_LCP)
+# @functools.partial(jit, static_argnames=['W', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
 @functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
 def comp_avg_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=True):
     grad = _comp_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs, use_abs_param)

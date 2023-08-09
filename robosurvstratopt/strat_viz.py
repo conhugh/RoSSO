@@ -229,7 +229,7 @@ def set_visual_edge_length(G, A, len):
                 edge.attr["len"] = len
 
 # Save the environment graph without edge labels:
-def draw_env_graph(A, graph_name, folder_path, show_edge_lens=False, save=True):
+def draw_env_graph(A, graph_name, show_edge_lens=False, save_dir=None):
     G = gen_NXgraph(A)
     G_viz = nx.nx_agraph.to_agraph(G)
     set_visual_edge_length(G_viz, A, 2)
@@ -241,28 +241,30 @@ def draw_env_graph(A, graph_name, folder_path, show_edge_lens=False, save=True):
                     e = G_viz.get_edge(i, j)
                     e.attr["xlabel"] = "{:.3f}".format(A[i, j])
                     e.attr["fontsize"] = 10.0
-    if(save):
+    if save_dir is not None:
+        if not os.path.isdir(save_dir): os.makedirs(save_dir)
+        save_path = os.path.join(save_dir, graph_name + ".png")
         G_viz.layout()
-        G_viz.draw(folder_path + "/" + graph_name +  ".png", prog="sfdp")
+        G_viz.draw(save_path, prog="sfdp")
     return G_viz
 
 # Save the environment graph with edges labeled with transition probabilities:
-def draw_trans_prob_graph(A, P, graph_name, folder_path, P_num=None, save=True):
-    G_viz = draw_env_graph(A, graph_name, folder_path, save=False)
+def draw_trans_prob_graph(A, P, graph_name, P_num=None, save_dir=None):
+    G_viz = draw_env_graph(A, graph_name, show_edge_lens=False, save_dir=None)
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
             if A[i, j] == 1:
                 e = G_viz.get_edge(i, j)
                 e.attr["xlabel"] = "{:.3f}".format(P[i, j])
                 e.attr["fontsize"] = 10.0
-    if(save):
-        # G_viz.write(folder_path + "/" + graph_name + "_P" + str(P_num) + ".dot")
-        G_viz.layout()
+    if save_dir is not None:
+        if not os.path.isdir(save_dir): os.makedirs(save_dir)
         if P_num is not None:
-            G_viz.draw(folder_path + "/" + graph_name + "_P" + str(P_num) +  ".png", prog="sfdp")
+            save_path = os.path.join(save_dir, graph_name + "_P" + str(P_num) + ".png")
         else:
-            G_viz.draw(folder_path + "/" + graph_name +  ".png", prog="sfdp")
-
+            save_path = os.path.join(save_dir, graph_name + ".png")
+        G_viz.layout()
+        G_viz.draw(save_path, prog="sfdp")
     return G_viz
 
 # Save the environment graph with edges labeled with optimized transition probabilities, 

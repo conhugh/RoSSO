@@ -3,7 +3,7 @@ import json
 import os
 
 class TestSpec:
-    default_test_spec_filepath = os.getcwd() + "/TestSpecs/default_test_spec.json"
+    default_test_spec_filepath = os.getcwd() + "/test_specs/default_test_spec.json"
 
     def __init__(self, test_spec_filepath=None, test_spec_name=None, num_tests=None, optimizer_params=None, trackers=None, graph_names=None, taus=None, graph_codes=None, weight_matrices=None):
         if test_spec_filepath != None:

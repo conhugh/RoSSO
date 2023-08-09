@@ -6,17 +6,24 @@
         "varying_optimizer_params": false,
         "params": {
             "optimizer_name": "sgd",
-            "num_init_Ps": 5,
-            "conv_test_mode": "P_update",
-            "conv_radius": 0.005,
-            "conv_window_size": 200,
+            "num_init_Ps": 3,
+            "num_init_LCPs": 1,
+            "num_LCPs_schedule": {
+                "0": 1
+            },
+            "use_edge_weights": false,
+            "cnvg_test_mode": "P_update", 
+            "cnvg_radius": 0.001,
+            "cnvg_window_size": 10,
             "num_rec_P_diffs": 200,
-            "P_update_elt_bound": 0.05,
-            "nominal_learning_rate": 0.05,
+            "nominal_learning_rate": 0.001,
+            "lr_schedule_type": "constant",
+            "lr_schedule_args": null,
             "use_momentum": true,
             "mom_decay_rate": 0.99,
             "use_nesterov": true,
-            "max_iters": 20000,
+            "use_abs_param": true,
+            "max_iters": 2000,
             "grad_mode": "MCP_parametrization",
             "use_P_update_bound_schedule": true,
             "use_learning_rate_schedule": true,
@@ -87,5 +94,6 @@
         "test1": "N9_111837205133",
         "test2": "N9_137170518016",
         "test3": "N9_103214498341"
-    }
+    },
+    "weight_matrices": null
 }

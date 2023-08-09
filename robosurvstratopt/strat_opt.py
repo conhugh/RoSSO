@@ -10,6 +10,8 @@ import numpy as np
 import optax
 
 import graph_comp
+import graph_gen
+from hash_array import HashableArray
 import strat_comp
 import strat_viz
 from test_spec import TestSpec
@@ -463,8 +465,50 @@ if __name__ == '__main__':
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec_2.json")
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec_3.json")
 
-    test_set_name = "SF_Test"
+    test_set_name = "SF_Test2"
     test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
+
+
+    n = 12
+    A, graph_name = graph_gen.gen_complete_G(n)
+    print(graph_name)
+    graph_code = graph_comp.gen_graph_code(A)
+    print(graph_code)
+
+    sf_weights = [[1, 3, 3, 5, 4, 6, 3, 5, 7, 4, 6, 6],
+                  [3, 1, 5, 4, 2, 4, 4, 5, 5, 3, 5, 5],
+                  [3, 5, 1, 7, 6, 8, 3, 4, 9, 4, 8, 7],
+                  [6, 4, 7, 1, 5, 6, 4, 7, 5, 6, 6, 7],
+                  [4, 3, 6, 5, 1, 3, 5, 5, 6, 3, 4, 4],
+                  [6, 4, 8, 5, 3, 1, 6, 7, 3, 6, 2, 3],
+                  [2, 5, 3, 5, 6, 7, 1, 5, 7, 5, 7, 8],
+                  [3, 5, 2, 7, 6, 7, 3, 1, 9, 3, 7, 5],
+                  [8, 6, 9, 4, 6, 4, 6, 9, 1, 8, 5, 7],
+                  [4, 3, 4, 6, 3, 5, 5, 3, 7, 1, 5, 3],
+                  [6, 4, 8, 6, 4, 2, 6, 6, 4, 5, 1, 3],
+                  [6, 4, 6, 6, 3, 3, 6, 4, 5, 3, 2, 1]]
+    sf_weights = jnp.array(sf_weights)
+    strat_viz.draw_env_graph(sf_weights, "SF Graph", show_edge_lens=True, save_dir="/home/connor/RoboSurvStratOpt/results/local/temp")
+
+    P0 = strat_comp.init_rand_Ps(A, 1)
+    W = sf_weights
+    w_max = int(jnp.max(W))
+    tau = 9
+    print(type(w_max))
+
+    W_hash = HashableArray(W)    
+
+    trace_start = time.time()
+    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, W_hash, w_max, tau)
+    trace_finish = time.time()
+    print("Tracing took " + str(trace_finish - trace_start) + " seconds.")
+    # print("Initial Gradient:")
+    # print(_grad)
+    grad_comp_start = time.time()
+    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, W_hash, w_max, tau)
+    grad_comp_finish = time.time()
+    print("First post-trace gradient computation took " + str(grad_comp_finish - grad_comp_start) + " seconds.")
+    print("Grad shape = " + str(jnp.shape(_grad)))
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
