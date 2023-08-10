@@ -253,27 +253,56 @@ if __name__ == '__main__':
     # CSV_RW_TEST()
     # GET_LEAF_CP_TEST()
     # # COMPARE_SPD_SPCP_TAUCP()
-    # n = 3
-    # tau = 1
-    # lower_bound = 1
-    # upper_bound = 3
-    # W = jax.random.randint(key=jax.random.PRNGKey(10), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
+    n = 3
+    A = jnp.ones((n, n))
+    tau = 3
+    lower_bound = 1
+    upper_bound = 3
+    W = jax.random.randint(key=jax.random.PRNGKey(1), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
     # # W = jnp.ones((n, n))
-    # print(W)
-    # w_max = int(jnp.max(W))
+    print(W)
+    w_max = int(jnp.max(W))
     # print(w_max)
-    # num_init_Ps = 2
-    # As = jnp.ones([n, n, num_init_Ps])
-    # # max_iters = 1000
-    # # eta = 1
-    
-    # N = 2
-    # Ps = (1/n)*jnp.ones((n, n, N))
-    # # Ps = scj.init_rand_Ps(As[:, :, 0], num_init_Ps)
-    # # F0s = jnp.zeros((n, n, tau, N))
+    # P = (1/n)*jnp.ones((n, n))
+    P = jnp.squeeze(scj.init_rand_Ps(A, 1))
+    indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
+    # print(scj.compute_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, tau))
+    # print(scj.compute_weighted_cap_probs_old(P, W, w_max, tau))
+    print(scj.comp_avg_weighted_LCP_grad(P, A, indic_mat, E_ij, W, w_max, tau))
 
-    n = 12
-    A, graph_name = gg.gen_complete_G(n)
-    print(graph_name)
-    graph_code = gc.gen_graph_code(A)
-    print(graph_code)
+    # start_time = time.time()
+    # print(scj.compute_weighted_cap_probs(P, W, w_max, tau))
+    # end_time = time.time()
+    # print(end_time - start_time)
+    
+    # start_time = time.time()
+    # indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
+    # print(scj.compute_weighted_cap_probs_2(P, indic_mat, E_ij, W, w_max, tau))
+    # end_time = time.time()
+    # print(end_time - start_time)
+
+    # tau_vec = (1, 2, 3)
+    # tau_max = max(tau_vec)
+    # T = 6
+    # tau_max = int(T - n + 1)
+    # tau_vec = jnp.array([1, 2, 3])
+    # tau_vec = jnp.array([1.2, -1.3, 4])
+    # tau_max = int(jnp.max(tau_vec))
+    # P = (1/n)*jnp.ones((n, n))
+    # Ps = scj.init_rand_Ps(As[:, :, 0], num_init_Ps)
+    # F0 = jnp.zeros((n, n, tau_max))
+    # print(scj.compute_hetero_tau_cap_probs(P, F0, tau_vec))
+    # print(scj.comp_avg_LCP_grad(P, A, F0, tau_vec))
+
+    # P_vec = P.flatten('F')
+    # x = jnp.concatenate((P_vec, tau_vec))
+    # print(scj.compute_co_opt_cap_probs(P, tau_vec, tau_max))
+    # print(scj.unpack_x(x, n))
+    # print(scj.comp_co_opt_grad(x, A, n, T, tau_max))
+    # print(scj.comp_x_param(x, A, n, T))
+
+    # n = 12
+    # A, graph_name = gg.gen_complete_G(n)
+    # print(graph_name)
+    # graph_code = gc.gen_graph_code(A)
+    # print(graph_code)
