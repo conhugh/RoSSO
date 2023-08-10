@@ -172,6 +172,56 @@ def comp_avg_hetero_tau_LCP_grad(Q, A, F0, tau_vec, num_LCPs=1, use_abs_param=Tr
     return grad
 
 ############################################################
+# Stackelberg Co-Optimization formulation
+############################################################
+# B: defense budget
+@functools.partial(jit, static_argnames=['B'])
+def greedy_co_opt_cap_probs(P, F0, B):
+    n = jnp.shape(P)[0]
+    tau_max = B - n + 1
+    F0 = F0.at[:, :, 0].set(P)
+    for i in range(1, tau_max):
+        F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
+
+    cap_probs = P
+    tau_vec = jnp.ones(n)
+    B -= n
+    while B > 0:
+        min_idx = jnp.argmin(cap_probs)
+        _, col_idx = divmod(min_idx, n)
+        tau_vec = tau_vec.at[col_idx].set(tau_vec[col_idx] + 1)
+        cap_probs = cap_probs.at[:, col_idx].set(cap_probs[:, col_idx] + F0[:, col_idx, (tau_vec[col_idx]-1).astype(int)])
+        B -= 1
+    
+    return tau_vec, cap_probs
+
+@functools.partial(jit, static_argnames=['B', 'num_LCPs'])
+def compute_greedy_co_opt_LCPs(P, F0, B, num_LCPs=1):
+    _, cap_probs = greedy_co_opt_cap_probs(P, F0, B)
+    if num_LCPs == 1:
+        lcps = jnp.min(cap_probs)
+    elif num_LCPs > 1:
+        F_vec = cap_probs.flatten('F')
+        lcps = jnp.sort(F_vec)[0:num_LCPs]
+    else:
+        raise ValueError("Invalid num_LCPs specified!")
+    return lcps
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['B', 'num_LCPs', 'use_abs_param'])
+def loss_greedy_co_opt_LCP(Q, A, F0, B, num_LCPs=1, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_greedy_co_opt_LCPs(P, F0, B, num_LCPs)
+    return jnp.mean(lcps)
+
+# Autodiff parametrized loss function
+_comp_greedy_co_opt_LCP_grad = jacrev(loss_greedy_co_opt_LCP)
+@functools.partial(jit, static_argnames=['B', 'num_LCPs', 'use_abs_param'])
+def comp_avg_greedy_co_opt_LCP_grad(Q, A, F0, B, num_LCPs=1, use_abs_param=True):
+    grad = _comp_greedy_co_opt_LCP_grad(Q, A, F0, B, num_LCPs, use_abs_param) 
+    return grad
+
+############################################################
 # Weighted Stackelberg formulation
 ############################################################
 def precompute_weighted_cap_probs(n, tau, W):

@@ -255,20 +255,29 @@ if __name__ == '__main__':
     # # COMPARE_SPD_SPCP_TAUCP()
     n = 3
     A = jnp.ones((n, n))
-    tau = 3
-    lower_bound = 1
-    upper_bound = 3
-    W = jax.random.randint(key=jax.random.PRNGKey(1), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
+    B = 5
+    tau_max = B - n + 1
+    tau_vec = (1, 2, 2)
+    # tau = 3
+    # lower_bound = 1
+    # upper_bound = 3
+    # W = jax.random.randint(key=jax.random.PRNGKey(1), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
     # # W = jnp.ones((n, n))
-    print(W)
-    w_max = int(jnp.max(W))
+    # print(W)
+    # w_max = int(jnp.max(W))
     # print(w_max)
     # P = (1/n)*jnp.ones((n, n))
     P = jnp.squeeze(scj.init_rand_Ps(A, 1))
-    indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
+    print(P)
+    F0 = jnp.zeros((n, n, tau_max))
+    print(scj.greedy_co_opt_cap_probs(P, F0, B))
+    print(scj.comp_avg_greedy_co_opt_LCP_grad(P, A, F0, B))
+    print(scj.comp_avg_hetero_tau_LCP_grad(P, A, F0, tau_vec))
+
+    # indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
     # print(scj.compute_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, tau))
     # print(scj.compute_weighted_cap_probs_old(P, W, w_max, tau))
-    print(scj.comp_avg_weighted_LCP_grad(P, A, indic_mat, E_ij, W, w_max, tau))
+    # print(scj.comp_avg_weighted_LCP_grad(P, A, indic_mat, E_ij, W, w_max, tau))
 
     # start_time = time.time()
     # print(scj.compute_weighted_cap_probs(P, W, w_max, tau))
@@ -294,15 +303,3 @@ if __name__ == '__main__':
     # print(scj.compute_hetero_tau_cap_probs(P, F0, tau_vec))
     # print(scj.comp_avg_LCP_grad(P, A, F0, tau_vec))
 
-    # P_vec = P.flatten('F')
-    # x = jnp.concatenate((P_vec, tau_vec))
-    # print(scj.compute_co_opt_cap_probs(P, tau_vec, tau_max))
-    # print(scj.unpack_x(x, n))
-    # print(scj.comp_co_opt_grad(x, A, n, T, tau_max))
-    # print(scj.comp_x_param(x, A, n, T))
-
-    # n = 12
-    # A, graph_name = gg.gen_complete_G(n)
-    # print(graph_name)
-    # graph_code = gc.gen_graph_code(A)
-    # print(graph_code)
