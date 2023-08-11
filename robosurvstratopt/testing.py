@@ -259,20 +259,22 @@ if __name__ == '__main__':
     # B = 5
     # tau_max = B - n + 1
     # tau_vec = (1, 2, 2)
-    tau = 1
-    # lower_bound = 1
-    # upper_bound = 3
-    # W = jax.random.randint(key=jax.random.PRNGKey(1), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
-    # # W = jnp.ones((n, n))
-    # print(W)
-    # w_max = int(jnp.max(W))
+    tau = 3
+    lower_bound = 1
+    upper_bound = 3
+    W = jax.random.randint(key=jax.random.PRNGKey(1), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
+    # W = jnp.ones((n, n))
+    print(W)
+    w_max = int(jnp.max(W))
     # print(w_max)
     # P = (1/n)*jnp.ones((n, n))
     Ps = scj.init_rand_Ps(A, N)
     print(Ps)
     F0s = jnp.zeros((n, n, tau, N))
     
-    combs = scj.precompute_multi_cap_probs(n, N)
-    print(combs)
-    print(scj.compute_multi_cap_probs(Ps, F0s, combs, tau))
+    # combs = scj.precompute_multi_cap_probs(n, N)
+    # print(combs)
+    # print(scj.compute_multi_cap_probs(Ps, F0s, combs, tau))
 
+    indic_mat, E_ij, combs = scj.precompute_weighted_multi_cap_probs(n, N, tau, W)
+    print(scj.compute_weighted_multi_cap_probs(Ps, indic_mat, E_ij, combs, W, w_max, tau))

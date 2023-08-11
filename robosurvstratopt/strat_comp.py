@@ -339,8 +339,23 @@ def comp_avg_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs=1, use_abs_param=True):
 ############################################################
 # Weighted Multi-Agent Stackelberg formulation
 ############################################################
+def precompute_weighted_multi_cap_probs(n, N, tau, W):
+    indic_mat = jnp.zeros((n, n, n))
+    for k in range(tau):
+        indic_mat = indic_mat.at[k].set((k + 1)*jnp.ones((n, n)) == W)
+
+    I = jnp.identity(n)
+    E_ij = jnp.zeros((n, n, n**2, n**2))
+    for i in range(n):
+        for j in range(n):
+            E_j = jnp.diag(jnp.ones(n) - I[:, j])
+            E_ij = E_ij.at[i, j].set(jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j]))))
+    
+    combs = jnp.array(list(itertools.product(range(1, n+1), repeat=N+1)))
+    return indic_mat, E_ij, combs
+
 @functools.partial(jit, static_argnames=['w_max', 'tau'])
-def compute_weighted_multi_cap_probs(Ps, W, w_max, tau):
+def compute_weighted_multi_cap_probs(Ps, indic_mat, E_ij, combs, W, w_max, tau):
     n = jnp.shape(Ps)[0]
     N = Ps.shape[2]
     F_vecs = jnp.zeros((n**2, tau + w_max, N))
@@ -348,28 +363,24 @@ def compute_weighted_multi_cap_probs(Ps, W, w_max, tau):
 
     for r in range(N):
         for k in range(tau):
-            indic_mat = ((k + 1)*jnp.ones((n, n)) == W)
-            P_direct = Ps[:, :, r]*indic_mat
+            P_direct = Ps[:, :, r]*indic_mat[k]
             P_direct_vec = jnp.reshape(P_direct, n**2, order='F')
 
             multi_step_probs = jnp.zeros(n**2)
             for i in range(n):
                 for j in range(n):
-                    E_j = jnp.diag(jnp.ones(n) - I[:, j])
-                    E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
-                    multi_step_probs = multi_step_probs + Ps[i, j, r]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int), r])
+                    multi_step_probs = multi_step_probs + Ps[i, j, r]*jnp.matmul(E_ij[i, j], F_vecs[:, k + w_max - W[i, j].astype(int), r])
                     
             F_vecs = F_vecs.at[:, k + w_max, r].set(P_direct_vec + multi_step_probs)
     F_vecs = F_vecs[:, w_max:, :]
     indiv_cap_probs = jnp.reshape(jnp.sum(F_vecs, axis=1), (n, n, N), order='F')
 
-    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
-    jax_combinations = jnp.array(combinations)
-    cap_probs = jnp.zeros(len(jax_combinations))
-    for i in range(len(jax_combinations)):
-        idx_vec = jax_combinations[i]
+    cap_probs = jnp.zeros(len(combs))
+    for i in range(len(combs)):
+        idx_vec = combs[i]
         not_cap_prob = jnp.prod(1 - indiv_cap_probs[idx_vec[:-1], idx_vec[-1], jnp.arange(N)])
         cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
+
     return jnp.reshape(cap_probs, (n**N, n), order='F')
 
 @functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs'])
