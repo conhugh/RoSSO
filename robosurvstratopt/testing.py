@@ -253,27 +253,26 @@ if __name__ == '__main__':
     # CSV_RW_TEST()
     # GET_LEAF_CP_TEST()
     # # COMPARE_SPD_SPCP_TAUCP()
-    # n = 3
-    # tau = 1
+    n = 3
+    N = 2
+    A = jnp.ones((n, n))
+    # B = 5
+    # tau_max = B - n + 1
+    # tau_vec = (1, 2, 2)
+    tau = 1
     # lower_bound = 1
     # upper_bound = 3
-    # W = jax.random.randint(key=jax.random.PRNGKey(10), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
+    # W = jax.random.randint(key=jax.random.PRNGKey(1), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
     # # W = jnp.ones((n, n))
     # print(W)
     # w_max = int(jnp.max(W))
     # print(w_max)
-    # num_init_Ps = 2
-    # As = jnp.ones([n, n, num_init_Ps])
-    # # max_iters = 1000
-    # # eta = 1
+    # P = (1/n)*jnp.ones((n, n))
+    Ps = scj.init_rand_Ps(A, N)
+    print(Ps)
+    F0s = jnp.zeros((n, n, tau, N))
     
-    # N = 2
-    # Ps = (1/n)*jnp.ones((n, n, N))
-    # # Ps = scj.init_rand_Ps(As[:, :, 0], num_init_Ps)
-    # # F0s = jnp.zeros((n, n, tau, N))
+    combs = scj.precompute_multi_cap_probs(n, N)
+    print(combs)
+    print(scj.compute_multi_cap_probs(Ps, F0s, combs, tau))
 
-    n = 12
-    A, graph_name = gg.gen_complete_G(n)
-    print(graph_name)
-    graph_code = gc.gen_graph_code(A)
-    print(graph_code)

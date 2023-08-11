@@ -105,11 +105,11 @@ def compute_LCPs(P, F0, tau, num_LCPs=1):
     --------
     compute_cap_probs
     """
-    F = compute_cap_probs(P, F0, tau)
+    cap_probs = compute_cap_probs(P, F0, tau)
     if num_LCPs == 1:
-        lcps = jnp.min(F)
+        lcps = jnp.min(cap_probs)
     elif num_LCPs > 1:
-        F_vec = F.flatten('F')
+        F_vec = cap_probs.flatten('F')
         lcps = jnp.sort(F_vec)[0:num_LCPs]
     else:
         raise ValueError("Invalid num_LCPs specified!")
@@ -130,47 +130,128 @@ def comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
     return grad
 
 ############################################################
+# Heterogeneous Attack Duration Stackelberg formulation
+############################################################
+# input tau_vec must be a tuple
+@functools.partial(jit, static_argnames=['tau_vec'])
+def compute_hetero_tau_cap_probs(P, F0, tau_vec):
+    n = jnp.shape(P)[0]
+    tau_max = max(tau_vec)
+    F0 = F0.at[:, :, 0].set(P)
+    for i in range(1, tau_max):
+        F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
+    cap_probs = jnp.zeros((n, n))
+    for i in range(n):
+        cap_probs = cap_probs.at[:, i].set(jnp.sum(F0[:, i, :tau_vec[i]], axis=1))
+    return cap_probs
+
+@functools.partial(jit, static_argnames=['tau_vec', 'num_LCPs'])
+def compute_hetero_tau_LCPs(P, F0, tau_vec, num_LCPs=1):
+    cap_probs = compute_hetero_tau_cap_probs(P, F0, tau_vec)
+    if num_LCPs == 1:
+        lcps = jnp.min(cap_probs)
+    elif num_LCPs > 1:
+        F_vec = cap_probs.flatten('F')
+        lcps = jnp.sort(F_vec)[0:num_LCPs]
+    else:
+        raise ValueError("Invalid num_LCPs specified!")
+    return lcps
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['tau_vec', 'num_LCPs', 'use_abs_param'])
+def loss_hetero_tau_LCP(Q, A, F0, tau_vec, num_LCPs=1, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_hetero_tau_LCPs(P, F0, tau_vec, num_LCPs)
+    return jnp.mean(lcps)
+
+# Autodiff parametrized loss function
+_comp_hetero_tau_LCP_grad = jacrev(loss_hetero_tau_LCP)
+@functools.partial(jit, static_argnames=['tau_vec', 'num_LCPs', 'use_abs_param'])
+def comp_avg_hetero_tau_LCP_grad(Q, A, F0, tau_vec, num_LCPs=1, use_abs_param=True):
+    grad = _comp_hetero_tau_LCP_grad(Q, A, F0, tau_vec, num_LCPs, use_abs_param) 
+    return grad
+
+############################################################
+# Stackelberg Co-Optimization formulation
+############################################################
+# B: defense budget
+@functools.partial(jit, static_argnames=['B'])
+def greedy_co_opt_cap_probs(P, F0, B):
+    n = jnp.shape(P)[0]
+    tau_max = B - n + 1
+    F0 = F0.at[:, :, 0].set(P)
+    for i in range(1, tau_max):
+        F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
+
+    cap_probs = P
+    tau_vec = jnp.ones(n)
+    B -= n
+    while B > 0:
+        min_idx = jnp.argmin(cap_probs)
+        _, col_idx = divmod(min_idx, n)
+        tau_vec = tau_vec.at[col_idx].set(tau_vec[col_idx] + 1)
+        cap_probs = cap_probs.at[:, col_idx].set(cap_probs[:, col_idx] + F0[:, col_idx, (tau_vec[col_idx]-1).astype(int)])
+        B -= 1
+    
+    return tau_vec, cap_probs
+
+@functools.partial(jit, static_argnames=['B', 'num_LCPs'])
+def compute_greedy_co_opt_LCPs(P, F0, B, num_LCPs=1):
+    _, cap_probs = greedy_co_opt_cap_probs(P, F0, B)
+    if num_LCPs == 1:
+        lcps = jnp.min(cap_probs)
+    elif num_LCPs > 1:
+        F_vec = cap_probs.flatten('F')
+        lcps = jnp.sort(F_vec)[0:num_LCPs]
+    else:
+        raise ValueError("Invalid num_LCPs specified!")
+    return lcps
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['B', 'num_LCPs', 'use_abs_param'])
+def loss_greedy_co_opt_LCP(Q, A, F0, B, num_LCPs=1, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_greedy_co_opt_LCPs(P, F0, B, num_LCPs)
+    return jnp.mean(lcps)
+
+# Autodiff parametrized loss function
+_comp_greedy_co_opt_LCP_grad = jacrev(loss_greedy_co_opt_LCP)
+@functools.partial(jit, static_argnames=['B', 'num_LCPs', 'use_abs_param'])
+def comp_avg_greedy_co_opt_LCP_grad(Q, A, F0, B, num_LCPs=1, use_abs_param=True):
+    grad = _comp_greedy_co_opt_LCP_grad(Q, A, F0, B, num_LCPs, use_abs_param) 
+    return grad
+
+############################################################
 # Weighted Stackelberg formulation
 ############################################################
-@functools.partial(jit, static_argnames=['w_max', 'tau'])
-def compute_weighted_cap_probs(P, W, w_max, tau):
-    """
-    Compute Capture Probability Matrix.
+def precompute_weighted_cap_probs(n, tau, W):
+    indic_mat = jnp.zeros((n, n, n))
+    for k in range(tau):
+        indic_mat = indic_mat.at[k].set((k + 1)*jnp.ones((n, n)) == W)
 
-    Parameters
-    ----------
-    P : jaxlib.xla_extension.DeviceArray 
-        Transition probability matrix.
-    F0 : jaxlib.xla_extension.DeviceArray 
-        Placeholder to be populated with FHT Probability matrices. 
-    tau : int
-        Intruder's attack duration. 
-    
-    Returns
-    -------
-    jaxlib.xla_extension.DeviceArray
-        Capture Probability matrix. 
-    
-    See Also
-    --------
-    compute_FHT_probs
-    """
+    I = jnp.identity(n)
+    E_ij = jnp.zeros((n, n, n**2, n**2))
+    for i in range(n):
+        for j in range(n):
+            E_j = jnp.diag(jnp.ones(n) - I[:, j])
+            E_ij = E_ij.at[i, j].set(jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j]))))
+
+    return indic_mat, E_ij
+
+@functools.partial(jit, static_argnames=['w_max', 'tau'])
+def compute_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, tau):
     n = jnp.shape(P)[0]
     F_vecs = jnp.zeros((n**2, tau + w_max))
-    I = jnp.identity(n)
 
     for k in range(tau):
-        indic_mat = ((k + 1)*jnp.ones((n, n)) == W)
-        P_direct = P*indic_mat
+        P_direct = P*indic_mat[k]
         P_direct_vec = jnp.reshape(P_direct, n**2, order='F')
 
         multi_step_probs = jnp.zeros(n**2)
         for i in range(n):
             for j in range(n):
-                E_j = jnp.diag(jnp.ones(n) - I[:, j])
-                E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
-                multi_step_probs = multi_step_probs + P[i, j]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int)])
-                
+                multi_step_probs += P[i, j]*jnp.matmul(E_ij[i, j], F_vecs[:, k + w_max - W[i, j].astype(int)])
+
         F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
 
     F_vecs = F_vecs[:, w_max:]
@@ -178,31 +259,8 @@ def compute_weighted_cap_probs(P, W, w_max, tau):
     return cap_probs
 
 @functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs'])
-def compute_weighted_LCPs(P, W, w_max, tau, num_LCPs=1):
-    """
-    Compute Lowest `num_LCPs` Capture Probabilities.
-
-    Parameters
-    ----------
-    P : jaxlib.xla_extension.DeviceArray 
-        Transition probability matrix. 
-    F0 : jaxlib.xla_extension.DeviceArray 
-        Placeholder to be populated with FHT Probability matrices.
-    tau : int
-        Intruder's attack duration. 
-    num_LCPs : int
-        Number of the lowest capture probabilities to compute. 
-    
-    Returns
-    -------
-    jaxlib.xla_extension.DeviceArray
-        Set of `num_LCPs` lowest capture probabilities. 
-    
-    See Also
-    --------
-    compute_cap_probs
-    """
-    cap_probs = compute_weighted_cap_probs(P, W, w_max, tau)
+def compute_weighted_LCPs(P, indic_mat, E_ij, W, w_max, tau, num_LCPs=1):
+    cap_probs = compute_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, tau)
     if num_LCPs == 1:
         lcps = jnp.min(cap_probs)
     elif num_LCPs > 1:
@@ -213,23 +271,27 @@ def compute_weighted_LCPs(P, W, w_max, tau, num_LCPs=1):
 
 # Loss function with constraints included in parametrization
 @functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
-def loss_weighted_LCP(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+def loss_weighted_LCP(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs=1, use_abs_param=True):
     P = comp_P_param(Q, A, use_abs_param)
-    lcps = compute_weighted_LCPs(P, W, w_max, tau, num_LCPs)
+    lcps = compute_weighted_LCPs(P, indic_mat, E_ij, W, w_max, tau, num_LCPs)
     return jnp.mean(lcps)
 
 # Autodiff parametrized loss function
 _comp_weighted_LCP_grad = jacrev(loss_weighted_LCP)
 @functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
-def comp_avg_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs=1, use_abs_param=True):
-    grad = _comp_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs, use_abs_param)
+def comp_avg_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+    grad = _comp_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs, use_abs_param)
     return grad
 
 ############################################################
 # Multi-Agent Stackelberg formulation
 ############################################################
+def precompute_multi_cap_probs(n, N):
+    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
+    return jnp.array(combinations)
+
 @functools.partial(jit, static_argnames=['tau'])
-def compute_multi_cap_probs(Ps, F0s, tau):
+def compute_multi_cap_probs(Ps, F0s, combs, tau):
     n = jnp.shape(Ps)[0]
     N = Ps.shape[2]
     for r in range(N):
@@ -238,11 +300,9 @@ def compute_multi_cap_probs(Ps, F0s, tau):
             F0s = F0s.at[:, :, i, r].set(jnp.matmul(Ps, (F0s[:, :, i - 1, r] - jnp.diag(jnp.diag(F0s[:, :, i - 1, r])))))
         indiv_cap_probs = jnp.sum(F0s, axis=2)
 
-    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
-    jax_combinations = jnp.array(combinations)
-    cap_probs = jnp.zeros(len(jax_combinations))
-    for i in range(len(jax_combinations)):
-        idx_vec = jax_combinations[i]
+    cap_probs = jnp.zeros(len(combs))
+    for i in range(len(combs)):
+        idx_vec = combs[i]
         not_cap_prob = jnp.prod(1 - indiv_cap_probs[idx_vec[:-1], idx_vec[-1], jnp.arange(N)])
         cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
 

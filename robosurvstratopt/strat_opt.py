@@ -5,6 +5,8 @@ import os
 import shutil
 import time
 
+import functools
+import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
@@ -13,7 +15,6 @@ import graph_comp
 import strat_comp
 import strat_viz
 from test_spec import TestSpec
-
 
 def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
     """
@@ -37,6 +38,7 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
         Capture Probability matrix corresponding to optimized strategy.
     """
     init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
+    grad_func = strat_comp.comp_avg_LCP_grad
     num_LCPs = 1
     nominal_learning_rate = 0.001
     n = A.shape[0]
@@ -44,7 +46,7 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
     time_avgs = []
     for k in range(num_init_Ps):
         Q = init_Ps[:, :, k]
-        init_grad = strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs)
+        init_grad = grad_func(Q, A, F0, tau, num_LCPs)
         init_grad_max = jnp.max(jnp.abs(init_grad))
         scaled_learning_rate = nominal_learning_rate/init_grad_max
         schedule = optax.constant_schedule(scaled_learning_rate)
@@ -53,16 +55,25 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
         optimizer = optax.sgd(schedule, momentum=0.99, nesterov=True)
         opt_state = optimizer.init(Q)
         check_time = time.time()
-        for iter in range(max_iters + 1):
-            # start_time = time.time()
+        
+        @jax.jit
+        def step(Q, opt_state):
             grad = -1*grad_func(Q, A, F0, tau, num_LCPs)
-            # print("--- Getting grad took: %s seconds ---" % (time.time() - start_time))
-            # start_time = time.time()
             updates, opt_state = optimizer.update(grad, opt_state)
-            # print("--- Getting update and state took: %s seconds ---" % (time.time() - start_time))
-            # start_time = time.time()
             Q = optax.apply_updates(Q, updates)
-            # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
+            return Q, opt_state
+
+        for iter in range(max_iters + 1):
+            Q, opt_state = step(Q, opt_state)
+            # # start_time = time.time()
+            # grad = -1*grad_func(Q, A, F0, tau, num_LCPs)
+            # # print("--- Getting grad took: %s seconds ---" % (time.time() - start_time))
+            # # start_time = time.time()
+            # updates, opt_state = optimizer.update(grad, opt_state)
+            # # print("--- Getting update and state took: %s seconds ---" % (time.time() - start_time))
+            # # start_time = time.time()
+            # Q = optax.apply_updates(Q, updates)
+            # # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
         P = strat_comp.comp_P_param(Q, A)
         print(P)
         opt_time = time.time() - check_time
@@ -204,7 +215,8 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
         if jnp.isnan(w_max):
             init_grad = strat_comp.comp_avg_LCP_grad(P0, A, F0, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         else:
-            init_grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, W, w_max, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
+            indic_mat, E_ij = strat_comp.precompute_weighted_cap_probs(n, tau, W)
+            init_grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, indic_mat, E_ij, W, w_max, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         lr_scale = jnp.max(jnp.abs(init_grad))
         lr = opt_params["nominal_learning_rate"]/lr_scale
         lr_scales.append(lr_scale)
@@ -212,7 +224,7 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
         opt_params["scaled_learning_rate"] = lr
 
         start_time = time.time()
-        P, F, tracked_vals = run_optimizer(P0, A, W, w_max, F0, tau, opt_params, trackers)
+        P, F, tracked_vals = run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, trackers)
         cnvg_time = time.time() - start_time
         cnvg_times.append(cnvg_time)
         print("--- Optimization took: %s seconds ---" % (cnvg_time))
@@ -267,7 +279,7 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
     info.close()
     return cnvg_times, opt_metrics["final_iters"], opt_metrics["final_MCP"]
 
-def run_optimizer(P0, A, W, w_max, F0, tau, opt_params, trackers):
+def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and initial strategy.
 
@@ -315,23 +327,34 @@ def run_optimizer(P0, A, W, w_max, F0, tau, opt_params, trackers):
     num_LCPs_schedule = {int(key): value for key, value in opt_params["num_LCPs_schedule"].items()}
     num_LCPs_schedule = optax.piecewise_constant_schedule(opt_params["num_init_LCPs"], num_LCPs_schedule)
 
+    grad_flag = jnp.isnan(w_max)
+    param_flag = opt_params["use_abs_param"]
+    @functools.partial(jax.jit, static_argnames=['num_LCPs'])
+    def step(Q, opt_state, num_LCPs):
+        if grad_flag:
+            grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, param_flag) # compute negative gradient
+        else:
+            grad = -1*strat_comp.comp_avg_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs, param_flag) # compute negative gradient
+        updates, opt_state = optimizer.update(grad, opt_state)
+        Q = optax.apply_updates(Q, updates)
+        return Q, opt_state
+
     # Run gradient-based optimization process:
     iter = 0 
     converged = False
     while not converged:
         num_LCPs = int(num_LCPs_schedule(iter))
         # apply update to P matrix, and parametrization Q:
-        if jnp.isnan(w_max):
-            grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"]) # compute negative gradient
-        else:
-            grad = -1*strat_comp.comp_avg_weighted_LCP_grad(Q, A, W, w_max, tau, num_LCPs, opt_params["use_abs_param"]) # compute negative gradient
-        P_old = strat_comp.comp_P_param(Q, A)
-        updates, opt_state = optimizer.update(grad, opt_state)
-        Q = optax.apply_updates(Q, updates)
+        # P_old = strat_comp.comp_P_param(Q, A)
+        P_old = P
+        # Q_old = Q
+        Q, opt_state = step(Q, opt_state, num_LCPs)
         P = strat_comp.comp_P_param(Q, A) # compute new P matrix
         # Compute the difference between the latest P matrix and the previous one:
         P_diff = P - P_old
         abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
+        # P_diff = Q - Q_old
+        # abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
         # track metrics of interest:
         if iter % opt_params["iters_per_trackvals"] == 0:
             tracked_vals["iters"].append(iter)
@@ -345,8 +368,8 @@ def run_optimizer(P0, A, W, w_max, F0, tau, opt_params, trackers):
             # print status update to terminal:
             if(iter % opt_params["iters_per_printout"] == 0):
                 print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time) + "-------")
-                print("grad 1-norm = " + str(jnp.sum(jnp.abs(grad))))
-                print("grad inf norm = " + str(jnp.max(jnp.abs(grad))))
+                # print("grad 1-norm = " + str(jnp.sum(jnp.abs(grad))))
+                # print("grad inf norm = " + str(jnp.max(jnp.abs(grad))))
                 print("abs_P_diff_sum = " + str(jnp.sum(jnp.abs(P_diff))))
                 print("MCP = " + str(jnp.min(F)))
         # check for convergence:
@@ -469,4 +492,10 @@ if __name__ == '__main__':
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
     print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
-
+    
+    # n = 12
+    # A = jnp.ones((n, n))
+    # tau = 6
+    # num_init_Ps = 1
+    # max_iters = 10000
+    # test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
