@@ -286,8 +286,12 @@ def comp_avg_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs=1,
 ############################################################
 # Multi-Agent Stackelberg formulation
 ############################################################
+def precompute_multi_cap_probs(n, N):
+    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
+    return jnp.array(combinations)
+
 @functools.partial(jit, static_argnames=['tau'])
-def compute_multi_cap_probs(Ps, F0s, tau):
+def compute_multi_cap_probs(Ps, F0s, combs, tau):
     n = jnp.shape(Ps)[0]
     N = Ps.shape[2]
     for r in range(N):
@@ -296,11 +300,9 @@ def compute_multi_cap_probs(Ps, F0s, tau):
             F0s = F0s.at[:, :, i, r].set(jnp.matmul(Ps, (F0s[:, :, i - 1, r] - jnp.diag(jnp.diag(F0s[:, :, i - 1, r])))))
         indiv_cap_probs = jnp.sum(F0s, axis=2)
 
-    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
-    jax_combinations = jnp.array(combinations)
-    cap_probs = jnp.zeros(len(jax_combinations))
-    for i in range(len(jax_combinations)):
-        idx_vec = jax_combinations[i]
+    cap_probs = jnp.zeros(len(combs))
+    for i in range(len(combs)):
+        idx_vec = combs[i]
         not_cap_prob = jnp.prod(1 - indiv_cap_probs[idx_vec[:-1], idx_vec[-1], jnp.arange(N)])
         cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
 

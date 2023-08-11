@@ -254,11 +254,12 @@ if __name__ == '__main__':
     # GET_LEAF_CP_TEST()
     # # COMPARE_SPD_SPCP_TAUCP()
     n = 3
+    N = 2
     A = jnp.ones((n, n))
-    B = 5
-    tau_max = B - n + 1
-    tau_vec = (1, 2, 2)
-    # tau = 3
+    # B = 5
+    # tau_max = B - n + 1
+    # tau_vec = (1, 2, 2)
+    tau = 1
     # lower_bound = 1
     # upper_bound = 3
     # W = jax.random.randint(key=jax.random.PRNGKey(1), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
@@ -267,39 +268,11 @@ if __name__ == '__main__':
     # w_max = int(jnp.max(W))
     # print(w_max)
     # P = (1/n)*jnp.ones((n, n))
-    P = jnp.squeeze(scj.init_rand_Ps(A, 1))
-    print(P)
-    F0 = jnp.zeros((n, n, tau_max))
-    print(scj.greedy_co_opt_cap_probs(P, F0, B))
-    print(scj.comp_avg_greedy_co_opt_LCP_grad(P, A, F0, B))
-    print(scj.comp_avg_hetero_tau_LCP_grad(P, A, F0, tau_vec))
-
-    # indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
-    # print(scj.compute_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, tau))
-    # print(scj.compute_weighted_cap_probs_old(P, W, w_max, tau))
-    # print(scj.comp_avg_weighted_LCP_grad(P, A, indic_mat, E_ij, W, w_max, tau))
-
-    # start_time = time.time()
-    # print(scj.compute_weighted_cap_probs(P, W, w_max, tau))
-    # end_time = time.time()
-    # print(end_time - start_time)
+    Ps = scj.init_rand_Ps(A, N)
+    print(Ps)
+    F0s = jnp.zeros((n, n, tau, N))
     
-    # start_time = time.time()
-    # indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
-    # print(scj.compute_weighted_cap_probs_2(P, indic_mat, E_ij, W, w_max, tau))
-    # end_time = time.time()
-    # print(end_time - start_time)
-
-    # tau_vec = (1, 2, 3)
-    # tau_max = max(tau_vec)
-    # T = 6
-    # tau_max = int(T - n + 1)
-    # tau_vec = jnp.array([1, 2, 3])
-    # tau_vec = jnp.array([1.2, -1.3, 4])
-    # tau_max = int(jnp.max(tau_vec))
-    # P = (1/n)*jnp.ones((n, n))
-    # Ps = scj.init_rand_Ps(As[:, :, 0], num_init_Ps)
-    # F0 = jnp.zeros((n, n, tau_max))
-    # print(scj.compute_hetero_tau_cap_probs(P, F0, tau_vec))
-    # print(scj.comp_avg_LCP_grad(P, A, F0, tau_vec))
+    combs = scj.precompute_multi_cap_probs(n, N)
+    print(combs)
+    print(scj.compute_multi_cap_probs(Ps, F0s, combs, tau))
 
