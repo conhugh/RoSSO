@@ -488,7 +488,6 @@ if __name__ == '__main__':
                   [6, 4, 8, 6, 4, 2, 6, 6, 4, 5, 1, 3],
                   [6, 4, 6, 6, 3, 3, 6, 4, 5, 3, 2, 1]]
     sf_weights = jnp.array(sf_weights)
-    strat_viz.draw_env_graph(sf_weights, "SF Graph", show_edge_lens=True, save_dir="/home/connor/RoboSurvStratOpt/results/local/temp")
 
     P0 = strat_comp.init_rand_Ps(A, 1)
     W = sf_weights
