@@ -355,9 +355,9 @@ def find_overlay_files(directory, metric):
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
         t_metric, t_run_num = parse_metric_name(filename)
-        if os.path.isfile(f) and filename.find("iters") != -1:
+        if os.path.isfile(f) and "iters" in filename:
             iter_filepaths[t_run_num] = f
-        if os.path.isfile(f) and (filename.find("iters") == -1):
+        if os.path.isfile(f) and "iters" not in filename:
             if(metric == t_metric):
                 metric_filepaths[t_run_num] = f
     return iter_filepaths, metric_filepaths
@@ -365,10 +365,10 @@ def find_overlay_files(directory, metric):
 # Plot optimization metrics as each test completes:
 def visualize_metrics(metrics, test_name, test_dir, show_legend=True, overlay=True):
     met_vis_dir = test_dir + "/metrics_visualization"
-    if not os.path.isdir(met_vis_dir):
+    if not os.path.isdir(met_vis_dir): 
         os.mkdir(met_vis_dir)
     for metric_name in metrics.keys():
-        if metric_name.find("final") == -1 and metric_name.find("iters") == -1:
+        if "final" not in metric_name and "iters" not in metric_name:
             if overlay:
                 plt.figure()
                 plt.xlabel("Iteration Number")
@@ -402,9 +402,9 @@ def visualize_metrics_retro(test_set_name, overlay=False):
     sub_dir_num = len(os.listdir(test_set_dir))
     print("Generating Metrics Visualization...")
     print_progress_bar(0, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
-    for sub_dir_count, sub_dir in enumerate(os.listdir(test_set_dir)):
-        if (sub_dir.find("test") != -1 and sub_dir.find("test_spec") == -1):
-            test_name = sub_dir
+    for sub_dir_count, sub_dir_name in enumerate(os.listdir(test_set_dir)):
+        if "test" in sub_dir_name and os.path.isdir(os.path.join(test_set_dir, sub_dir_name)):
+            test_name = sub_dir_name
             test_dir = os.path.join(test_set_dir, test_name)
             metrics_dir = os.path.join(test_dir, "metrics")
             met_vis_dir = os.path.join(test_dir, "metrics_visualization")
@@ -420,7 +420,7 @@ def visualize_metrics_retro(test_set_name, overlay=False):
                     iters_list = line.split()
                     iters.append(list(map(int, iters_list)))
             for filename in os.listdir(metrics_dir):
-                if (filename.find("iters") == -1) and (filename.find("debug") == -1) and (filename.find("final") == -1):
+                if not "iters" in filename and not "debug" in filename and not "final" in filename:
                     metric_file = os.path.join(metrics_dir, filename)
                     metric_name = filename[:filename.find(".")]
                     with open(metric_file) as metric:

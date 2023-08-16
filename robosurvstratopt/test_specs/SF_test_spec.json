@@ -22,7 +22,7 @@
             "cnvg_test_mode": "P_update", 
             "cnvg_radius": 0.00001,
             "cnvg_window_size": 10,
-            "iters_per_printout": 200,
+            "iters_per_printout": 500,
             "iters_per_trackvals": 50
         }
     },
@@ -33,8 +33,7 @@
         "MCP_inds",
         "MCPs",
         "final_MCP",
-        "final_iters",
-        "diam_pair_CP_variance"
+        "final_iters"
     ],
     "graph_names": {
         "test1": "complete_N12"

@@ -1,3 +1,4 @@
+import numpy as np
 import jax
 from jax import jit
 from jax.tree_util import register_pytree_node
@@ -18,11 +19,14 @@ class HashableArray:
     def __getitem__(self, index):
         return self.array[index]
     
-    # def __mul__(self, other):
-    #     return HashableArray(self.array * other)
+    def __mul__(self, other):
+        return self.array * other
 
-    # def __rmul__(self, other):
-    #     return HashableArray(other * self.array)
+    def __rmul__(self, other):
+        return other * self.array
+    
+    # def __abs__(self):
+    #     return HashableArray(np.abs(self.array))
 
 register_pytree_node(
     HashableArray,

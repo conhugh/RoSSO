@@ -256,13 +256,13 @@ if __name__ == '__main__':
     # CSV_RW_TEST()
     # GET_LEAF_CP_TEST()
     # # COMPARE_SPD_SPCP_TAUCP()
-    n = 3
-    N = 2
-    A = jnp.ones((n, n))
+    # n = 3
+    # N = 2
+    # A = jnp.ones((n, n))
     # B = 5
     # tau_max = B - n + 1
     # tau_vec = (1, 2, 2)
-    tau = 1
+    # tau = 1
     # lower_bound = 1
     # upper_bound = 3
     # W = jax.random.randint(key=jax.random.PRNGKey(1), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
@@ -271,20 +271,20 @@ if __name__ == '__main__':
     # w_max = int(jnp.max(W))
     # print(w_max)
     # P = (1/n)*jnp.ones((n, n))
-    Ps = scj.init_rand_Ps(A, N)
-    print(Ps)
-    F0s = jnp.zeros((n, n, tau, N))
+    # Ps = strat_comp.init_rand_Ps(A, N)
+    # print(Ps)
+    # F0s = jnp.zeros((n, n, tau, N))
     
-    combs = scj.precompute_multi_cap_probs(n, N)
-    print(combs)
-    print(scj.compute_multi_cap_probs(Ps, F0s, combs, tau))
+    # combs = strat_comp.precompute_multi_cap_probs(n, N)
+    # print(combs)
+    # print(strat_comp.compute_multi_cap_probs(Ps, F0s, combs, tau))
 
 
     n = 12
     A, graph_name = graph_gen.gen_complete_G(n)
-    print(graph_name)
+    # print(graph_name)
     graph_code = graph_comp.gen_graph_code(A)
-    print(graph_code)
+    # print(graph_code)
 
     sf_weights = [[1, 3, 3, 5, 4, 6, 3, 5, 7, 4, 6, 6],
                   [3, 1, 5, 4, 2, 4, 4, 5, 5, 3, 5, 5],
@@ -302,11 +302,11 @@ if __name__ == '__main__':
     strat_viz.draw_env_graph(sf_weights, "SF Graph", show_edge_lens=True, save_dir="/home/connor/RoboSurvStratOpt/results/local/temp")
 
     P0 = strat_comp.init_rand_Ps(A, 1)
-    ic(jnp.shape(P0))
+    # ic(jnp.shape(P0))
     W = sf_weights
     w_max = int(jnp.max(W))
     tau = 9
-    print(type(w_max))
+    # print(type(w_max))
     # lcps_comp_start = time.time()
     # lcps = strat_comp.compute_weighted_LCPs(P0, W, w_max, tau)
     # lcps_comp_finish = time.time()
@@ -317,27 +317,38 @@ if __name__ == '__main__':
     # lcps_comp_finish = time.time()
     # print("LCPs second computation took " + str(lcps_comp_finish - lcps_comp_start) + " seconds.")
 
-    # A_hash = HashableArray(A)    
+    A_hash = HashableArray(A)    
     W_hash = HashableArray(W)    
 
-    # loss_comp_start = time.time()
-    # loss = strat_comp.loss_weighted_LCP(P0, A, W_hash, w_max, tau)
-    # loss_comp_finish = time.time()
-    # print("Loss function direct tracing took " + str(loss_comp_finish - loss_comp_start) + " seconds.")
+    # ic(W_hash.shape)
+    
 
-    # loss_comp_start = time.time()
-    # loss = strat_comp.loss_weighted_LCP(P0, A, W_hash, w_max, tau)
-    # loss_comp_finish = time.time()
-    # print("Loss function second computation took " + str(loss_comp_finish - loss_comp_start) + " seconds.")
+    indic_mat, E_ij = strat_comp.precompute_weighted_cap_probs(P0.shape[0], tau, W_hash)
+    # ic(indic_mat.shape)
+    # ic(E_ij.shape)
+    # ic(indic_mat)
+
+    indic_mat_hash = HashableArray(indic_mat)
+    E_ij_hash = HashableArray(E_ij)
+
+    loss_comp_start = time.time()
+    loss = strat_comp.loss_weighted_LCP(P0, A_hash, indic_mat_hash, E_ij_hash, W_hash, w_max, tau)
+    loss_comp_finish = time.time()
+    print("Loss function direct tracing took " + str(loss_comp_finish - loss_comp_start) + " seconds.")
+
+    loss_comp_start = time.time()
+    loss = strat_comp.loss_weighted_LCP(P0, A_hash, indic_mat_hash, E_ij_hash, W_hash, w_max, tau)
+    loss_comp_finish = time.time()
+    print("Loss function second computation took " + str(loss_comp_finish - loss_comp_start) + " seconds.")
 
     trace_start = time.time()
-    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, W_hash, w_max, tau)
+    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A_hash, indic_mat_hash, E_ij_hash, W_hash, w_max, tau)
     trace_finish = time.time()
     print("Tracing took " + str(trace_finish - trace_start) + " seconds.")
     # print("Initial Gradient:")
     # print(_grad)
     grad_comp_start = time.time()
-    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, W_hash, w_max, tau)
+    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A_hash, indic_mat_hash, E_ij_hash, W_hash, w_max, tau)
     grad_comp_finish = time.time()
     print("First post-trace gradient computation took " + str(grad_comp_finish - grad_comp_start) + " seconds.")
 

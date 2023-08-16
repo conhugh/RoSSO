@@ -217,8 +217,12 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
         if jnp.isnan(w_max):
             init_grad = strat_comp.comp_avg_LCP_grad(P0, A, F0, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         else:
+            A_hash = HashableArray(A)
+            W_hash = HashableArray(W)
             indic_mat, E_ij = strat_comp.precompute_weighted_cap_probs(n, tau, W)
-            init_grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, indic_mat, E_ij, W, w_max, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
+            indic_mat_hash = HashableArray(indic_mat)
+            E_ij_hash = HashableArray(E_ij)
+            init_grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A_hash, indic_mat_hash, E_ij_hash, W_hash, w_max, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         lr_scale = jnp.max(jnp.abs(init_grad))
         lr = opt_params["nominal_learning_rate"]/lr_scale
         lr_scales.append(lr_scale)
@@ -226,7 +230,7 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
         opt_params["scaled_learning_rate"] = lr
 
         start_time = time.time()
-        P, F, tracked_vals = run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, trackers)
+        P, F, tracked_vals = run_optimizer(P0, A_hash, indic_mat_hash, E_ij_hash, W_hash, w_max, F0, tau, opt_params, trackers)
         cnvg_time = time.time() - start_time
         cnvg_times.append(cnvg_time)
         print("--- Optimization took: %s seconds ---" % (cnvg_time))
@@ -242,12 +246,6 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
             else:
                 opt_metrics[track].extend(tracked_vals[track])
 
-    # Save results from optimization processes:
-    np.savetxt(test_dir + "/A.csv", np.asarray(A).astype(int), delimiter=',')  # Save the env graph binary adjacency matrix
-    strat_viz.draw_env_graph(A, graph_name, test_dir)  # Save a drawing of the env graph
-    strat_viz.visualize_metrics(opt_metrics, test_name, test_dir, show_legend=False) # Save plots of the optimization metrics tracked
-    graph_code = graph_comp.gen_graph_code(A)  # Generate unique graph code
-
     # Save all optimization metrics which were tracked:
     for metric_name in opt_metrics.keys():
         metric_path = os.path.join(metrics_dir, metric_name + ".txt")
@@ -256,6 +254,13 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
             for r in range(len(opt_metrics[metric_name])):
                 metric_string = metric_string + str(np.asarray(opt_metrics[metric_name][r])) + "\n"
             metric_file.write(metric_string)
+
+    # Save results from optimization processes:
+    np.savetxt(test_dir + "/A.csv", np.asarray(A).astype(int), delimiter=',')  # Save the env graph binary adjacency matrix
+    strat_viz.draw_env_graph(A, graph_name, test_dir)  # Save a drawing of the env graph
+    strat_viz.visualize_metrics(opt_metrics, test_name, test_dir, show_legend=False) # Save plots of the optimization metrics tracked
+    graph_code = graph_comp.gen_graph_code(A)  # Generate unique graph code
+
 
     # Write info file with graph and optimization algorithm info:
     info_path = os.path.join(test_dir, "test" + str(test_num) + "_info.txt")
@@ -320,7 +325,7 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
     P = P0 
     Q = P0
     old_MCP = 0
-    diam_pairs = graph_comp.get_diametric_pairs(A)
+    # diam_pairs = graph_comp.get_diametric_pairs(A)
     optimizer = setup_optimizer(opt_params)
     opt_state = optimizer.init(P0)
     cnvg_test_vals = deque()  # queue storing recent values of desired metric, for checking convergence
@@ -362,8 +367,9 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
             tracked_vals["iters"].append(iter)
             tracked_vals["P_diff_sums"].append(abs_P_diff_sum)
             tracked_vals["P_diff_max_elts"].append(jnp.max(jnp.abs(P_diff)))
-            F = strat_comp.compute_cap_probs(P, F0, tau)
-            tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
+            F = strat_comp.compute_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, tau)
+            # F = strat_comp.compute_cap_probs(P, F0, tau)
+            # tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
             F = F.reshape((n**2), order='F')
             tracked_vals["MCP_inds"].append(jnp.argmin(F))
             tracked_vals["MCPs"].append(jnp.min(F))
@@ -518,16 +524,20 @@ if __name__ == '__main__':
     tau = 9
     print(type(w_max))
 
+    A_hash = HashableArray(A)    
     W_hash = HashableArray(W)    
+    indic_mat, E_ij = strat_comp.precompute_weighted_cap_probs(P0.shape[0], tau, W_hash)
+    indic_mat_hash = HashableArray(indic_mat)
+    E_ij_hash = HashableArray(E_ij)
 
     trace_start = time.time()
-    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, W_hash, w_max, tau)
+    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A_hash, indic_mat_hash, E_ij_hash, W_hash, w_max, tau)
     trace_finish = time.time()
     print("Tracing took " + str(trace_finish - trace_start) + " seconds.")
     # print("Initial Gradient:")
     # print(_grad)
     grad_comp_start = time.time()
-    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, W_hash, w_max, tau)
+    _grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A_hash, indic_mat_hash, E_ij_hash, W_hash, w_max, tau)
     grad_comp_finish = time.time()
     print("First post-trace gradient computation took " + str(grad_comp_finish - grad_comp_start) + " seconds.")
     print("Grad shape = " + str(jnp.shape(_grad)))

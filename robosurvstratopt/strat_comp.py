@@ -270,8 +270,8 @@ def compute_weighted_LCPs(P, indic_mat, E_ij, W, w_max, tau, num_LCPs=1):
     return lcps
 
 # Loss function with constraints included in parametrization
-# @functools.partial(jit, static_argnames=['W', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
-@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+@functools.partial(jit, static_argnames=['A', 'indic_mat', 'E_ij', 'W', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+# @functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
 def loss_weighted_LCP(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs=1, use_abs_param=True):
     P = comp_P_param(Q, A, use_abs_param)
     lcps = compute_weighted_LCPs(P, indic_mat, E_ij, W, w_max, tau, num_LCPs)
@@ -280,7 +280,10 @@ def loss_weighted_LCP(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs=1, use_abs_
 # Autodiff parametrized loss function
 _comp_weighted_LCP_grad = jacrev(loss_weighted_LCP)
 # @functools.partial(jit, static_argnames=['W', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
-@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+#TODO: try including all but Q as static argnames and timing the wrapping/compilation, also
+#      try timing the wrapping with and without pre-wrapping inner functions. 
+@functools.partial(jit, static_argnames=['A', 'indic_mat', 'E_ij', 'W', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+# @functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
 def comp_avg_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs=1, use_abs_param=True):
     grad = _comp_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs, use_abs_param)
     return grad
