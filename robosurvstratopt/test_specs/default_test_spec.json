@@ -22,7 +22,7 @@
             "mom_decay_rate": 0.99,
             "use_nesterov": true,
             "cnvg_test_mode": "P_update", 
-            "cnvg_radius": 0.005,
+            "cnvg_radius": 0.01,
             "cnvg_window_size": 200,
             "iters_per_printout": 500,
             "iters_per_trackvals": 10
