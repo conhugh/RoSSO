@@ -320,7 +320,7 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
     n = P0.shape[0]
     P = P0 
     Q = P0
-    old_MCP = 0
+    MCP = 0
     diam_pairs = graph_comp.get_diametric_pairs(A)
     optimizer = setup_optimizer(opt_params)
     opt_state = optimizer.init(P0)
@@ -332,7 +332,7 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
 
     grad_flag = jnp.isnan(w_max)
     @functools.partial(jax.jit, static_argnames=['num_LCPs'])
-    def step(Q, P, opt_state, num_LCPs):
+    def step(Q, P, MCP, opt_state, num_LCPs):
         P_old = P
         if grad_flag:
             grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"]) # compute negative gradient
@@ -343,7 +343,15 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
         P = strat_comp.comp_P_param(Q, A)
         P_diff = P - P_old
         abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
-        return Q, P, P_diff, abs_P_diff_sum, opt_state
+
+        MCP_old = MCP
+        if opt_params["cnvg_test_mode"] == "MCP_diff":
+            MCP = strat_comp.compute_LCPs(P, F0, tau)
+            MCP_diff = MCP - MCP_old
+        elif opt_params["cnvg_test_mode"] == "P_update":
+            MCP = MCP_diff = jnp.nan
+
+        return Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, opt_state
     
     # Run gradient-based optimization process:
     iter = 0 
@@ -351,7 +359,7 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
     while not converged:
         num_LCPs = int(num_LCPs_schedule(iter))
         # apply update to P matrix, and parametrization Q:
-        Q, P, P_diff, abs_P_diff_sum, opt_state = step(Q, P, opt_state, num_LCPs)
+        Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, opt_state = step(Q, P, MCP, opt_state, num_LCPs)
         # track metrics of interest:
         if iter % opt_params["iters_per_trackvals"] == 0:
             tracked_vals["iters"].append(iter)
@@ -373,10 +381,7 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
         if opt_params["cnvg_test_mode"] == "P_update":
             converged, cnvg_test_vals = cnvg_check(iter, abs_P_diff_sum, cnvg_test_vals, opt_params)
         elif opt_params["cnvg_test_mode"] == "MCP_diff":
-            MCP =  strat_comp.compute_LCPs(P, F0, tau)
-            MCP_diff = MCP - old_MCP
             converged, cnvg_test_vals = cnvg_check(iter, MCP_diff, cnvg_test_vals, opt_params)
-            old_MCP = MCP
         # terminate optimization if maximum iteration count reached:
         if iter == opt_params["max_iters"]:
             converged = True
