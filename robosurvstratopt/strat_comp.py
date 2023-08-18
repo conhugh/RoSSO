@@ -182,7 +182,6 @@ def greedy_co_opt_cap_probs(P, F0, B):
     F0 = F0.at[:, :, 0].set(P)
     for i in range(1, tau_max):
         F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))
-
     cap_probs = P
     tau_vec = jnp.ones(n)
     B -= n
@@ -192,7 +191,6 @@ def greedy_co_opt_cap_probs(P, F0, B):
         tau_vec = tau_vec.at[col_idx].set(tau_vec[col_idx] + 1)
         cap_probs = cap_probs.at[:, col_idx].set(cap_probs[:, col_idx] + F0[:, col_idx, (tau_vec[col_idx]-1).astype(int)])
         B -= 1
-    
     return tau_vec, cap_probs
 
 @functools.partial(jit, static_argnames=['B', 'num_LCPs'])
