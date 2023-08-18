@@ -355,3 +355,5 @@ if __name__ == '__main__':
 
 
 
+    indic_mat, E_ij, combs = scj.precompute_weighted_multi_cap_probs(n, N, tau, W)
+    print(scj.compute_weighted_multi_cap_probs(Ps, indic_mat, E_ij, combs, W, w_max, tau))
