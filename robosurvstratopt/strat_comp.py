@@ -1,12 +1,11 @@
 # Computation of quantities relevant to optimization of stochastic surveillance strategies
 import functools
 import itertools
-
 import jax
-from jax import grad, jacrev, jit
 import jax.numpy as jnp
 import numpy as np
-
+from jax import jacrev, jit
+import scipy.optimize as sci_opt
 import graph_comp
 
 def init_rand_Ps(A, num, seed=0):
@@ -33,11 +32,21 @@ def init_rand_Ps(A, num, seed=0):
         P0 = A*jax.random.uniform(subkey, A_shape)
         P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0) 
         initPs = initPs.at[:, : , k].set(P0)
-    # if num == 1:
-    #     initPs = jnp.squeeze(initPs)
     return initPs
 
-# Parametrization of the P matrix
+def init_rand_qs(A, num, seed=0):
+    n_sq = jnp.shape(A)[0]**2
+    key = jax.random.PRNGKey(seed)
+    init_qs = jnp.zeros((n_sq, num),  dtype='float32')
+    for k in range(num):
+        key, subkey = jax.random.split(key)
+        q0 = jax.random.uniform(subkey, (n_sq, ))
+        init_qs = init_qs.at[:, k].set(q0)
+    return init_qs
+
+############################################################
+# Constraint Parametrization methods
+############################################################
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_P_param(Q, A, use_abs_param=True):
     P = Q*A
@@ -47,6 +56,63 @@ def comp_P_param(Q, A, use_abs_param=True):
         P = jnp.maximum(jnp.zeros_like(P), P) # apply component-wise ReLU   
     P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize rows to generate valid prob dist 
     return P
+
+def precompute_pi_param(pi, A):
+    n = len(pi)
+    # RHS
+    b = jnp.hstack([pi, jnp.ones(n)])
+
+    # stationary distribution constraint
+    B1 = jnp.zeros((n, n**2))
+    for i in range(n):
+        for j in range(n):
+            B1 = B1.at[i, (i*n)+j].set(pi[j])
+    # row-stochastic constraint
+    B2 = jnp.zeros((n, n**2))
+    for i in range(n):
+        for j in range(n):
+            B2 = B2.at[i, i+n*j].set(1)
+    B = jnp.vstack([B1, B2])
+
+    # graph constraint
+    n_zeros = n**2 - jnp.sum(A)
+    if n_zeros > 0:
+        b = jnp.hstack([b, jnp.zeros(n_zeros)])
+        B3 = jnp.zeros((n_zeros, n**2))
+        ct = 0
+        for i in range(n):
+            for j in range(n):
+                if A[i, j] == 0:
+                    B3 = B3.at[ct, i+(n*j)].set(1)
+                    ct += 1
+        B = jnp.vstack([B, B3])
+
+    # particular solution
+    q_ls = jnp.dot(jnp.linalg.pinv(B), b)
+
+    # null space
+    _, s, Vt = jnp.linalg.svd(B)
+    tol = 1e-6
+    idx = jnp.argmax(s < tol)
+    B_null = jnp.reshape(Vt.T[:, idx:], (n**2, -1))
+
+    return q_ls, B_null
+
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_P_pi_param(q, q_ls, B_null, A, use_abs_param=True):
+    n = A.shape[0]
+    if use_abs_param:
+        q = jnp.abs(q) # apply component-wise absolute-value
+    else:
+        q = jnp.maximum(jnp.zeros_like(q), q) # apply component-wise ReLU  
+    
+    # project q onto null space of B
+    proj_coeffs = jnp.dot(q.T, B_null)
+    q_null = jnp.squeeze(jnp.dot(proj_coeffs, B_null.T))
+
+    # add particular solution
+    P_vec = q_ls + q_null
+    return jnp.reshape(P_vec, (n, n), order='F')
 
 ############################################################
 # Stackelberg formulation
@@ -590,7 +656,7 @@ def comp_weighted_RTE_grad(Q, A, W, w_max, pi, N_eta, use_abs_param=True):
     return grad
 
 ############################################################
-# Auxiliary strategy analysis functions below
+# Auxiliary strategy analysis methods below
 ############################################################
 # @jit
 def compute_SPCPs(A, FHT_mats, node_pairs):
