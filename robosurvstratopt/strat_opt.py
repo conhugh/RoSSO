@@ -16,7 +16,7 @@ import strat_comp
 import strat_viz
 from test_spec import TestSpec
 
-def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
+def test_optimizer_fixed_iters(A, pi, tau, N_eta, alpha, num_init_Ps, max_iters):
     """
     Test and time various Optax optimizers for a fixed number of iterations.
 
@@ -38,15 +38,33 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
         Capture Probability matrix corresponding to optimized strategy.
     """
     init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
-    grad_func = strat_comp.comp_avg_LCP_grad
+    # grad_func = strat_comp.comp_avg_LCP_grad
+    # grad_func = strat_comp.comp_avg_LCP_pi_grad
+    # grad_func = strat_comp.comp_avg_weighted_LCP_pi_grad
+    # grad_func = strat_comp.comp_MHT_grad
+    grad_func = strat_comp.comp_MHT_pi_grad
+    # grad_func = strat_comp.comp_weighted_MHT_pi_grad
+    # grad_func = strat_comp.comp_ER_pi_grad
+    # grad_func = strat_comp.comp_RTE_pi_grad
+    # grad_func = strat_comp.comp_weighted_RTE_pi_grad
     num_LCPs = 1
     nominal_learning_rate = 0.001
     n = A.shape[0]
-    F0 = jnp.full((n, n, tau), np.NaN)
+    W = jnp.ones((n, n))
+    w_max = int(jnp.max(W))
+    F0 = jnp.zeros((n, n, tau))
+    indic_mat, E_ij = strat_comp.precompute_weighted_cap_probs(n, tau, W)
     time_avgs = []
     for k in range(num_init_Ps):
         Q = init_Ps[:, :, k]
-        init_grad = grad_func(Q, A, F0, tau, num_LCPs)
+        # init_grad = grad_func(Q, A, F0, tau, num_LCPs)
+        # init_grad = grad_func(Q, A, F0, tau, pi, alpha)
+        # init_grad = grad_func(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha)
+        # init_grad = grad_func(Q, A)
+        # init_grad = grad_func(Q, A, W, pi, alpha)
+        init_grad = grad_func(Q, A, pi, alpha)
+        # init_grad = grad_func(Q, A, pi, N_eta, alpha)
+        # init_grad = grad_func(Q, A, W, w_max, pi, N_eta, alpha)
         init_grad_max = jnp.max(jnp.abs(init_grad))
         scaled_learning_rate = nominal_learning_rate/init_grad_max
         schedule = optax.constant_schedule(scaled_learning_rate)
@@ -58,7 +76,14 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
         
         @jax.jit
         def step(Q, opt_state):
-            grad = -1*grad_func(Q, A, F0, tau, num_LCPs)
+            # grad = -1*grad_func(Q, A, F0, tau, num_LCPs)
+            # grad = -1*grad_func(Q, A, F0, tau, pi, alpha)
+            # grad = -1*grad_func(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha)
+            grad = grad_func(Q, A, pi, alpha)
+            # grad = grad_func(Q, A, W, pi, alpha)
+            # grad = -1*grad_func(Q, A, pi, alpha)
+            # grad = -1*grad_func(Q, A, pi, N_eta, alpha)
+            # grad = -1*grad_func(Q, A, W, w_max, pi, N_eta, alpha)
             updates, opt_state = optimizer.update(grad, opt_state)
             Q = optax.apply_updates(Q, updates)
             return Q, opt_state
@@ -79,8 +104,15 @@ def test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters):
         opt_time = time.time() - check_time
         time_avgs.append(opt_time)
         print("Optimizing P matrix number " + str(k + 1) + " over " + str(max_iters) + " iterations took: " + str(opt_time)[:7] + " seconds")
-        print("Final MCP: " + str(strat_comp.compute_LCPs(P, F0, tau, num_LCPs)))
-    return time_avgs
+        # print("Final MCP: " + str(strat_comp.compute_LCPs(P, F0, tau, num_LCPs)))
+        # print("Final MCP: " + str(strat_comp.loss_LCP_pi(Q, A, F0, tau, pi, alpha)))
+        # print("Final MCP: " + str(strat_comp.loss_weighted_LCP_pi(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha)))
+        print("Final loss: " + str(strat_comp.loss_MHT_pi(Q, A, pi, alpha)))
+        # print("Final loss: " + str(strat_comp.loss_weighted_MHT_pi(Q, A, W, pi, alpha)))
+        # print("Final loss: " + str(strat_comp.loss_ER_pi(Q, A, pi, alpha)))
+        # print("Final loss: " + str(strat_comp.loss_RTE_pi(Q, A, pi, N_eta, alpha)))
+        # print("Final loss: " + str(strat_comp.loss_weighted_RTE_pi(Q, A, W, w_max, pi, N_eta, alpha)))
+    return P
 
 def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
     """
@@ -482,21 +514,31 @@ if __name__ == '__main__':
     # test_set_name = "Quick_Setup_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/quick_test_spec.json")
 
-    test_set_name = "Default_Setup_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec.json")
+    # test_set_name = "Default_Setup_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec.json")
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec_2.json")
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/default_test_spec_3.json")
 
     # test_set_name = "SF_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
-    test_set_start_time = time.time()
-    run_test_set(test_set_name, test_spec)
-    print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
+    # test_set_start_time = time.time()
+    # run_test_set(test_set_name, test_spec)
+    # print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
     
-    # n = 12
+    # config.update("jax_debug_nans", True)
+    n = 4
+    A = jnp.array([[1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 1, 1], [1, 1, 1, 0]])
     # A = jnp.ones((n, n))
-    # tau = 6
-    # num_init_Ps = 1
-    # max_iters = 1000
-    # test_optimizer_fixed_iters(A, tau, num_init_Ps, max_iters)
+    W = jnp.ones((n, n))
+    pi = (0.4, 0.2, 0.25, 0.15)
+    alpha = 1000
+    tau = 2
+    eta = 0.25
+    N_eta = int(jnp.ceil(jnp.max(W)/(eta*jnp.min(jnp.array(pi)))) - 1)
+    # print(N_eta)
+    num_init_Ps = 1
+    max_iters = 1000
+    P = test_optimizer_fixed_iters(A, pi, tau, N_eta, alpha, num_init_Ps, max_iters)
+    print(jnp.dot(jnp.array(pi), P))
+    print(jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))))

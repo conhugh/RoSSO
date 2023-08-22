@@ -5,7 +5,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import jacrev, jit
-import scipy.optimize as sci_opt
 import graph_comp
 
 def init_rand_Ps(A, num, seed=0):
@@ -34,19 +33,6 @@ def init_rand_Ps(A, num, seed=0):
         initPs = initPs.at[:, : , k].set(P0)
     return initPs
 
-def init_rand_qs(A, num, seed=0):
-    n_sq = jnp.shape(A)[0]**2
-    key = jax.random.PRNGKey(seed)
-    init_qs = jnp.zeros((n_sq, num),  dtype='float32')
-    for k in range(num):
-        key, subkey = jax.random.split(key)
-        q0 = jax.random.uniform(subkey, (n_sq, ))
-        init_qs = init_qs.at[:, k].set(q0)
-    return init_qs
-
-############################################################
-# Constraint Parametrization methods
-############################################################
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_P_param(Q, A, use_abs_param=True):
     P = Q*A
@@ -56,63 +42,6 @@ def comp_P_param(Q, A, use_abs_param=True):
         P = jnp.maximum(jnp.zeros_like(P), P) # apply component-wise ReLU   
     P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize rows to generate valid prob dist 
     return P
-
-def precompute_pi_param(pi, A):
-    n = len(pi)
-    # RHS
-    b = jnp.hstack([pi, jnp.ones(n)])
-
-    # stationary distribution constraint
-    B1 = jnp.zeros((n, n**2))
-    for i in range(n):
-        for j in range(n):
-            B1 = B1.at[i, (i*n)+j].set(pi[j])
-    # row-stochastic constraint
-    B2 = jnp.zeros((n, n**2))
-    for i in range(n):
-        for j in range(n):
-            B2 = B2.at[i, i+n*j].set(1)
-    B = jnp.vstack([B1, B2])
-
-    # graph constraint
-    n_zeros = n**2 - jnp.sum(A)
-    if n_zeros > 0:
-        b = jnp.hstack([b, jnp.zeros(n_zeros)])
-        B3 = jnp.zeros((n_zeros, n**2))
-        ct = 0
-        for i in range(n):
-            for j in range(n):
-                if A[i, j] == 0:
-                    B3 = B3.at[ct, i+(n*j)].set(1)
-                    ct += 1
-        B = jnp.vstack([B, B3])
-
-    # particular solution
-    q_ls = jnp.dot(jnp.linalg.pinv(B), b)
-
-    # null space
-    _, s, Vt = jnp.linalg.svd(B)
-    tol = 1e-6
-    idx = jnp.argmax(s < tol)
-    B_null = jnp.reshape(Vt.T[:, idx:], (n**2, -1))
-
-    return q_ls, B_null
-
-@functools.partial(jit, static_argnames=['use_abs_param'])
-def comp_P_pi_param(q, q_ls, B_null, A, use_abs_param=True):
-    n = A.shape[0]
-    if use_abs_param:
-        q = jnp.abs(q) # apply component-wise absolute-value
-    else:
-        q = jnp.maximum(jnp.zeros_like(q), q) # apply component-wise ReLU  
-    
-    # project q onto null space of B
-    proj_coeffs = jnp.dot(q.T, B_null)
-    q_null = jnp.squeeze(jnp.dot(proj_coeffs, B_null.T))
-
-    # add particular solution
-    P_vec = q_ls + q_null
-    return jnp.reshape(P_vec, (n, n), order='F')
 
 ############################################################
 # Stackelberg formulation
@@ -193,6 +122,21 @@ _comp_LCP_grad = jacrev(loss_LCP)
 @functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
 def comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs=1, use_abs_param=True):
     grad = _comp_LCP_grad(Q, A, F0, tau, num_LCPs, use_abs_param) 
+    return grad
+
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['tau', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def loss_LCP_pi(Q, A, F0, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
+    n = len(pi)
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_LCPs(P, F0, tau, num_LCPs)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return jnp.mean(lcps) - alpha*penalty
+
+_comp_avg_LCP_pi_grad = jacrev(loss_LCP_pi)
+@functools.partial(jit, static_argnames=['tau', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def comp_avg_LCP_pi_grad(Q, A, F0, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
+    grad = _comp_avg_LCP_pi_grad(Q, A, F0, tau, pi, alpha, num_LCPs, use_abs_param)
     return grad
 
 ############################################################
@@ -349,6 +293,21 @@ def comp_avg_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs=1,
     grad = _comp_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs, use_abs_param)
     return grad
 
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def loss_weighted_LCP_pi(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
+    n = len(pi)
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_weighted_LCPs(P, indic_mat, E_ij, W, w_max, tau, num_LCPs)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return jnp.mean(lcps) - alpha*penalty
+
+_comp_avg_weighted_LCP_pi_grad = jacrev(loss_weighted_LCP_pi)
+@functools.partial(jit, static_argnames=['w_max', 'tau', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def comp_avg_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
+    grad = _comp_avg_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha, num_LCPs, use_abs_param)
+    return grad
+
 ############################################################
 # Multi-Agent Stackelberg formulation
 ############################################################
@@ -484,14 +443,14 @@ def comp_avg_weighted_multi_LCP_grad(Qs, As, W, w_max, tau, num_LCPs=1, use_abs_
 def compute_MHT(P):
     eigs = jnp.linalg.eigvals(P)
     sorted_eigs = eigs[jnp.argsort(jnp.abs(eigs))]
-    M = 1 + jnp.sum(1 / (1 - sorted_eigs[:-1]))
-    return jnp.real(M)
+    m = 1 + jnp.sum(1 / (1 - sorted_eigs[:-1]))
+    return jnp.real(m)
 
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def loss_MHT(Q, A, use_abs_param=True):
     P = comp_P_param(Q, A, use_abs_param)
-    M = compute_MHT(P)
-    return M
+    m = compute_MHT(P)
+    return m
 
 # Autodiff parametrized loss function
 _comp_MHT_grad = jacrev(loss_MHT)
@@ -500,27 +459,45 @@ def comp_MHT_grad(Q, A, use_abs_param=True):
     grad = _comp_MHT_grad(Q, A, use_abs_param) 
     return grad
 
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['pi', 'alpha', 'use_abs_param'])
+def loss_MHT_pi(Q, A, pi, alpha, use_abs_param=True):
+    n = len(pi)
+    P = comp_P_param(Q, A, use_abs_param)
+    m = compute_MHT(P)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return m + alpha*penalty
+
+_comp_MHT_pi_grad = jacrev(loss_MHT_pi)
+@functools.partial(jit, static_argnames=['pi', 'alpha', 'use_abs_param'])
+def comp_MHT_pi_grad(Q, A, pi, alpha, use_abs_param=True):
+    grad = _comp_MHT_pi_grad(Q, A, pi, alpha, use_abs_param) 
+    return grad
+
 ############################################################
 # Weighted Mean Hitting Time formulation
 ############################################################
-@jit
-def compute_weighted_MHT(P,W,pi):
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['pi'])
+def compute_weighted_MHT_pi(P, W, pi):
     n = P.shape[0]
-    M = compute_MHT(P)
-    sclr = jnp.dot(pi,jnp.dot(P*W,jnp.ones((n,))))
-    return jnp.squeeze(sclr*M)
+    m = compute_MHT(P)
+    sclr = jnp.dot(jnp.array(pi),jnp.dot(P*jnp.array(W),jnp.ones((n,))))
+    return jnp.squeeze(sclr*m)
 
-@functools.partial(jit, static_argnames=['use_abs_param'])
-def loss_weighted_MHT(Q, A, W, pi, use_abs_param=True):
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['pi', 'alpha', 'use_abs_param'])
+def loss_weighted_MHT_pi(Q, A, W, pi, alpha, use_abs_param=True):
+    n = len(pi)
     P = comp_P_param(Q, A, use_abs_param)
-    M = compute_weighted_MHT(P,W,pi)
-    return M
+    m_w = compute_weighted_MHT_pi(P, W, pi)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return m_w + alpha*penalty
 
-# Autodiff parametrized loss function
-_comp_weighted_MHT_grad = jacrev(loss_weighted_MHT)
-@functools.partial(jit, static_argnames=['use_abs_param'])
-def comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param=True):
-    grad = _comp_weighted_MHT_grad(Q, A, W, pi, use_abs_param)
+_comp_weighted_MHT_pi_grad = jacrev(loss_weighted_MHT_pi)
+@functools.partial(jit, static_argnames=['pi', 'alpha', 'use_abs_param'])
+def comp_weighted_MHT_pi_grad(Q, A, W, pi, alpha, use_abs_param=True):
+    grad = _comp_weighted_MHT_pi_grad(Q, A, W, pi, alpha, use_abs_param) 
     return grad
 
 ############################################################
@@ -565,30 +542,38 @@ def comp_multi_MHT_grad(Qs, As, use_abs_param=True):
 ############################################################
 # Entropy Rate formulation
 ############################################################
-@jit
-def compute_ER(P, pi):
-    entropy_rate_matrix = P*jnp.log(P)
-    entropy_rate = -jnp.dot(pi,jnp.sum(entropy_rate_matrix, axis=1))
+@functools.partial(jit, static_argnames=['pi'])
+def compute_ER_pi(P, pi):
+    # vectorized_cond() method required to avoid generation of nan values from 0*log(0) in jacrev gradient
+    def vectorized_cond(pred, true_fun, false_fun, operand):
+        true_op = jnp.where(pred, operand, 0)
+        false_op = jnp.where(pred, 0, operand)
+        return jnp.where(pred, true_fun(true_op), false_fun(false_op))
+    
+    entropy_rate_matrix = vectorized_cond(P > 0, lambda x: x*jnp.log(x), lambda x: 0.0, P)
+    entropy_rate = -jnp.dot(jnp.array(pi),jnp.sum(entropy_rate_matrix, axis=1))
     return jnp.squeeze(entropy_rate)
 
-@functools.partial(jit, static_argnames=['use_abs_param'])
-def loss_ER(Q, A, pi, use_abs_param=True):
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['pi', 'alpha', 'use_abs_param'])
+def loss_ER_pi(Q, A, pi, alpha, use_abs_param=True):
+    n = len(pi)
     P = comp_P_param(Q, A, use_abs_param)
-    loss = compute_ER(P, pi)
-    return loss
+    h_r = compute_ER_pi(P, pi)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return h_r - alpha*penalty
 
-# Autodiff parametrized loss function
-_comp_ER_grad = jacrev(loss_ER)
-@functools.partial(jit, static_argnames=['use_abs_param'])
-def comp_ER_grad(Q, A, pi, use_abs_param=True):
-    grad = _comp_ER_grad(Q, A, pi, use_abs_param)
+_comp_ER_pi_grad = jacrev(loss_ER_pi)
+@functools.partial(jit, static_argnames=['pi', 'alpha', 'use_abs_param'])
+def comp_ER_pi_grad(Q, A, pi, alpha, use_abs_param=True):
+    grad = _comp_ER_pi_grad(Q, A, pi, alpha, use_abs_param) 
     return grad
 
 ############################################################
 # Return-Time Entropy formulation
 ############################################################
-@functools.partial(jit, static_argnames=['N_eta'])
-def compute_RTE(P, pi, N_eta):
+@functools.partial(jit, static_argnames=['pi', 'N_eta'])
+def compute_RTE_pi(P, pi, N_eta):
     n = jnp.shape(P)[0]
     F_vecs = jnp.zeros((n**2, N_eta))
     F_vecs = F_vecs.at[:, 0].set(jnp.ravel(P, order='F'))
@@ -600,26 +585,28 @@ def compute_RTE(P, pi, N_eta):
         F_vecs = F_vecs.at[:, k].set(vec)
     F_vecs_sum = jnp.sum(F_vecs*jnp.log(F_vecs), axis=1)
     F_sum_mat = jnp.reshape(F_vecs_sum, (n, n), order='F')
-    return -jnp.squeeze(jnp.dot(pi, jnp.diagonal(F_sum_mat)))
+    return -jnp.squeeze(jnp.dot(jnp.array(pi), jnp.diagonal(F_sum_mat)))
 
-@functools.partial(jit, static_argnames=['N_eta', 'use_abs_param'])
-def loss_RTE(Q, A, pi, N_eta, use_abs_param=True):
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['pi', 'N_eta', 'alpha', 'use_abs_param'])
+def loss_RTE_pi(Q, A, pi, N_eta, alpha, use_abs_param=True):
+    n = len(pi)
     P = comp_P_param(Q, A, use_abs_param)
-    loss = compute_RTE(P, pi, N_eta)
-    return loss
+    h_ret = compute_RTE_pi(P, pi, N_eta)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return h_ret - alpha*penalty
 
-# Autodiff parametrized loss function
-_comp_RTE_grad = jacrev(loss_RTE)
-@functools.partial(jit, static_argnames=['N_eta', 'use_abs_param'])
-def comp_RTE_grad(Q, A, pi, N_eta, use_abs_param=True):
-    grad = _comp_RTE_grad(Q, A, pi, N_eta, use_abs_param)
+_comp_RTE_pi_grad = jacrev(loss_RTE_pi)
+@functools.partial(jit, static_argnames=['pi', 'N_eta', 'alpha', 'use_abs_param'])
+def comp_RTE_pi_grad(Q, A, pi, N_eta, alpha, use_abs_param=True):
+    grad = _comp_RTE_pi_grad(Q, A, pi, N_eta, alpha, use_abs_param) 
     return grad
 
 ############################################################
 # Weighted Return-Time Entropy formulation
 ############################################################
-@functools.partial(jit, static_argnames=['w_max', 'N_eta'])
-def compute_weighted_RTE(P, W, w_max, pi, N_eta):
+@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta'])
+def compute_weighted_RTE_pi(P, W, w_max, pi, N_eta):
     n = jnp.shape(P)[0]
     F_vecs = jnp.zeros((n**2, N_eta + w_max))
     I = jnp.identity(n)
@@ -640,19 +627,21 @@ def compute_weighted_RTE(P, W, w_max, pi, N_eta):
     F_vecs = F_vecs[:, w_max:]
     F_vecs_sum = jnp.sum(F_vecs*jnp.log(jnp.where(F_vecs == 0, 1, F_vecs)), axis=1)
     F_sum_mat = jnp.reshape(F_vecs_sum, (n, n), order='F')
-    return -jnp.squeeze(jnp.dot(pi, jnp.diagonal(F_sum_mat)))
+    return -jnp.squeeze(jnp.dot(jnp.array(pi), jnp.diagonal(F_sum_mat)))
 
-@functools.partial(jit, static_argnames=['w_max', 'N_eta', 'use_abs_param'])
-def loss_weighted_RTE(Q, A, W, w_max, pi, N_eta, use_abs_param=True):
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
+def loss_weighted_RTE_pi(Q, A, W, w_max, pi, N_eta, alpha, use_abs_param=True):
+    n = len(pi)
     P = comp_P_param(Q, A, use_abs_param)
-    loss = compute_weighted_RTE(P, W, w_max, pi, N_eta)
-    return loss
+    h_ret_w = compute_weighted_RTE_pi(P, W, w_max, pi, N_eta)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return h_ret_w - alpha*penalty
 
-# Autodiff parametrized loss function
-_comp_weighted_RTE_grad = jacrev(loss_weighted_RTE)
-@functools.partial(jit, static_argnames=['w_max', 'N_eta', 'use_abs_param'])
-def comp_weighted_RTE_grad(Q, A, W, w_max, pi, N_eta, use_abs_param=True):
-    grad = _comp_weighted_RTE_grad(Q, A, W, w_max, pi, N_eta, use_abs_param)
+_comp_weighted_RTE_pi_grad = jacrev(loss_weighted_RTE_pi)
+@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
+def comp_weighted_RTE_pi_grad(Q, A, W, w_max, pi, N_eta, alpha, use_abs_param=True):
+    grad = _comp_weighted_RTE_pi_grad(Q, A, W, w_max, pi, N_eta, alpha, use_abs_param) 
     return grad
 
 ############################################################

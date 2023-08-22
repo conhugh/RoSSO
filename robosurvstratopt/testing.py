@@ -247,48 +247,16 @@ def COMPARE_SPD_SPCP_TAUCP():
 
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
-    # NUDEL_FHT_TESTS()
-    # HOLY_GRID_TESTS()
-    # F0_REQ_TESTS()
-    # CSV_RW_TEST()
-    # GET_LEAF_CP_TEST()
-    # # COMPARE_SPD_SPCP_TAUCP()
     n = 4
-    N = 2
-    # A = jnp.ones((n, n))
-    A = jnp.array([[1, 0, 1, 1], [1, 1, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1]])
-    print(A)
-    key = jax.random.PRNGKey(0)  # Initialize a random key
-    Q = jax.random.normal(key, (n, n))
-    # print(Q)
-    pi = jnp.array([0.4, 0.2, 0.25, 0.15])
-    q = scj.init_rand_qs(A, 1, 1)
-    q_ls, B_null = scj.precompute_pi_param(pi, A)
-    P = scj.comp_P_pi_param(q, q_ls, B_null, A)
-    print(P)
-    print(jnp.dot(P, jnp.ones((n, 1))))
-    print(jnp.dot(pi, P))
-    # print(jnp.dot(B, P))
-    # print(jnp.dot(pi, P))
-    # B = 5
-    # tau_max = B - n + 1
-    # tau_vec = (1, 2, 2)
-    # tau = 3
-    # lower_bound = 1
-    # upper_bound = 3
-    # W = jax.random.randint(key=jax.random.PRNGKey(1), shape=(n, n), minval=lower_bound, maxval=upper_bound + 1)
-    # W = jnp.ones((n, n))
-    # print(W)
-    # w_max = int(jnp.max(W))
-    # print(w_max)
+    A = jnp.ones((n, n))
+    pi = (0.4, 0.2, 0.25, 0.15)
+    alpha = 100
+    P = scj.init_rand_Ps(A, 1)
+    Q = P[:, :, 0]
     # P = (1/n)*jnp.ones((n, n))
-    # Ps = scj.init_rand_Ps(A, N)
-    # print(Ps)
-    # F0s = jnp.zeros((n, n, tau, N))
-    
-    # combs = scj.precompute_multi_cap_probs(n, N)
-    # print(combs)
-    # print(scj.compute_multi_cap_probs(Ps, F0s, combs, tau))
-
-    # indic_mat, E_ij, combs = scj.precompute_weighted_multi_cap_probs(n, N, tau, W)
-    # print(scj.compute_weighted_multi_cap_probs(Ps, indic_mat, E_ij, combs, W, w_max, tau))
+    Q = Q.at[0, 0].set(0)
+    print(Q)
+    print(scj.compute_ER(P, pi))
+    print(scj.loss_ER_pi(P, A, pi, alpha))
+    print(scj.comp_ER_pi_grad(Q, A, pi, alpha))
+    print(1e-6*jnp.log(1e-6))
