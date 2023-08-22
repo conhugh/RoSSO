@@ -181,6 +181,21 @@ def comp_avg_hetero_tau_LCP_grad(Q, A, F0, tau_vec, num_LCPs=1, use_abs_param=Tr
     grad = _comp_hetero_tau_LCP_grad(Q, A, F0, tau_vec, num_LCPs, use_abs_param) 
     return grad
 
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['tau_vec', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def loss_hetero_tau_LCP_pi(Q, A, F0, tau_vec, pi, alpha, num_LCPs=1, use_abs_param=True):
+    n = len(pi)
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_hetero_tau_LCPs(P, F0, tau_vec, num_LCPs)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return jnp.mean(lcps) - alpha*penalty
+
+_comp_avg_hetero_tau_LCP_pi_grad = jacrev(loss_hetero_tau_LCP_pi)
+@functools.partial(jit, static_argnames=['tau_vec', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def comp_avg_hetero_tau_LCP_pi_grad(Q, A, F0, tau_vec, pi, alpha, num_LCPs=1, use_abs_param=True):
+    grad = _comp_avg_hetero_tau_LCP_pi_grad(Q, A, F0, tau_vec, pi, alpha, num_LCPs, use_abs_param)
+    return grad
+
 ############################################################
 # Stackelberg Co-Optimization formulation
 ############################################################
@@ -229,6 +244,21 @@ _comp_greedy_co_opt_LCP_grad = jacrev(loss_greedy_co_opt_LCP)
 @functools.partial(jit, static_argnames=['B', 'num_LCPs', 'use_abs_param'])
 def comp_avg_greedy_co_opt_LCP_grad(Q, A, F0, B, num_LCPs=1, use_abs_param=True):
     grad = _comp_greedy_co_opt_LCP_grad(Q, A, F0, B, num_LCPs, use_abs_param) 
+    return grad
+
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['B', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def loss_greedy_co_opt_LCP_pi(Q, A, F0, B, pi, alpha, num_LCPs=1, use_abs_param=True):
+    n = len(pi)
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_greedy_co_opt_LCPs(P, F0, B, num_LCPs)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return jnp.mean(lcps) - alpha*penalty
+
+_comp_avg_greedy_co_opt_LCP_pi_grad = jacrev(loss_greedy_co_opt_LCP_pi)
+@functools.partial(jit, static_argnames=['B', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def comp_avg_greedy_co_opt_LCP_pi_grad(Q, A, F0, B, pi, alpha, num_LCPs=1, use_abs_param=True):
+    grad = _comp_avg_greedy_co_opt_LCP_pi_grad(Q, A, F0, B, pi, alpha, num_LCPs, use_abs_param)
     return grad
 
 ############################################################

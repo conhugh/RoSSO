@@ -16,7 +16,7 @@ import strat_comp
 import strat_viz
 from test_spec import TestSpec
 
-def test_optimizer_fixed_iters(A, pi, tau, N_eta, alpha, num_init_Ps, max_iters):
+def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps, max_iters):
     """
     Test and time various Optax optimizers for a fixed number of iterations.
 
@@ -41,8 +41,10 @@ def test_optimizer_fixed_iters(A, pi, tau, N_eta, alpha, num_init_Ps, max_iters)
     # grad_func = strat_comp.comp_avg_LCP_grad
     # grad_func = strat_comp.comp_avg_LCP_pi_grad
     # grad_func = strat_comp.comp_avg_weighted_LCP_pi_grad
+    # grad_func = strat_comp.comp_avg_hetero_tau_LCP_pi_grad
+    grad_func = strat_comp.comp_avg_greedy_co_opt_LCP_pi_grad
     # grad_func = strat_comp.comp_MHT_grad
-    grad_func = strat_comp.comp_MHT_pi_grad
+    # grad_func = strat_comp.comp_MHT_pi_grad
     # grad_func = strat_comp.comp_weighted_MHT_pi_grad
     # grad_func = strat_comp.comp_ER_pi_grad
     # grad_func = strat_comp.comp_RTE_pi_grad
@@ -52,17 +54,21 @@ def test_optimizer_fixed_iters(A, pi, tau, N_eta, alpha, num_init_Ps, max_iters)
     n = A.shape[0]
     W = jnp.ones((n, n))
     w_max = int(jnp.max(W))
-    F0 = jnp.zeros((n, n, tau))
-    indic_mat, E_ij = strat_comp.precompute_weighted_cap_probs(n, tau, W)
+    # F0 = jnp.zeros((n, n, tau))
+    # F0 = jnp.zeros((n, n, jnp.max(jnp.array(tau_vec))))
+    F0 = jnp.zeros((n, n, B-n+1))
+    # indic_mat, E_ij = strat_comp.precompute_weighted_cap_probs(n, tau, W)
     time_avgs = []
     for k in range(num_init_Ps):
         Q = init_Ps[:, :, k]
         # init_grad = grad_func(Q, A, F0, tau, num_LCPs)
         # init_grad = grad_func(Q, A, F0, tau, pi, alpha)
         # init_grad = grad_func(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha)
+        # init_grad = grad_func(Q, A, F0, tau_vec, pi, alpha)
+        init_grad = grad_func(Q, A, F0, B, pi, alpha)
         # init_grad = grad_func(Q, A)
         # init_grad = grad_func(Q, A, W, pi, alpha)
-        init_grad = grad_func(Q, A, pi, alpha)
+        # init_grad = grad_func(Q, A, pi, alpha)
         # init_grad = grad_func(Q, A, pi, N_eta, alpha)
         # init_grad = grad_func(Q, A, W, w_max, pi, N_eta, alpha)
         init_grad_max = jnp.max(jnp.abs(init_grad))
@@ -79,7 +85,9 @@ def test_optimizer_fixed_iters(A, pi, tau, N_eta, alpha, num_init_Ps, max_iters)
             # grad = -1*grad_func(Q, A, F0, tau, num_LCPs)
             # grad = -1*grad_func(Q, A, F0, tau, pi, alpha)
             # grad = -1*grad_func(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha)
-            grad = grad_func(Q, A, pi, alpha)
+            # grad = -1*grad_func(Q, A, F0, tau_vec, pi, alpha)
+            grad = -1*grad_func(Q, A, F0, B, pi, alpha)
+            # grad = grad_func(Q, A, pi, alpha)
             # grad = grad_func(Q, A, W, pi, alpha)
             # grad = -1*grad_func(Q, A, pi, alpha)
             # grad = -1*grad_func(Q, A, pi, N_eta, alpha)
@@ -107,7 +115,9 @@ def test_optimizer_fixed_iters(A, pi, tau, N_eta, alpha, num_init_Ps, max_iters)
         # print("Final MCP: " + str(strat_comp.compute_LCPs(P, F0, tau, num_LCPs)))
         # print("Final MCP: " + str(strat_comp.loss_LCP_pi(Q, A, F0, tau, pi, alpha)))
         # print("Final MCP: " + str(strat_comp.loss_weighted_LCP_pi(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha)))
-        print("Final loss: " + str(strat_comp.loss_MHT_pi(Q, A, pi, alpha)))
+        # print("Final MCP: " + str(strat_comp.loss_hetero_tau_LCP_pi(Q, A, F0, tau_vec, pi, alpha)))
+        print("Final MCP: " + str(strat_comp.loss_greedy_co_opt_LCP_pi(Q, A, F0, B, pi, alpha)))
+        # print("Final loss: " + str(strat_comp.loss_MHT_pi(Q, A, pi, alpha)))
         # print("Final loss: " + str(strat_comp.loss_weighted_MHT_pi(Q, A, W, pi, alpha)))
         # print("Final loss: " + str(strat_comp.loss_ER_pi(Q, A, pi, alpha)))
         # print("Final loss: " + str(strat_comp.loss_RTE_pi(Q, A, pi, N_eta, alpha)))
@@ -533,12 +543,14 @@ if __name__ == '__main__':
     W = jnp.ones((n, n))
     pi = (0.4, 0.2, 0.25, 0.15)
     alpha = 1000
-    tau = 2
+    tau = jnp.nan
+    tau_vec = (2, 2, 2, 2)
     eta = 0.25
     N_eta = int(jnp.ceil(jnp.max(W)/(eta*jnp.min(jnp.array(pi)))) - 1)
     # print(N_eta)
+    B = 8
     num_init_Ps = 1
     max_iters = 1000
-    P = test_optimizer_fixed_iters(A, pi, tau, N_eta, alpha, num_init_Ps, max_iters)
+    P = test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps, max_iters)
     print(jnp.dot(jnp.array(pi), P))
     print(jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))))
