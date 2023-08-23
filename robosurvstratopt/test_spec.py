@@ -5,7 +5,7 @@ import os
 class TestSpec:
     default_test_spec_filepath = os.getcwd() + "/TestSpecs/default_test_spec.json"
 
-    def __init__(self, test_spec_filepath=None, test_spec_name=None, num_tests=None, optimizer_params=None, trackers=None, graph_names=None, taus=None, graph_codes=None, weight_matrices=None):
+    def __init__(self, test_spec_filepath=None, test_spec_name=None, num_tests=None, optimizer_params=None, trackers=None, graph_names=None, objective_functions=None, stationary_distributions=None, taus=None, etas=None, graph_codes=None, weight_matrices=None):
         if test_spec_filepath != None:
             if os.path.exists(test_spec_filepath):
                 # instantiate test_spec object from JSON file:
@@ -17,18 +17,24 @@ class TestSpec:
                     self.optimizer_params = test_spec_dict["optimizer_params"]
                     self.trackers = test_spec_dict["trackers"]
                     self.graph_names = test_spec_dict["graph_names"]
+                    self.objective_functions = test_spec_dict["objective_functions"]
+                    self.stationary_distributions = test_spec_dict["stationary_distributions"]
                     self.taus = test_spec_dict["taus"]
+                    self.etas = test_spec_dict["etas"]
                     self.graph_codes = test_spec_dict["graph_codes"]
                     self.weight_matrices = test_spec_dict["weight_matrices"]
             else:
                 raise ValueError("Test specification file was not found at provided path.")
-        elif all(arg is not None for arg in (test_spec_name, num_tests, optimizer_params, trackers, graph_names, taus, graph_codes, weight_matrices)): 
+        elif all(arg is not None for arg in (test_spec_name, num_tests, optimizer_params, trackers, graph_names, objective_functions, stationary_distributions, taus, etas, graph_codes, weight_matrices)): 
             self.test_spec_name = test_spec_name
             self.num_tests = num_tests
             self.optimizer_params = optimizer_params
             self.trackers = trackers
             self.graph_names = graph_names
+            self.objective_functions = objective_functions
+            self.stationary_distributions = stationary_distributions
             self.taus = taus
+            self.etas = etas
             self.graph_codes = graph_codes
             self.weight_matrices = weight_matrices
         elif os.path.exists(TestSpec.default_test_spec_filepath):
@@ -42,7 +48,10 @@ class TestSpec:
                 self.optimizer_params = default_test_spec_dict["optimizer_params"]
                 self.trackers = default_test_spec_dict["trackers"]
                 self.graph_names = default_test_spec_dict["graph_names"]
+                self.objective_functions = default_test_spec_dict["objective_functions"]
+                self.stationary_distributions = default_test_spec_dict["stationary_distributions"]
                 self.taus = default_test_spec_dict["taus"]
+                self.etas = default_test_spec_dict["etas"]
                 self.graph_codes = default_test_spec_dict["graph_codes"]
                 self.weight_matrices = default_test_spec_dict["weight_matrices"]
         else:
@@ -58,7 +67,7 @@ class TestSpec:
             json_file.write(json_string)
 
     def validate_test_spec(self):
-        required_fields = ["test_spec_name", "num_tests", "optimizer_params", "trackers", "graph_names", "taus", "graph_codes"]
+        required_fields = ["test_spec_name", "num_tests", "optimizer_params", "trackers", "graph_names", "objective_functions", "stationary_distributions", "taus", "etas", "graph_codes", "weight_matrices"]
         missing_fields = []
         complete_fields = True
         for field in required_fields:

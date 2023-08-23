@@ -170,7 +170,10 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
         graph_name = test_spec.graph_names[test_name]
         graph_code = test_spec.graph_codes[test_name]
         A = graph_comp.graph_decode(graph_code)
+        obj_fun_flag = test_spec.objective_functions[test_name]
+        pi = tuple(test_spec.stationary_distributions[test_name])
         tau = test_spec.taus[test_name]
+        eta = test_spec.etas[test_name]
         trackers = test_spec.trackers
         if test_spec.optimizer_params["varying_optimizer_params"]:
             opt_params = test_spec.optimizer_params[test_name].copy()
@@ -184,7 +187,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
             w_max = jnp.nan
         print("-------- Working on Graph " + graph_name + " with tau = " + str(tau) + "----------")
         test_start_time = time.time()
-        times, iters, MCPs = run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, trackers)
+        times, iters, MCPs = run_test(A, W, w_max, tau, obj_fun_flag, pi, eta, test_set_dir, test_num, graph_name, opt_params, trackers)
         print("Running test number " + str(test_num) + " took " + str(time.time() - test_start_time) + " seconds to complete.")
         run_times.append(times)
         final_iters.append(iters)
@@ -194,7 +197,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
     if(opt_comparison):
         strat_viz.plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, final_MCPs)
 
-def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, trackers):
+def run_test(A, W, w_max, tau, obj_fun_flag, pi, eta, test_set_dir, test_num, graph_name, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and number of initial strategies.
 
@@ -243,25 +246,49 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
     
     # Run the optimization algorithm for the specified number of initial strategies:
     n = A.shape[0]
-    F0 = jnp.full((n, n, tau), np.NaN)
+    F0 = jnp.nan
+    N_eta = jnp.nan
     num_init_Ps = opt_params["num_init_Ps"]
     init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
     learning_rates = []
     lr_scales = []
     cnvg_times = []
     opt_metrics = {track : [] for track in trackers}
-    if jnp.isnan(w_max):
-        indic_mat = E_ij = jnp.nan
-    else:
+    # precomputation
+    if obj_fun_flag == 'weighted_Stackelberg' or obj_fun_flag == 'weighted_Stackelberg_pi':
         indic_mat, E_ij = strat_comp.precompute_weighted_cap_probs(n, tau, W)
+    else:
+        indic_mat = E_ij = jnp.nan
     for k in range(num_init_Ps):
         print("Optimizing with initial P matrix number " + str(k + 1) + "...")
         print("Using optimizer: " + opt_params["optimizer_name"])
         P0 = init_Ps[:, :, k]
-        if jnp.isnan(w_max):
+        # initial gradient computation
+        if obj_fun_flag == 'Stackelberg':
+            F0 = jnp.full((n, n, tau), jnp.nan)
             init_grad = strat_comp.comp_avg_LCP_grad(P0, A, F0, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
-        else:
+        elif obj_fun_flag == 'Stackelberg_pi':
+            F0 = jnp.full((n, n, tau), jnp.nan)
+            init_grad = strat_comp.comp_avg_LCP_pi_grad(P0, A, F0, tau, pi, opt_params["alpha"], opt_params["num_init_LCPs"], opt_params["use_abs_param"]) 
+        elif obj_fun_flag == 'weighted_Stackelberg':
             init_grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, indic_mat, E_ij, W, w_max, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'weighted_Stackelberg_pi':
+            init_grad = strat_comp.comp_avg_weighted_LCP_pi_grad(P0, A, indic_mat, E_ij, W, w_max, tau, pi, opt_params["alpha"], opt_params["num_init_LCPs"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'MHT':
+            init_grad = strat_comp.comp_MHT_grad(P0, A, opt_params["use_abs_param"])
+        elif obj_fun_flag == 'MHT_pi':
+            init_grad = strat_comp.comp_MHT_pi_grad(P0, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'weighted_MHT_pi':
+            init_grad = strat_comp.comp_weighted_MHT_pi_grad(P0, A, W, pi, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'ER_pi':
+            init_grad = strat_comp.comp_ER_pi_grad(P0, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'RTE_pi':
+            N_eta = int(jnp.ceil(1/(eta*jnp.min(jnp.array(pi)))) - 1)
+            init_grad = strat_comp.comp_RTE_pi_grad(P0, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'weighted_RTE_pi':
+            N_eta = int(jnp.ceil(w_max/(eta*jnp.min(jnp.array(pi)))) - 1)
+            init_grad = strat_comp.comp_weighted_RTE_pi_grad(P0, A, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+
         lr_scale = jnp.max(jnp.abs(init_grad))
         lr = opt_params["nominal_learning_rate"]/lr_scale
         lr_scales.append(lr_scale)
@@ -269,7 +296,7 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
         opt_params["scaled_learning_rate"] = lr
 
         start_time = time.time()
-        P, F, tracked_vals = run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, trackers)
+        P, tracked_vals = run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, obj_fun_flag, pi, N_eta, opt_params, trackers)
         cnvg_time = time.time() - start_time
         cnvg_times.append(cnvg_time)
         print("--- Optimization took: %s seconds ---" % (cnvg_time))
@@ -324,7 +351,7 @@ def run_test(A, W, w_max, tau, test_set_dir, test_num, graph_name, opt_params, t
     info.close()
     return cnvg_times, opt_metrics["final_iters"], opt_metrics["final_MCP"]
 
-def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, trackers):
+def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, obj_fun_flag, pi, N_eta, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and initial strategy.
 
@@ -372,14 +399,31 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
     num_LCPs_schedule = {int(key): value for key, value in opt_params["num_LCPs_schedule"].items()}
     num_LCPs_schedule = optax.piecewise_constant_schedule(opt_params["num_init_LCPs"], num_LCPs_schedule)
 
-    grad_flag = jnp.isnan(w_max)
-    @functools.partial(jax.jit, static_argnames=['num_LCPs'])
+    @jax.jit
     def step(Q, P, MCP, opt_state, num_LCPs):
         P_old = P
-        if grad_flag:
-            grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"]) # compute negative gradient
-        else:
-            grad = -1*strat_comp.comp_avg_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs, opt_params["use_abs_param"]) # compute negative gradient
+        # gradient computation
+        if obj_fun_flag == 'Stackelberg':
+            grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"])
+        elif obj_fun_flag == 'Stackelberg_pi':
+            grad = -1*strat_comp.comp_avg_LCP_pi_grad(Q, A, F0, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"]) 
+        elif obj_fun_flag == 'weighted_Stackelberg':
+            grad = -1*strat_comp.comp_avg_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau, num_LCPs, opt_params["use_abs_param"])
+        elif obj_fun_flag == 'weighted_Stackelberg_pi':
+            grad = -1*strat_comp.comp_avg_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
+        elif obj_fun_flag == 'MHT':
+            grad = strat_comp.comp_MHT_grad(Q, A, opt_params["use_abs_param"])
+        elif obj_fun_flag == 'MHT_pi':
+            grad = strat_comp.comp_MHT_pi_grad(Q, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'weighted_MHT_pi':
+            grad = strat_comp.comp_weighted_MHT_pi_grad(Q, A, W, pi, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'ER_pi':
+            grad = -1*strat_comp.comp_ER_pi_grad(Q, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'RTE_pi':
+            grad = -1*strat_comp.comp_RTE_pi_grad(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'weighted_RTE_pi':
+            grad = -1*strat_comp.comp_weighted_RTE_pi_grad(Q, A, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+        
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
         P = strat_comp.comp_P_param(Q, A)
@@ -407,18 +451,23 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
             tracked_vals["iters"].append(iter)
             tracked_vals["P_diff_sums"].append(abs_P_diff_sum)
             tracked_vals["P_diff_max_elts"].append(jnp.max(jnp.abs(P_diff)))
-            F = strat_comp.compute_cap_probs(P, F0, tau)
-            tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
-            F = F.reshape((n**2), order='F')
-            tracked_vals["MCP_inds"].append(jnp.argmin(F))
-            tracked_vals["MCPs"].append(jnp.min(F))
+            if "Stackelberg" in obj_fun_flag:
+                F = strat_comp.compute_cap_probs(P, F0, tau)
+                tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
+                F = F.reshape((n**2), order='F')
+                tracked_vals["MCP_inds"].append(jnp.argmin(F))
+                tracked_vals["MCPs"].append(jnp.min(F))
+            else:
+                tracked_vals["diam_pair_CP_variance"].append(jnp.nan)
+                tracked_vals["MCP_inds"].append(jnp.nan)
+                tracked_vals["MCPs"].append(jnp.nan)
             # print status update to terminal:
             if(iter % opt_params["iters_per_printout"] == 0):
                 print("------ iteration number " + str(iter) + ", elapsed time =  " + str(time.time() - check_time) + "-------")
                 # print("grad 1-norm = " + str(jnp.sum(jnp.abs(grad))))
                 # print("grad inf norm = " + str(jnp.max(jnp.abs(grad))))
                 print("abs_P_diff_sum = " + str(jnp.sum(jnp.abs(P_diff))))
-                print("MCP = " + str(jnp.min(F)))
+                # print("MCP = " + str(jnp.min(F)))
         # check for convergence:
         if opt_params["cnvg_test_mode"] == "P_update":
             converged, cnvg_test_vals = cnvg_check(iter, abs_P_diff_sum, cnvg_test_vals, opt_params)
@@ -429,14 +478,18 @@ def run_optimizer(P0, A, indic_mat, E_ij, W, w_max, F0, tau, opt_params, tracker
             converged = True
         iter = iter + 1
 
-    # convergence or max iteration count has been reached...
-    F = strat_comp.compute_cap_probs(P, F0, tau)
-    final_MCP = jnp.min(F)
-    tracked_vals["final_MCP"].append(final_MCP)
-    print("Minimum Capture Probability at iteration " + str(iter) + ":")
-    print(final_MCP)
     tracked_vals["final_iters"].append(iter)
-    return P, F, tracked_vals
+    # convergence or max iteration count has been reached...
+    if "Stackelberg" in obj_fun_flag:
+        F = strat_comp.compute_cap_probs(P, F0, tau)
+        final_MCP = jnp.min(F)
+        tracked_vals["final_MCP"].append(final_MCP)
+        # print("Minimum Capture Probability at iteration " + str(iter) + ":")
+        # print(final_MCP)
+    else:
+        tracked_vals["final_MCP"].append(jnp.nan)
+
+    return P, tracked_vals
 
 def setup_optimizer(opt_params):
     """
@@ -532,25 +585,26 @@ if __name__ == '__main__':
     # test_set_name = "SF_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
-    # test_set_start_time = time.time()
-    # run_test_set(test_set_name, test_spec)
-    # print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
+    test_set_name = "SF_Comparison_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
+
+    test_set_start_time = time.time()
+    run_test_set(test_set_name, test_spec)
+    print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
     
     # config.update("jax_debug_nans", True)
-    n = 4
-    A = jnp.array([[1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 1, 1], [1, 1, 1, 0]])
-    # A = jnp.ones((n, n))
-    W = jnp.ones((n, n))
-    pi = (0.4, 0.2, 0.25, 0.15)
-    alpha = 1000
-    tau = jnp.nan
-    tau_vec = (2, 2, 2, 2)
-    eta = 0.25
-    N_eta = int(jnp.ceil(jnp.max(W)/(eta*jnp.min(jnp.array(pi)))) - 1)
-    # print(N_eta)
-    B = 8
-    num_init_Ps = 1
-    max_iters = 1000
-    P = test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps, max_iters)
-    print(jnp.dot(jnp.array(pi), P))
-    print(jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))))
+    # n = 4
+    # A = jnp.array([[1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 1, 1], [1, 1, 1, 0]])
+    # # A = jnp.ones((n, n))
+    # W = jnp.ones((n, n))
+    # pi = (0.4, 0.2, 0.25, 0.15)
+    # alpha = 1000
+    # tau = jnp.nan
+    # tau_vec = (2, 2, 2, 2)
+    # eta = 0.25
+    # N_eta = int(jnp.ceil(jnp.max(W)/(eta*jnp.min(jnp.array(pi)))) - 1)
+    # # print(N_eta)
+    # B = 8
+    # num_init_Ps = 1
+    # max_iters = 1000
+    # P = test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps, max_iters)
