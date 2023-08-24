@@ -256,7 +256,7 @@ if __name__ == '__main__':
     # P = (1/n)*jnp.ones((n, n))
     Q = Q.at[0, 0].set(0)
     print(Q)
-    print(scj.compute_ER(P, pi))
+    print(scj.compute_ER_pi(P, pi))
     print(scj.loss_ER_pi(P, A, pi, alpha))
     print(scj.comp_ER_pi_grad(Q, A, pi, alpha))
     print(1e-6*jnp.log(1e-6))

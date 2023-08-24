@@ -574,13 +574,7 @@ def comp_multi_MHT_grad(Qs, As, use_abs_param=True):
 ############################################################
 @functools.partial(jit, static_argnames=['pi'])
 def compute_ER_pi(P, pi):
-    # vectorized_cond() method required to avoid generation of nan values from 0*log(0) in jacrev gradient
-    def vectorized_cond(pred, true_fun, false_fun, operand):
-        true_op = jnp.where(pred, operand, 0)
-        false_op = jnp.where(pred, 0, operand)
-        return jnp.where(pred, true_fun(true_op), false_fun(false_op))
-    
-    entropy_rate_matrix = vectorized_cond(P > 0, lambda x: x*jnp.log(x), lambda x: 0.0, P)
+    entropy_rate_matrix = P*jnp.log(jnp.where(P == 0, 1, P))
     entropy_rate = -jnp.dot(jnp.array(pi),jnp.sum(entropy_rate_matrix, axis=1))
     return jnp.squeeze(entropy_rate)
 
