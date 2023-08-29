@@ -44,8 +44,8 @@
     },
     "objective_functions": {
         "test1": "weighted_MHT_pi",
-        "test2": "weighted_RTE_pi",
-        "test3": "weighted_Stackelberg_pi"
+        "test2": "weighted_Stackelberg_pi",
+        "test3": "weighted_RTE_pi"
     },
     "stationary_distributions": {
         "test1": [0.1536, 0.1039, 0.1028, 0.1005, 0.0958, 0.0958, 0.0855, 0.0739, 0.0554, 0.0497, 0.0439, 0.0392],
@@ -54,13 +54,13 @@
     },
     "taus": {
         "test1": -1,
-        "test2": -1,
-        "test3": 1
+        "test2": 9,
+        "test3": -1
     },
     "etas": {
         "test1": -1,
-        "test2": 0.99,
-        "test3": -1
+        "test2": -1,
+        "test3": 0.1
     },
     "graph_codes": {
         "test1": "N12_147573952589676412927",

@@ -256,9 +256,9 @@ if __name__ == '__main__':
     B = 6
     pi = (0.3, 0.3, 0.4)
     alpha = 100
-    # P = scj.init_rand_Ps(A, 1)
-    # Q = jnp.reshape(P, (n, n))
-    Q = (1/3)*jnp.ones((n, n))
+    P = scj.init_rand_Ps(A, 1)
+    Q = jnp.reshape(P, (n, n))
+    # Q = (1/3)*jnp.ones((n, n))
     print(Q)
     # P = (1/n)*jnp.ones((n, n))
     # Q = Q.at[0, 0].set(0)
@@ -269,11 +269,9 @@ if __name__ == '__main__':
     # eta = 0.5
     # N_eta = int(jnp.ceil(w_max/(eta*jnp.min(jnp.array(pi)))) - 1)
     # print(N_eta)
-    indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
+    D_idx = scj.precompute_weighted_Stackelberg(W, w_max, tau)
+    # print(scj.compute_weighted_Stackelberg(Q, D_idx, W, w_max, tau))
+    # indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
     # print(scj.compute_weighted_cap_probs(Q, indic_mat, E_ij, W, w_max, tau))
-    # print(scj.greedy_co_opt_weighted_cap_probs(Q, indic_mat, E_ij, W, B, w_max))
-    # print(scj.comp_avg_greedy_co_opt_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, B))
-    # print(scj.comp_avg_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau))
-
-    print(scj.comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, B, pi, alpha))
-    print(scj.comp_avg_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha))
+    print(scj.comp_avg_weighted_LCP_grad(Q, A, D_idx, W, w_max, tau))
+    print(scj.comp_avg_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, tau, pi, alpha))
