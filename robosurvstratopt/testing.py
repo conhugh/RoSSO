@@ -247,16 +247,33 @@ def COMPARE_SPD_SPCP_TAUCP():
 
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
-    n = 4
+    n = 3
     A = jnp.ones((n, n))
-    pi = (0.4, 0.2, 0.25, 0.15)
+    # A = A.at[0, 1].set(0)
+    # A = A.at[1, 0].set(0)
+    # pi = (0.4, 0.2, 0.25, 0.15)
+    tau = 2
+    B = 6
+    pi = (0.3, 0.3, 0.4)
     alpha = 100
-    P = scj.init_rand_Ps(A, 1)
-    Q = P[:, :, 0]
-    # P = (1/n)*jnp.ones((n, n))
-    Q = Q.at[0, 0].set(0)
+    # P = scj.init_rand_Ps(A, 1)
+    # Q = jnp.reshape(P, (n, n))
+    Q = (1/3)*jnp.ones((n, n))
     print(Q)
-    print(scj.compute_ER_pi(P, pi))
-    print(scj.loss_ER_pi(P, A, pi, alpha))
-    print(scj.comp_ER_pi_grad(Q, A, pi, alpha))
-    print(1e-6*jnp.log(1e-6))
+    # P = (1/n)*jnp.ones((n, n))
+    # Q = Q.at[0, 0].set(0)
+    W = jnp.ones((n, n))
+    # W = jnp.array([[1, 0, 2], [0, 1, 1], [2, 1, 1]])
+    print(W)
+    w_max = int(jnp.max(W))
+    # eta = 0.5
+    # N_eta = int(jnp.ceil(w_max/(eta*jnp.min(jnp.array(pi)))) - 1)
+    # print(N_eta)
+    indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
+    # print(scj.compute_weighted_cap_probs(Q, indic_mat, E_ij, W, w_max, tau))
+    # print(scj.greedy_co_opt_weighted_cap_probs(Q, indic_mat, E_ij, W, B, w_max))
+    # print(scj.comp_avg_greedy_co_opt_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, B))
+    # print(scj.comp_avg_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, tau))
+
+    print(scj.comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, B, pi, alpha))
+    print(scj.comp_avg_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha))

@@ -339,6 +339,77 @@ def comp_avg_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alph
     return grad
 
 ############################################################
+# Weighted Stackelberg Co-Optimization formulation
+############################################################
+@functools.partial(jit, static_argnames=['w_max', 'B'])
+def greedy_co_opt_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, B):
+    n = jnp.shape(P)[0]
+    tau_max = B - n + 1
+    F_vecs = jnp.zeros((n**2, tau_max + w_max))
+    for k in range(tau_max):
+        P_direct = P*indic_mat[k]
+        P_direct_vec = jnp.reshape(P_direct, n**2, order='F')
+        multi_step_probs = jnp.zeros(n**2)
+        for i in range(n):
+            for j in range(n):
+                multi_step_probs += P[i, j]*jnp.matmul(E_ij[i, j], F_vecs[:, k + w_max - W[i, j].astype(int)])
+        F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
+    F_vecs = F_vecs[:, w_max:]
+    F0 = jnp.reshape(F_vecs, (n, n, tau_max), order='F').T
+
+    cap_probs = jnp.zeros((n, n))
+    tau_vec = jnp.zeros(n)
+    while B > 0:
+        min_idx = jnp.argmin(cap_probs)
+        _, col_idx = divmod(min_idx, n)
+        tau_vec = tau_vec.at[col_idx].set(tau_vec[col_idx] + 1)
+        cap_probs = cap_probs.at[:, col_idx].set(cap_probs[:, col_idx] + F0[(tau_vec[col_idx]-1).astype(int), :, col_idx])
+        B -= 1
+    
+    return tau_vec, cap_probs
+
+@functools.partial(jit, static_argnames=['w_max', 'B', 'num_LCPs'])
+def compute_greedy_co_opt_weighted_LCPs(P, indic_mat, E_ij, W, w_max, B, num_LCPs=1):
+    _, cap_probs = greedy_co_opt_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, B)
+    if num_LCPs == 1:
+        lcps = jnp.min(cap_probs)
+    elif num_LCPs > 1:
+        F_vec = cap_probs.flatten('F')
+        lcps = jnp.sort(F_vec)[0:num_LCPs]
+    else:
+        raise ValueError("Invalid num_LCPs specified!")
+    return lcps
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['w_max', 'B', 'num_LCPs', 'use_abs_param'])
+def loss_greedy_co_opt_weighted_LCP(Q, A, indic_mat, E_ij, W, w_max, B, num_LCPs=1, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_greedy_co_opt_weighted_LCPs(P, indic_mat, E_ij, W, w_max, B, num_LCPs)
+    return jnp.mean(lcps)
+
+# Autodiff parametrized loss function
+_comp_greedy_co_opt_weighted_LCP_grad = jacrev(loss_greedy_co_opt_weighted_LCP)
+@functools.partial(jit, static_argnames=['w_max', 'B', 'num_LCPs', 'use_abs_param'])
+def comp_avg_greedy_co_opt_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, B, num_LCPs=1, use_abs_param=True):
+    grad = _comp_greedy_co_opt_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, B, num_LCPs, use_abs_param) 
+    return grad
+
+# pi must be a tuple
+@functools.partial(jit, static_argnames=['w_max', 'B', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def loss_greedy_co_opt_weighted_LCP_pi(Q, A, indic_mat, E_ij, W, w_max, B, pi, alpha, num_LCPs=1, use_abs_param=True):
+    n = len(pi)
+    P = comp_P_param(Q, A, use_abs_param)
+    lcps = compute_greedy_co_opt_weighted_LCPs(P, indic_mat, E_ij, W, w_max, B, num_LCPs)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
+    return jnp.mean(lcps) - alpha*penalty
+
+_comp_avg_greedy_co_opt_weighted_LCP_pi_grad = jacrev(loss_greedy_co_opt_weighted_LCP_pi)
+@functools.partial(jit, static_argnames=['w_max', 'B', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, B, pi, alpha, num_LCPs=1, use_abs_param=True):
+    grad = _comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, B, pi, alpha, num_LCPs, use_abs_param)
+    return grad
+
+############################################################
 # Multi-Agent Stackelberg formulation
 ############################################################
 def precompute_multi_cap_probs(n, N):
@@ -629,43 +700,45 @@ def comp_RTE_pi_grad(Q, A, pi, N_eta, alpha, use_abs_param=True):
 ############################################################
 # Weighted Return-Time Entropy formulation
 ############################################################
-@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta'])
-def compute_weighted_RTE_pi(P, W, w_max, pi, N_eta):
-    n = jnp.shape(P)[0]
-    F_vecs = jnp.zeros((n**2, N_eta + w_max))
-    I = jnp.identity(n)
+def precompute_weighted_RTE_pi(W, w_max, N_eta):
+    n = jnp.shape(W)[0]
+    D_idx = jnp.zeros((N_eta, n, n))
     for k in range(N_eta):
-        indic_mat = ((k + 1)*jnp.ones((n, n)) == W)
-        P_direct = P*indic_mat
-        P_direct_vec = jnp.ravel(P_direct, order='F')
-
-        multi_step_probs = jnp.zeros(n**2)
         for i in range(n):
-            for j in range(n):
-                E_j = jnp.diag(jnp.ones(n) - I[:, j])
-                E_ij = jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j])))
-                multi_step_probs = multi_step_probs + P[i, j]*jnp.matmul(E_ij, F_vecs[:, k + w_max - W[i, j].astype(int)])
+            vec = jnp.where(W[i, :] > 0, k - W[i, :], -w_max)
+            D_idx = D_idx.at[k, i].set(vec)
+    return D_idx
 
-        F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
+@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta'])
+def compute_weighted_RTE_pi(P, D_idx, W, w_max, pi, N_eta):
+    n = jnp.shape(P)[0]
+    F_mats = jnp.zeros((N_eta + w_max, n, n))
+    for k in range(N_eta):
+        P_direct = P*(W == k+1)
+        idx = (D_idx[k] + w_max).astype(int)
+        D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
+        D_k = jnp.reshape(D_k, (n, n, n))
+        D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
+        multi_step_probs = jnp.matmul(P, D_k)
+        multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
+        F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
 
-    F_vecs = F_vecs[:, w_max:]
-    F_vecs_sum = jnp.sum(F_vecs*jnp.log(jnp.where(F_vecs == 0, 1, F_vecs)), axis=1)
-    F_sum_mat = jnp.reshape(F_vecs_sum, (n, n), order='F')
-    return -jnp.squeeze(jnp.dot(jnp.array(pi), jnp.diagonal(F_sum_mat)))
+    F_mats = F_mats[w_max:, :, :]
+    F_sum_mat = jnp.sum(F_mats*jnp.log(jnp.where(F_mats == 0, 1, F_mats)), axis=0)
+    return -(jnp.dot(jnp.array(pi), jnp.diagonal(F_sum_mat)))
 
-# pi must be a tuple
 @functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
-def loss_weighted_RTE_pi(Q, A, W, w_max, pi, N_eta, alpha, use_abs_param=True):
+def loss_weighted_RTE_pi(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param=True):
     n = len(pi)
     P = comp_P_param(Q, A, use_abs_param)
-    h_ret_w = compute_weighted_RTE_pi(P, W, w_max, pi, N_eta)
+    h_ret_w = compute_weighted_RTE_pi(P, D_idx, W, w_max, pi, N_eta)
     penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
     return h_ret_w - alpha*penalty
 
 _comp_weighted_RTE_pi_grad = jacrev(loss_weighted_RTE_pi)
 @functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
-def comp_weighted_RTE_pi_grad(Q, A, W, w_max, pi, N_eta, alpha, use_abs_param=True):
-    grad = _comp_weighted_RTE_pi_grad(Q, A, W, w_max, pi, N_eta, alpha, use_abs_param) 
+def comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param=True):
+    grad = _comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param) 
     return grad
 
 ############################################################
