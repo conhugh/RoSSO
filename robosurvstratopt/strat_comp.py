@@ -714,7 +714,7 @@ def precompute_weighted_RTE_pi(W, w_max, N_eta):
             D_idx = D_idx.at[k, i].set(vec)
     return D_idx
 
-@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta'])
+# @functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta'])
 def compute_weighted_RTE_pi(P, D_idx, W, w_max, pi, N_eta):
     n = jnp.shape(P)[0]
     F_mats = jnp.zeros((N_eta + w_max, n, n))
@@ -732,7 +732,7 @@ def compute_weighted_RTE_pi(P, D_idx, W, w_max, pi, N_eta):
     F_sum_mat = jnp.sum(F_mats*jnp.log(jnp.where(F_mats == 0, 1, F_mats)), axis=0)
     return -(jnp.dot(jnp.array(pi), jnp.diagonal(F_sum_mat)))
 
-@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
+# @functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
 def loss_weighted_RTE_pi(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param=True):
     n = len(pi)
     P = comp_P_param(Q, A, use_abs_param)
@@ -741,7 +741,7 @@ def loss_weighted_RTE_pi(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param=
     return h_ret_w - alpha*penalty
 
 _comp_weighted_RTE_pi_grad = jacrev(loss_weighted_RTE_pi)
-@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
+# @functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
 def comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param=True):
     grad = _comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param) 
     return grad

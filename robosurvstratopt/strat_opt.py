@@ -406,6 +406,7 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
     P = P0 
     Q = P0
     MCP = 0
+    loss = 1e-3
     diam_pairs = graph_comp.get_diametric_pairs(A)
     optimizer = setup_optimizer(opt_params)
     opt_state = optimizer.init(P0)
@@ -416,48 +417,60 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
     num_LCPs_schedule = optax.piecewise_constant_schedule(opt_params["num_init_LCPs"], num_LCPs_schedule)
 
     @functools.partial(jax.jit, static_argnames=['num_LCPs'])
-    def step(Q, P, MCP, opt_state, num_LCPs):
+    def step(Q, P, MCP, loss, opt_state, num_LCPs):
         P_old = P
+        loss_old = loss
         # gradient computation
         if obj_fun_flag == 'Stackelberg':
             grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"])
+            loss = strat_comp.loss_LCP(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'Stackelberg_pi':
             grad = -1*strat_comp.comp_avg_LCP_pi_grad(Q, A, F0, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"]) 
+            loss = strat_comp.loss_LCP_pi(Q, A, F0, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg':
             grad = -1*strat_comp.comp_avg_weighted_LCP_grad(Q, A, D_idx, W, w_max, tau, num_LCPs, opt_params["use_abs_param"])
+            loss = strat_comp.loss_weighted_LCP(Q, A, D_idx, W, w_max, tau, num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg_pi':
             grad = -1*strat_comp.comp_avg_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
+            loss = strat_comp.loss_weighted_LCP_pi(Q, A, D_idx, W, w_max, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg_co_opt':
             grad = -1*strat_comp.comp_avg_greedy_co_opt_weighted_LCP_grad(Q, A, D_idx, W, w_max, B, num_LCPs, opt_params["use_abs_param"])
+            loss = strat_comp.loss_greedy_co_opt_weighted_LCP(Q, A, D_idx, W, w_max, B, num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg_co_opt_pi':
             grad = -1*strat_comp.comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, B, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
+            loss = strat_comp.loss_greedy_co_opt_weighted_LCP_pi(Q, A, D_idx, W, w_max, B, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'MHT':
             grad = strat_comp.comp_MHT_grad(Q, A, opt_params["use_abs_param"])
+            loss = strat_comp.loss_MHT(Q, A, opt_params["use_abs_param"])
         elif obj_fun_flag == 'MHT_pi':
             grad = strat_comp.comp_MHT_pi_grad(Q, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
+            loss = strat_comp.loss_MHT_pi(Q, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_MHT_pi':
             grad = strat_comp.comp_weighted_MHT_pi_grad(Q, A, W, pi, opt_params["alpha"], opt_params["use_abs_param"])
+            loss = strat_comp.loss_weighted_MHT_pi(Q, A, W, pi, opt_params["alpha"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'ER_pi':
             grad = -1*strat_comp.comp_ER_pi_grad(Q, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
-        elif obj_fun_flag == 'RTE_pi':
-            grad = -1*strat_comp.comp_RTE_pi_grad(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
-        elif obj_fun_flag == 'weighted_RTE_pi':
-            grad = -1*strat_comp.comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+            loss = strat_comp.loss_ER_pi(Q, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
+        # elif obj_fun_flag == 'RTE_pi':
+        #     grad = -1*strat_comp.comp_RTE_pi_grad(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+        # elif obj_fun_flag == 'weighted_RTE_pi':
+        #     grad = -1*strat_comp.comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
         
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
         P = strat_comp.comp_P_param(Q, A)
         P_diff = P - P_old
         abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
+        loss_diff = jnp.abs((loss - loss_old)/loss_old)
 
         if opt_params["cnvg_test_mode"] == "MCP_diff":
             MCP_old = MCP
             MCP = strat_comp.compute_LCPs(P, F0, tau)
             MCP_diff = MCP - MCP_old
-        elif opt_params["cnvg_test_mode"] == "P_update":
+        else:
             MCP = MCP_diff = jnp.nan
 
-        return Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, opt_state
+        return Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, loss, loss_diff, opt_state
     
     # Run gradient-based optimization process:
     iter = 0 
@@ -465,12 +478,37 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
     while not converged:
         num_LCPs = int(num_LCPs_schedule(iter))
         # apply update to P matrix, and parametrization Q:
-        Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, opt_state = step(Q, P, MCP, opt_state, num_LCPs)
+        if 'RTE' in obj_fun_flag:
+            P_old = P
+            loss_old = loss
+            if obj_fun_flag == 'RTE_pi':
+                grad = -1*strat_comp.comp_RTE_pi_grad(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+                loss = strat_comp.loss_RTE_pi(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+            elif obj_fun_flag == 'weighted_RTE_pi':
+                grad = -1*strat_comp.comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+                loss = strat_comp.loss_weighted_RTE_pi(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+            updates, opt_state = optimizer.update(grad, opt_state)
+            Q = optax.apply_updates(Q, updates)
+            P = strat_comp.comp_P_param(Q, A)
+            P_diff = P - P_old
+            abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
+            loss_diff = jnp.abs((loss - loss_old)/loss_old)
+
+            if opt_params["cnvg_test_mode"] == "MCP_diff":
+                MCP_old = MCP
+                MCP = strat_comp.compute_LCPs(P, F0, tau)
+                MCP_diff = MCP - MCP_old
+            elif opt_params["cnvg_test_mode"] == "P_update":
+                MCP = MCP_diff = jnp.nan
+        else:
+            Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, loss, loss_diff, opt_state = step(Q, P, MCP, loss, opt_state, num_LCPs)
         # track metrics of interest:
         if iter % opt_params["iters_per_trackvals"] == 0:
             tracked_vals["iters"].append(iter)
             tracked_vals["P_diff_sums"].append(abs_P_diff_sum)
             tracked_vals["P_diff_max_elts"].append(jnp.max(jnp.abs(P_diff)))
+            tracked_vals["loss"].append(loss)
+            tracked_vals["loss_diff"].append(loss_diff)
             if "weighted_Stackelberg_co_opt" in obj_fun_flag:
                 tauvec, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
                 tracked_vals["diam_pair_CP_variance"].append(jnp.nan)
@@ -500,18 +538,21 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
                 # print("grad inf norm = " + str(jnp.max(jnp.abs(grad))))
                 print("abs_P_diff_sum = " + str(jnp.sum(jnp.abs(P_diff))))
                 # print("MCP = " + str(jnp.min(F)))
+                print("loss_diff = " + str(loss_diff))
         # check for convergence:
         if opt_params["cnvg_test_mode"] == "P_update":
             converged, cnvg_test_vals = cnvg_check(iter, abs_P_diff_sum, cnvg_test_vals, opt_params)
         elif opt_params["cnvg_test_mode"] == "MCP_diff":
             converged, cnvg_test_vals = cnvg_check(iter, MCP_diff, cnvg_test_vals, opt_params)
-        # terminate optimization if maximum iteration count reached:
-        if iter == opt_params["max_iters"]:
-            converged = True
+        elif opt_params["cnvg_test_mode"] == "loss_diff":
+            converged, cnvg_test_vals = cnvg_check(iter, loss_diff, cnvg_test_vals, opt_params)
         iter = iter + 1
 
     tracked_vals["final_iters"].append(iter)
     # convergence or max iteration count has been reached...
+    tracked_vals["final_loss"].append(loss)
+    print("*************************")
+    print("FINAL LOSS = " + str(loss))
     if "weighted_Stackelberg_co_opt" in obj_fun_flag:
         tauvec, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
         print("Minimum Capture Probability at iteration " + str(iter) + ":")
@@ -609,7 +650,7 @@ def cnvg_check(iter, new_val, cnvg_test_vals, opt_params):
         converged = MA_val < opt_params["cnvg_radius"]
     else:
         converged = False
-    if iter == opt_params["max_iters"]:
+    if iter + 1 == opt_params["max_iters"]:
         converged = True
     return converged, cnvg_test_vals
 
@@ -628,11 +669,11 @@ if __name__ == '__main__':
     # test_set_name = "SF_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
-    test_set_name = "SF_Comparison_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
+    # test_set_name = "SF_Comparison_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
 
-    # test_set_name = "SF_Co_Opt_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
+    test_set_name = "SF_Co_Opt_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)

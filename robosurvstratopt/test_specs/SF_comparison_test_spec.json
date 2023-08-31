@@ -13,15 +13,15 @@
             "use_abs_param": true,
             "alpha": 1000,
             "max_iters": 10000,
-            "optimizer_name": "sgd",
-            "nominal_learning_rate": 0.1,
+            "optimizer_name": "rmsprop",
+            "nominal_learning_rate": 1,
             "lr_schedule_type": "constant",
             "lr_schedule_args": null,
             "use_momentum": false,
             "mom_decay_rate": 0.9,
             "use_nesterov": false,
-            "cnvg_test_mode": "P_update", 
-            "cnvg_radius": 0.1,
+            "cnvg_test_mode": "loss_diff", 
+            "cnvg_radius": 0.01,
             "cnvg_window_size": 10,
             "iters_per_printout": 100,
             "iters_per_trackvals": 10
@@ -35,7 +35,10 @@
         "MCPs",
         "final_MCP",
         "final_iters",
-        "diam_pair_CP_variance"
+        "diam_pair_CP_variance",
+        "loss",
+        "loss_diff",
+        "final_loss"
     ],
     "graph_names": {
         "test1": "complete_N12",
