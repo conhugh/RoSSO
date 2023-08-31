@@ -14,7 +14,7 @@
             "alpha": 1000,
             "max_iters": 10000,
             "optimizer_name": "sgd",
-            "nominal_learning_rate": 0.001,
+            "nominal_learning_rate": 0.005,
             "lr_schedule_type": "constant",
             "lr_schedule_args": null,
             "use_momentum": true,

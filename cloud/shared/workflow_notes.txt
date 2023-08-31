@@ -1,0 +1,9 @@
+By default, when you run strat_opt or strat_viz, results and visualizations will
+be saved to the "results/local" folder, which has been added to the .gitignore
+included with this repo. So, the results which are contained in "results/local" 
+will NOT be included in updates pushed to the remote repo. This is by design, to 
+keep things clean and prevent the remote repo from becoming too large. 
+
+If you want a specific set of results to be pushed to the remote repo, copy the
+directory containing the results of interest to this "results/shared" folder, 
+then push your updates. 

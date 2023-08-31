@@ -1,0 +1,40 @@
+---------- Graph Information ----------
+Number of nodes (n) = 12
+Graph Name = complete_N12
+Attack Duration (tau) = 9
+Graph Code = N12_147573952589676412927
+
+---------- Optimizer Information ----------
+Optimizer used = sgd
+
+Optimizer Parameters from Test Specification:
+{
+    "num_init_Ps": 1,
+    "num_init_LCPs": 1,
+    "num_LCPs_schedule": {
+        "0": 1
+    },
+    "use_edge_weights": true,
+    "use_abs_param": true,
+    "alpha": 1000,
+    "max_iters": 10000,
+    "optimizer_name": "sgd",
+    "nominal_learning_rate": 0.001,
+    "lr_schedule_type": "constant",
+    "lr_schedule_args": null,
+    "use_momentum": true,
+    "mom_decay_rate": 0.99,
+    "use_nesterov": true,
+    "cnvg_test_mode": "P_update",
+    "cnvg_radius": 0.01,
+    "cnvg_window_size": 50,
+    "iters_per_printout": 500,
+    "iters_per_trackvals": 100
+}
+
+Optimizer Parameters computed during testing:
+Scaled Learning Rates = [0.00006777]
+Max absolute-value elements of initial MCP gradients = [14.755429]
+Final MCPs achieved = [0.01844849]
+Number of iterations required = [216]
+Optimization Times Required (seconds) = [4.927619934082031]

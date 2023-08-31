@@ -12,7 +12,7 @@
             "use_edge_weights": true,
             "use_abs_param": true,
             "alpha": 1000,
-            "max_iters": 10000,
+            "max_iters": 10,
             "optimizer_name": "sgd",
             "nominal_learning_rate": 0.001,
             "lr_schedule_type": "constant",
