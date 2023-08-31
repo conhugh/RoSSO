@@ -5,3 +5,4 @@ __pycache__/
 results/local/
 results/shared/workflow_notes.txt
 deprecated/
+cloud/
