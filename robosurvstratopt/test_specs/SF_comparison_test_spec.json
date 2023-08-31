@@ -57,6 +57,11 @@
         "test2": 9,
         "test3": -1
     },
+    "defense_budgets":{
+        "test1": -1,
+        "test2": -1,
+        "test3": -1
+    },
     "etas": {
         "test1": -1,
         "test2": -1,
