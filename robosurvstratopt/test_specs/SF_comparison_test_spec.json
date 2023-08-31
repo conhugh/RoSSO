@@ -14,17 +14,17 @@
             "alpha": 1000,
             "max_iters": 10000,
             "optimizer_name": "sgd",
-            "nominal_learning_rate": 0.005,
+            "nominal_learning_rate": 0.1,
             "lr_schedule_type": "constant",
             "lr_schedule_args": null,
-            "use_momentum": true,
-            "mom_decay_rate": 0.99,
-            "use_nesterov": true,
+            "use_momentum": false,
+            "mom_decay_rate": 0.9,
+            "use_nesterov": false,
             "cnvg_test_mode": "P_update", 
-            "cnvg_radius": 0.01,
-            "cnvg_window_size": 50,
+            "cnvg_radius": 0.1,
+            "cnvg_window_size": 10,
             "iters_per_printout": 100,
-            "iters_per_trackvals": 100
+            "iters_per_trackvals": 10
         }
     },
     "trackers": [
