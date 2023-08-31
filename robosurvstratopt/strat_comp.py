@@ -607,8 +607,12 @@ def comp_weighted_MHT_pi_grad(Q, A, W, pi, alpha, use_abs_param=True):
 ############################################################
 # Multi-Agent Mean Hitting Time formulation
 ############################################################
+def precompute_multi_MHT(n, N):
+    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
+    return jnp.array(combinations)
+
 @jit
-def compute_multi_MHT(Ps):
+def compute_multi_MHT(Ps, combs):
     n = Ps.shape[0]
     N = Ps.shape[2]
     big_I = jnp.identity(n**(N+1))
@@ -617,10 +621,8 @@ def compute_multi_MHT(Ps):
     for i in range(N):
         mat = jnp.kron(mat, Ps[:, :, i])
 
-    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
-    jax_combinations = jnp.array(combinations)
-    last_entry = jax_combinations[:, -1]
-    other_entries = jax_combinations[:, :-1]
+    last_entry = combs[:, -1]
+    other_entries = combs[:, :-1]
     e = jnp.any(last_entry[:, None] == other_entries, axis=1).astype(jnp.int32)
 
     big_mat = big_I - jnp.matmul(mat, big_I - jnp.diag(e))
