@@ -193,7 +193,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
         else:
             W = jnp.nan
             w_max = jnp.nan
-        print("-------- Working on Graph " + graph_name + " with tau = " + str(tau) + "----------")
+        print("-------- Working on Graph " + graph_name + " with tau = " + str(tau) + " ----------")
         test_start_time = time.time()
         times, iters, MCPs = run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num, graph_name, opt_params, trackers)
         print("Running test number " + str(test_num) + " took " + str(time.time() - test_start_time) + " seconds to complete.")
@@ -669,11 +669,11 @@ if __name__ == '__main__':
     # test_set_name = "SF_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
-    # test_set_name = "SF_Comparison_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
+    test_set_name = "SF_Comparison_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
 
-    test_set_name = "SF_Co_Opt_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
+    # test_set_name = "SF_Co_Opt_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
