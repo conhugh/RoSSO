@@ -334,21 +334,31 @@ def comp_avg_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, tau, pi, alpha, num_LCP
 ############################################################
 # Weighted Stackelberg Co-Optimization formulation
 ############################################################
+def precompute_weighted_Stackelberg_co_opt(W, w_max, B):
+    n = jnp.shape(W)[0]
+    tau_max = B - n + 1
+    D_idx = jnp.zeros((tau_max, n, n))
+    for k in range(tau_max):
+        for i in range(n):
+            vec = jnp.where(W[i, :] > 0, k - W[i, :], -w_max)
+            D_idx = D_idx.at[k, i].set(vec)
+    return D_idx
+
 @functools.partial(jit, static_argnames=['w_max', 'B'])
-def greedy_co_opt_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, B):
+def greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B):
     n = jnp.shape(P)[0]
     tau_max = B - n + 1
-    F_vecs = jnp.zeros((n**2, tau_max + w_max))
+    F_mats = jnp.zeros((tau_max + w_max, n, n))
     for k in range(tau_max):
-        P_direct = P*indic_mat[k]
-        P_direct_vec = jnp.reshape(P_direct, n**2, order='F')
-        multi_step_probs = jnp.zeros(n**2)
-        for i in range(n):
-            for j in range(n):
-                multi_step_probs += P[i, j]*jnp.matmul(E_ij[i, j], F_vecs[:, k + w_max - W[i, j].astype(int)])
-        F_vecs = F_vecs.at[:, k + w_max].set(P_direct_vec + multi_step_probs)
-    F_vecs = F_vecs[:, w_max:]
-    F0 = jnp.reshape(F_vecs, (n, n, tau_max), order='F').T
+        P_direct = P*(W == k+1)
+        idx = (D_idx[k] + w_max).astype(int)
+        D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
+        D_k = jnp.reshape(D_k, (n, n, n))
+        D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
+        multi_step_probs = jnp.matmul(P, D_k)
+        multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
+        F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
+    F0 = F_mats[w_max:, :, :]
 
     cap_probs = jnp.zeros((n, n))
     tau_vec = jnp.zeros(n)
@@ -362,8 +372,8 @@ def greedy_co_opt_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, B):
     return tau_vec, cap_probs
 
 @functools.partial(jit, static_argnames=['w_max', 'B', 'num_LCPs'])
-def compute_greedy_co_opt_weighted_LCPs(P, indic_mat, E_ij, W, w_max, B, num_LCPs=1):
-    _, cap_probs = greedy_co_opt_weighted_cap_probs(P, indic_mat, E_ij, W, w_max, B)
+def compute_greedy_co_opt_weighted_LCPs(P, D_idx, W, w_max, B, num_LCPs=1):
+    _, cap_probs = greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
     if num_LCPs == 1:
         lcps = jnp.min(cap_probs)
     elif num_LCPs > 1:
@@ -375,31 +385,31 @@ def compute_greedy_co_opt_weighted_LCPs(P, indic_mat, E_ij, W, w_max, B, num_LCP
 
 # Loss function with constraints included in parametrization
 @functools.partial(jit, static_argnames=['w_max', 'B', 'num_LCPs', 'use_abs_param'])
-def loss_greedy_co_opt_weighted_LCP(Q, A, indic_mat, E_ij, W, w_max, B, num_LCPs=1, use_abs_param=True):
+def loss_greedy_co_opt_weighted_LCP(Q, A, D_idx, W, w_max, B, num_LCPs=1, use_abs_param=True):
     P = comp_P_param(Q, A, use_abs_param)
-    lcps = compute_greedy_co_opt_weighted_LCPs(P, indic_mat, E_ij, W, w_max, B, num_LCPs)
+    lcps = compute_greedy_co_opt_weighted_LCPs(P, D_idx, W, w_max, B, num_LCPs)
     return jnp.mean(lcps)
 
 # Autodiff parametrized loss function
 _comp_greedy_co_opt_weighted_LCP_grad = jacrev(loss_greedy_co_opt_weighted_LCP)
 @functools.partial(jit, static_argnames=['w_max', 'B', 'num_LCPs', 'use_abs_param'])
-def comp_avg_greedy_co_opt_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, B, num_LCPs=1, use_abs_param=True):
-    grad = _comp_greedy_co_opt_weighted_LCP_grad(Q, A, indic_mat, E_ij, W, w_max, B, num_LCPs, use_abs_param) 
+def comp_avg_greedy_co_opt_weighted_LCP_grad(Q, A, D_idx, W, w_max, B, num_LCPs=1, use_abs_param=True):
+    grad = _comp_greedy_co_opt_weighted_LCP_grad(Q, A, D_idx, W, w_max, B, num_LCPs, use_abs_param) 
     return grad
 
 # pi must be a tuple
 @functools.partial(jit, static_argnames=['w_max', 'B', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
-def loss_greedy_co_opt_weighted_LCP_pi(Q, A, indic_mat, E_ij, W, w_max, B, pi, alpha, num_LCPs=1, use_abs_param=True):
+def loss_greedy_co_opt_weighted_LCP_pi(Q, A, D_idx, W, w_max, B, pi, alpha, num_LCPs=1, use_abs_param=True):
     n = len(pi)
     P = comp_P_param(Q, A, use_abs_param)
-    lcps = compute_greedy_co_opt_weighted_LCPs(P, indic_mat, E_ij, W, w_max, B, num_LCPs)
+    lcps = compute_greedy_co_opt_weighted_LCPs(P, D_idx, W, w_max, B, num_LCPs)
     penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
     return jnp.mean(lcps) - alpha*penalty
 
 _comp_avg_greedy_co_opt_weighted_LCP_pi_grad = jacrev(loss_greedy_co_opt_weighted_LCP_pi)
 @functools.partial(jit, static_argnames=['w_max', 'B', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
-def comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, B, pi, alpha, num_LCPs=1, use_abs_param=True):
-    grad = _comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, indic_mat, E_ij, W, w_max, B, pi, alpha, num_LCPs, use_abs_param)
+def comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, B, pi, alpha, num_LCPs=1, use_abs_param=True):
+    grad = _comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, B, pi, alpha, num_LCPs, use_abs_param)
     return grad
 
 ############################################################
