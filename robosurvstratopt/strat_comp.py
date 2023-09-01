@@ -4,6 +4,7 @@ import itertools
 import jax
 import jax.numpy as jnp
 import numpy as np
+import scipy
 from jax import jacrev, jit
 import graph_comp
 
@@ -550,6 +551,24 @@ def compute_MHT(P):
     m = 1 + jnp.sum(1 / (1 - sorted_eigs[:-1]))
     return jnp.real(m)
 
+@functools.partial(jit, static_argnames=['pi'])
+def compute_MHT_GPU(P, pi):
+    n = len(pi)
+    pi = jnp.array(pi)
+    M_d = jnp.diag(1 / pi)
+    lhs = jnp.identity(n) - P
+    lhs = jnp.hstack((lhs, jnp.zeros((n, n**2 - n))))
+    LHS = lhs[1:, 1:n**2 - n + 1]
+    for i in range(1, n):
+        rows = jnp.vstack((lhs[:i, 0:n**2 - n + 1], lhs[i+1:, 0:n**2 - n + 1]))
+        rows = jnp.hstack((rows[:, :i], rows[:, i+1:]))
+        rows = jnp.hstack((rows[:, -i*(n-1):], rows[:, :-i*(n-1)]))
+        LHS = jnp.vstack((LHS, rows))
+    RHS = jnp.ones((n**2 - n, ))
+    M_offdiag = jnp.linalg.solve(LHS, RHS)
+    M_row = jnp.hstack((M_d[0, 0], M_offdiag[n-1::n-1]))
+    return jnp.dot(M_row, pi)
+
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def loss_MHT(Q, A, use_abs_param=True):
     P = comp_P_param(Q, A, use_abs_param)
@@ -568,7 +587,8 @@ def comp_MHT_grad(Q, A, use_abs_param=True):
 def loss_MHT_pi(Q, A, pi, alpha, use_abs_param=True):
     n = len(pi)
     P = comp_P_param(Q, A, use_abs_param)
-    m = compute_MHT(P)
+    # m = compute_MHT(P)
+    m = compute_MHT_GPU(P, pi)
     penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
     return m + alpha*penalty
 

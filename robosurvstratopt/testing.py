@@ -7,6 +7,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import scipy
 
 import graph_gen as gg
 import graph_comp as gc
@@ -254,24 +255,33 @@ if __name__ == '__main__':
     # pi = (0.4, 0.2, 0.25, 0.15)
     tau = 2
     B = 6
-    pi = (0.3, 0.3, 0.4)
-    alpha = 100
-    P = scj.init_rand_Ps(A, 1)
+    # pi = (0.3, 0.3, 0.4)
+    alpha = 0
+    P = scj.init_rand_Ps(A, 1, 0)
     Q = jnp.reshape(P, (n, n))
     # Q = (1/3)*jnp.ones((n, n))
     print(Q)
+    w, vl, _ = scipy.linalg.eig(Q, left=True)
+    pi = ( vl[:,0] / jnp.sum(vl[:,0]) ).T
+    pi = tuple(float(jnp.real(x)) for x in pi)
+    print(pi)
+    # print(jnp.dot(pi, Q))
     # P = (1/n)*jnp.ones((n, n))
     # Q = Q.at[0, 0].set(0)
     W = jnp.ones((n, n))
     # W = jnp.array([[1, 0, 2], [0, 1, 1], [2, 1, 1]])
-    print(W)
+    # print(W)
     w_max = int(jnp.max(W))
     # eta = 0.5
     # N_eta = int(jnp.ceil(w_max/(eta*jnp.min(jnp.array(pi)))) - 1)
     # print(N_eta)
-    D_idx = scj.precompute_weighted_Stackelberg(W, w_max, tau)
+    # D_idx = scj.precompute_weighted_Stackelberg(W, w_max, tau)
     # print(scj.compute_weighted_Stackelberg(Q, D_idx, W, w_max, tau))
     # indic_mat, E_ij = scj.precompute_weighted_cap_probs(n, tau, W)
     # print(scj.compute_weighted_cap_probs(Q, indic_mat, E_ij, W, w_max, tau))
-    print(scj.comp_avg_weighted_LCP_grad(Q, A, D_idx, W, w_max, tau))
-    print(scj.comp_avg_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, tau, pi, alpha))
+    # print(scj.comp_avg_weighted_LCP_grad(Q, A, D_idx, W, w_max, tau))
+    # print(scj.comp_avg_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, tau, pi, alpha))
+    print(scj.loss_MHT(Q, A))
+    print(scj.loss_MHT_pi(Q, A, pi, alpha))
+    print(scj.comp_MHT_grad(Q, A,))
+    print(scj.comp_MHT_pi_grad(Q, A, pi, alpha))
