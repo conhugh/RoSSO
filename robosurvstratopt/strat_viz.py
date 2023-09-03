@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import seaborn as sns
 # import pygraphviz as pgv
 
 import graph_comp
@@ -184,7 +185,6 @@ def plot_MCP_var_P(P0, tau, rows, cols, resolution):
     plt.ylabel("Capture Probabilities")
     plt.title("Capture Probabilities for tau = " + str(tau) + " and varying P")
     plt.savefig(os.getcwd() + "/test_CP_plot.png")
-
 
 def gen_NXgraph(A):
     """
@@ -527,6 +527,18 @@ def visualize_results(test_set_name, num_top_MCP_runs=None):
             draw_opt_graphs(A, opt_P_mats, test_name, opt_run_nums, res_vis_dir)
         print_progress_bar(sub_dir_count + 1, sub_dir_num, prefix = 'Progress:', suffix = 'Complete', length = 50)
 
+# Plot optimization metrics as each test completes:
+def visualize_strategy(P, test_dir, k):
+    res_vis_dir = test_dir + "/results_visualization"
+    if not os.path.isdir(res_vis_dir):
+        os.mkdir(res_vis_dir)
+    plt.figure()
+    heatmap = sns.heatmap(P, annot=False, linewidths=0.5, cmap="rocket_r", cbar=True, vmin=0.0, vmax=1.0, square=False)
+    heatmap.xaxis.tick_top()
+    plt.title("Optimized Patrol Strategy")
+    plt.savefig(os.path.join(res_vis_dir, "opt_P_" + str(k+1)), bbox_inches = "tight")
+    plt.close()
+
 # Visualize MCPs from multiple tests
 def visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=False):
     test_set_dir = "../results/local/test_set_" + test_set_name
@@ -770,11 +782,11 @@ if __name__ == '__main__':
     # test_set_name = "Tau_Study_3x3Grid1"
 
     # visualize_metrics_retro(test_set_name, overlay=True)
-    visualize_results(test_set_name, num_top_MCP_runs=5)
+    # visualize_results(test_set_name, num_top_MCP_runs=5)
     # visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=None, plot_best_fit=False)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=1, plot_best_fit=True)
-    visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=5, plot_best_fit=True)
+    # visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=5, plot_best_fit=True)
     # visualize_MCPs(test_set_name, tau_study=False, num_top_MCPs=25, plot_best_fit=False)
     # plot_optimizer_comparison_retro(test_set_name)
 

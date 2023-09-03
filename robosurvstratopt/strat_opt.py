@@ -241,7 +241,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
     run_optimizer
     """
     # Create directory for saving the results for the given graph and tau value:
-    test_name = "test" + str(test_num) + "_" + graph_name + "_tau" + str(tau)
+    test_name = "test" + str(test_num) + "_" + obj_fun_flag
     test_dir = os.path.join(test_set_dir, test_name)
     if not os.path.isdir(test_dir):
         os.mkdir(test_dir)
@@ -320,6 +320,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
         # Save initial and optimized P matrices:
         np.savetxt(test_results_dir + "/init_P_" + str(k + 1) + ".csv", P0, delimiter=',')
         np.savetxt(test_results_dir + "/opt_P_" + str(k + 1) + ".csv", P, delimiter=',')
+        strat_viz.visualize_strategy(P, test_dir, k)
 
         # Save metrics tracked during the optimization process:
         for track in trackers:
@@ -330,6 +331,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
 
     # Save results from optimization processes:
     np.savetxt(test_dir + "/A.csv", np.asarray(A).astype(int), delimiter=',')  # Save the env graph binary adjacency matrix
+    np.savetxt(test_dir + "/W.csv", np.asarray(W).astype(int), delimiter=',')  # Save the env graph travel time matrix
     strat_viz.draw_env_graph(A, graph_name, test_dir)  # Save a drawing of the env graph
     strat_viz.visualize_metrics(opt_metrics, test_name, test_dir, show_legend=False) # Save plots of the optimization metrics tracked
     graph_code = graph_comp.gen_graph_code(A)  # Generate unique graph code
@@ -349,8 +351,14 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
         info.write("---------- Graph Information ----------\n")
         info.write("Number of nodes (n) = " + str(n) + "\n")
         info.write("Graph Name = " + graph_name + "\n")
-        info.write("Attack Duration (tau) = " + str(tau) + "\n")
         info.write("Graph Code = " + graph_code + "\n")
+        info.write("Weight Matrix = " + str(W) + "\n")
+        info.write("\n---------- Formulation Information ----------\n")
+        info.write("Objective Function = " + obj_fun_flag + "\n")
+        info.write("Stationary Distribution (pi) = " + str(pi) + "\n")
+        info.write("Attack Duration (tau) = " + str(tau) + "\n")
+        info.write("Defense Budget (B) = " + str(B) + "\n")
+        info.write("Truncation Accuracy (eta) = " + str(eta) + "\n")
         info.write("\n---------- Optimizer Information ----------\n")
         info.write("Optimizer used = " + opt_params["optimizer_name"] + "\n")
         info.write("\nOptimizer Parameters from Test Specification:\n")
@@ -361,6 +369,8 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
         info.write("\nOptimizer Parameters computed during testing:\n")
         info.write("Scaled Learning Rates = " + str(np.asarray(learning_rates)) + "\n")
         info.write("Max absolute-value elements of initial MCP gradients = " + str(np.asarray(lr_scales)) + "\n")
+        info.write("Final loss achieved = " + str(np.asarray(opt_metrics["final_loss"])) + "\n")
+        info.write("Final penalty achieved = " + str(np.asarray(opt_metrics["final_penalty"])) + "\n")
         info.write("Final MCPs achieved = " + str(np.asarray(opt_metrics["final_MCP"])) + "\n")
         info.write("Number of iterations required = " + str(opt_metrics["final_iters"]) + "\n")
         info.write("Optimization Times Required (seconds) = " + str(cnvg_times) + "\n")
@@ -511,24 +521,24 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
             tracked_vals["loss_diff"].append(loss_diff)
             if "weighted_Stackelberg_co_opt" in obj_fun_flag:
                 tauvec, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
-                tracked_vals["diam_pair_CP_variance"].append(jnp.nan)
+                # tracked_vals["diam_pair_CP_variance"].append(jnp.nan)
                 F = cap_probs.reshape((n**2), order='F')
                 tracked_vals["MCP_inds"].append(jnp.argmin(F))
                 tracked_vals["MCPs"].append(jnp.min(F))
             elif "weighted_Stackelberg" in obj_fun_flag:
                 F = strat_comp.compute_weighted_cap_probs(P, D_idx, W, w_max, tau)
-                tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
+                # tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
                 F = F.reshape((n**2), order='F')
                 tracked_vals["MCP_inds"].append(jnp.argmin(F))
                 tracked_vals["MCPs"].append(jnp.min(F))
             elif "Stackelberg" in obj_fun_flag:
                 F = strat_comp.compute_cap_probs(P, F0, tau)
-                tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
+                # tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
                 F = F.reshape((n**2), order='F')
                 tracked_vals["MCP_inds"].append(jnp.argmin(F))
                 tracked_vals["MCPs"].append(jnp.min(F))
             else:
-                tracked_vals["diam_pair_CP_variance"].append(jnp.nan)
+                # tracked_vals["diam_pair_CP_variance"].append(jnp.nan)
                 tracked_vals["MCP_inds"].append(jnp.nan)
                 tracked_vals["MCPs"].append(jnp.nan)
             # print status update to terminal:
@@ -548,11 +558,14 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
             converged, cnvg_test_vals = cnvg_check(iter, loss_diff, cnvg_test_vals, opt_params)
         iter = iter + 1
 
-    tracked_vals["final_iters"].append(iter)
     # convergence or max iteration count has been reached...
+    penalty = strat_comp.comp_pi_penalty(P, pi, opt_params["alpha"])
+    tracked_vals["final_penalty"].append(penalty)
+    tracked_vals["final_iters"].append(iter)
     tracked_vals["final_loss"].append(loss)
     print("*************************")
     print("FINAL LOSS = " + str(loss))
+    print("FINAL PENALTY = " + str(penalty))
     if "weighted_Stackelberg_co_opt" in obj_fun_flag:
         tauvec, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
         print("Minimum Capture Probability at iteration " + str(iter) + ":")

@@ -5,7 +5,7 @@ Attack Duration (tau) = -1
 Graph Code = N12_147573952589676412927
 
 ---------- Optimizer Information ----------
-Optimizer used = sgd
+Optimizer used = rmsprop
 
 Optimizer Parameters from Test Specification:
 {
@@ -18,23 +18,23 @@ Optimizer Parameters from Test Specification:
     "use_abs_param": true,
     "alpha": 1000,
     "max_iters": 10000,
-    "optimizer_name": "sgd",
-    "nominal_learning_rate": 0.001,
+    "optimizer_name": "rmsprop",
+    "nominal_learning_rate": 1,
     "lr_schedule_type": "constant",
     "lr_schedule_args": null,
-    "use_momentum": true,
-    "mom_decay_rate": 0.99,
-    "use_nesterov": true,
-    "cnvg_test_mode": "P_update",
+    "use_momentum": false,
+    "mom_decay_rate": 0.9,
+    "use_nesterov": false,
+    "cnvg_test_mode": "loss_diff",
     "cnvg_radius": 0.01,
-    "cnvg_window_size": 50,
-    "iters_per_printout": 500,
-    "iters_per_trackvals": 100
+    "cnvg_window_size": 10,
+    "iters_per_printout": 100,
+    "iters_per_trackvals": 10
 }
 
 Optimizer Parameters computed during testing:
-Scaled Learning Rates = [0.00005726]
-Max absolute-value elements of initial MCP gradients = [17.464987]
+Scaled Learning Rates = [0.02424876]
+Max absolute-value elements of initial MCP gradients = [41.239227]
 Final MCPs achieved = [nan]
-Number of iterations required = [2749]
-Optimization Times Required (seconds) = [2.4839928150177]
+Number of iterations required = [1041]
+Optimization Times Required (seconds) = [6.010760307312012]

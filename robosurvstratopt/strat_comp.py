@@ -44,6 +44,11 @@ def comp_P_param(Q, A, use_abs_param=True):
     P = jnp.matmul(jnp.diag(1/jnp.sum(P, axis=1)), P)   # normalize rows to generate valid prob dist 
     return P
 
+def comp_pi_penalty(P, pi, alpha):
+    n = len(pi)
+    penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi)))
+    return alpha*penalty
+
 ############################################################
 # Stackelberg formulation
 ############################################################
