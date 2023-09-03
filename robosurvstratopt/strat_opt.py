@@ -669,33 +669,33 @@ if __name__ == '__main__':
     # test_set_name = "SF_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
-    # test_set_name = "SF_Comparison_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
+    test_set_name = "SF_Comparison_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
 
     # test_set_name = "SF_Co_Opt_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
 
-    # test_set_start_time = time.time()
-    # run_test_set(test_set_name, test_spec)
-    # print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
+    test_set_start_time = time.time()
+    run_test_set(test_set_name, test_spec)
+    print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
     
     # # config.update("jax_debug_nans", True)
     # n = 4
-    A = jnp.array([[1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 1, 1], [1, 1, 1, 0]])
+    # A = jnp.array([[1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 1, 1], [1, 1, 1, 0]])
     # # A = jnp.ones((n, n))
     # W = jnp.array([[1, 0, 2, 3], [3, 1, 0, 1], [0, 2, 1, 1], [1, 1, 2, 0]])
-    pi = (0.4, 0.2, 0.25, 0.15)
-    alpha = 1000
-    tau = jnp.nan
-    tau_vec = jnp.nan
+    # pi = (0.4, 0.2, 0.25, 0.15)
+    # alpha = 1000
+    # tau = jnp.nan
+    # tau_vec = jnp.nan
     # # tau_vec = (2, 2, 2, 2)
-    N_eta = jnp.nan
+    # N_eta = jnp.nan
     # # eta = 0.25
     # # N_eta = int(jnp.ceil(jnp.max(W)/(eta*jnp.min(jnp.array(pi)))) - 1)
     # # print(N_eta)
-    B = 8
-    num_init_Ps = 1
-    max_iters = 1000
-    P = test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps, max_iters)
+    # B = 8
+    # num_init_Ps = 1
+    # max_iters = 1000
+    # P = test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps, max_iters)
     # print(P)
     # print(jnp.dot(jnp.array(pi), P))
