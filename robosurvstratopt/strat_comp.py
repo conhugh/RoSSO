@@ -605,7 +605,7 @@ def comp_MHT_pi_grad(Q, A, pi, alpha, use_abs_param=True):
 @functools.partial(jit, static_argnames=['pi'])
 def compute_weighted_MHT_pi(P, W, pi):
     n = P.shape[0]
-    m = compute_MHT(P)
+    m = compute_MHT_GPU(P, pi)
     sclr = jnp.dot(jnp.array(pi),jnp.dot(P*jnp.array(W),jnp.ones((n,))))
     return jnp.squeeze(sclr*m)
 
