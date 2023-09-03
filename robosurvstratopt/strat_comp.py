@@ -734,19 +734,33 @@ def precompute_weighted_RTE_pi(W, w_max, N_eta):
             D_idx = D_idx.at[k, i].set(vec)
     return D_idx
 
+@functools.partial(jit, static_argnames=['w_max'])
+def weighted_RTE_loop_guts(P, D_idx, W, w_max, F_mats, k):
+    n = jnp.shape(P)[0]
+    P_direct = P*(W == k+1)
+    idx = (D_idx[k] + w_max).astype(int)
+    D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
+    D_k = jnp.reshape(D_k, (n, n, n))
+    D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
+    multi_step_probs = jnp.matmul(P, D_k)
+    multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
+    F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
+    return F_mats
+
 # @functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta'])
 def compute_weighted_RTE_pi(P, D_idx, W, w_max, pi, N_eta):
     n = jnp.shape(P)[0]
     F_mats = jnp.zeros((N_eta + w_max, n, n))
     for k in range(N_eta):
-        P_direct = P*(W == k+1)
-        idx = (D_idx[k] + w_max).astype(int)
-        D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
-        D_k = jnp.reshape(D_k, (n, n, n))
-        D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
-        multi_step_probs = jnp.matmul(P, D_k)
-        multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
-        F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
+        # P_direct = P*(W == k+1)
+        # idx = (D_idx[k] + w_max).astype(int)
+        # D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
+        # D_k = jnp.reshape(D_k, (n, n, n))
+        # D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
+        # multi_step_probs = jnp.matmul(P, D_k)
+        # multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
+        # F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
+        F_mats = weighted_RTE_loop_guts(P, D_idx, W, w_max, F_mats, k)
 
     F_mats = F_mats[w_max:, :, :]
     F_sum_mat = jnp.sum(F_mats*jnp.log(jnp.where(F_mats == 0, 1, F_mats)), axis=0)
