@@ -4,7 +4,7 @@
     "optimizer_params": {
         "varying_optimizer_params": false,
         "params": {
-            "num_init_Ps": 2,
+            "num_init_Ps": 10,
             "num_init_LCPs": 1,
             "num_LCPs_schedule": {
                 "0": 1

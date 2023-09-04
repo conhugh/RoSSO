@@ -359,6 +359,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
         info.write("Attack Duration (tau) = " + str(tau) + "\n")
         info.write("Defense Budget (B) = " + str(B) + "\n")
         info.write("Truncation Accuracy (eta) = " + str(eta) + "\n")
+        info.write("Duration (N_eta) = " + str(N_eta) + "\n")
         info.write("\n---------- Optimizer Information ----------\n")
         info.write("Optimizer used = " + opt_params["optimizer_name"] + "\n")
         info.write("\nOptimizer Parameters from Test Specification:\n")
