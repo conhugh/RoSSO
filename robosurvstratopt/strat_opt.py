@@ -464,8 +464,10 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
             loss = strat_comp.loss_ER_pi(Q, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'RTE_pi':
             grad = -1*strat_comp.comp_RTE_pi_grad(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+            loss = strat_comp.loss_RTE_pi(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_RTE_pi':
             grad = -1*strat_comp.comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+            loss = strat_comp.loss_weighted_RTE_pi(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
         
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
@@ -547,8 +549,10 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
     print("FINAL PENALTY = " + str(penalty))
     if "weighted_Stackelberg_co_opt" in obj_fun_flag:
         tauvec, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
+        final_MCP = jnp.min(cap_probs)
+        tracked_vals["final_MCP"].append(final_MCP)
         print("Minimum Capture Probability at iteration " + str(iter) + ":")
-        print(jnp.min(cap_probs))
+        print(final_MCP)
         print("Final tauvec:" + str(tauvec))
     elif "weighted_Stackelberg" in obj_fun_flag:
         F = strat_comp.compute_weighted_cap_probs(P, D_idx, W, w_max, tau)
