@@ -12,7 +12,7 @@
             "use_edge_weights": true,
             "use_abs_param": true,
             "alpha": 1000,
-            "max_iters": 10,
+            "max_iters": 10000,
             "optimizer_name": "rmsprop",
             "nominal_learning_rate": 1,
             "lr_schedule_type": "constant",
@@ -21,7 +21,7 @@
             "mom_decay_rate": 0.9,
             "use_nesterov": false,
             "cnvg_test_mode": "loss_diff", 
-            "cnvg_radius": 0.001,
+            "cnvg_radius": 0.01,
             "cnvg_window_size": 10,
             "iters_per_printout": 100,
             "iters_per_trackvals": 10
@@ -35,10 +35,10 @@
         "MCPs",
         "final_MCP",
         "final_iters",
-        "diam_pair_CP_variance",
         "loss",
         "loss_diff",
-        "final_loss"
+        "final_loss",
+        "final_penalty"
     ],
     "graph_names": {
         "test1": "complete_N12"

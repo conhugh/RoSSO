@@ -49,6 +49,19 @@ def comp_pi_penalty(P, pi, alpha):
     penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi)))
     return alpha*penalty
 
+def weighted_FHTs_loop_body(k, loop_vals):
+    F_mats, P, D_idx, W, w_max = loop_vals
+    n = jnp.shape(P)[0]
+    P_direct = P*(W == k+1)
+    idx = (D_idx[k] + w_max).astype(int)
+    D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
+    D_k = jnp.reshape(D_k, (n, n, n))
+    D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
+    multi_step_probs = jnp.matmul(P, D_k)
+    multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
+    F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
+    return (F_mats, P, D_idx, W, w_max)
+
 ############################################################
 # Stackelberg formulation
 ############################################################
@@ -283,16 +296,8 @@ def precompute_weighted_Stackelberg(W, w_max, tau):
 def compute_weighted_cap_probs(P, D_idx, W, w_max, tau):
     n = jnp.shape(P)[0]
     F_mats = jnp.zeros((tau + w_max, n, n))
-    for k in range(tau):
-        P_direct = P*(W == k+1)
-        idx = (D_idx[k] + w_max).astype(int)
-        D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
-        D_k = jnp.reshape(D_k, (n, n, n))
-        D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
-        multi_step_probs = jnp.matmul(P, D_k)
-        multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
-        F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
-
+    init_vals = (F_mats, P, D_idx, W, w_max)
+    F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
     F_mats = F_mats[w_max:, :, :]
     cap_probs = jnp.sum(F_mats, axis=0)
     return jnp.ravel(cap_probs, order='F')
@@ -350,30 +355,28 @@ def precompute_weighted_Stackelberg_co_opt(W, w_max, B):
             D_idx = D_idx.at[k, i].set(vec)
     return D_idx
 
+def greedy_co_opt_loop_body(_, loop_vals):
+    tau_vec, cap_probs, F0 = loop_vals
+    n = len(tau_vec)
+    min_idx = jnp.argmin(cap_probs)
+    _, col_idx = divmod(min_idx, n)
+    tau_vec = tau_vec.at[col_idx].set(tau_vec[col_idx] + 1)
+    cap_probs = cap_probs.at[:, col_idx].set(cap_probs[:, col_idx] + F0[(tau_vec[col_idx]-1).astype(int), :, col_idx])
+    return (tau_vec, cap_probs, F0)
+
 @functools.partial(jit, static_argnames=['w_max', 'B'])
 def greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B):
     n = jnp.shape(P)[0]
     tau_max = B - n + 1
     F_mats = jnp.zeros((tau_max + w_max, n, n))
-    for k in range(tau_max):
-        P_direct = P*(W == k+1)
-        idx = (D_idx[k] + w_max).astype(int)
-        D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
-        D_k = jnp.reshape(D_k, (n, n, n))
-        D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
-        multi_step_probs = jnp.matmul(P, D_k)
-        multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
-        F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
+    init_vals = (F_mats, P, D_idx, W, w_max)
+    F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau_max, weighted_FHTs_loop_body, init_vals)
     F0 = F_mats[w_max:, :, :]
 
-    cap_probs = jnp.zeros((n, n))
     tau_vec = jnp.zeros(n)
-    while B > 0:
-        min_idx = jnp.argmin(cap_probs)
-        _, col_idx = divmod(min_idx, n)
-        tau_vec = tau_vec.at[col_idx].set(tau_vec[col_idx] + 1)
-        cap_probs = cap_probs.at[:, col_idx].set(cap_probs[:, col_idx] + F0[(tau_vec[col_idx]-1).astype(int), :, col_idx])
-        B -= 1
+    cap_probs = jnp.zeros((n, n))
+    init_vals = (tau_vec, cap_probs, F0)
+    tau_vec, cap_probs, _ = jax.lax.fori_loop(0, B, greedy_co_opt_loop_body, init_vals)
     
     return tau_vec, cap_probs
 
@@ -739,39 +742,17 @@ def precompute_weighted_RTE_pi(W, w_max, N_eta):
             D_idx = D_idx.at[k, i].set(vec)
     return D_idx
 
-@functools.partial(jit, static_argnames=['w_max'])
-def weighted_RTE_loop_guts(P, D_idx, W, w_max, F_mats, k):
-    n = jnp.shape(P)[0]
-    P_direct = P*(W == k+1)
-    idx = (D_idx[k] + w_max).astype(int)
-    D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
-    D_k = jnp.reshape(D_k, (n, n, n))
-    D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
-    multi_step_probs = jnp.matmul(P, D_k)
-    multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
-    F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
-    return F_mats
-
-# @functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta'])
+@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta'])
 def compute_weighted_RTE_pi(P, D_idx, W, w_max, pi, N_eta):
     n = jnp.shape(P)[0]
     F_mats = jnp.zeros((N_eta + w_max, n, n))
-    for k in range(N_eta):
-        # P_direct = P*(W == k+1)
-        # idx = (D_idx[k] + w_max).astype(int)
-        # D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
-        # D_k = jnp.reshape(D_k, (n, n, n))
-        # D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
-        # multi_step_probs = jnp.matmul(P, D_k)
-        # multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
-        # F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
-        F_mats = weighted_RTE_loop_guts(P, D_idx, W, w_max, F_mats, k)
-
+    init_vals = (F_mats, P, D_idx, W, w_max)
+    F_mats, _, _, _, _ = jax.lax.fori_loop(0, N_eta, weighted_FHTs_loop_body, init_vals)
     F_mats = F_mats[w_max:, :, :]
     F_sum_mat = jnp.sum(F_mats*jnp.log(jnp.where(F_mats == 0, 1, F_mats)), axis=0)
     return -(jnp.dot(jnp.array(pi), jnp.diagonal(F_sum_mat)))
 
-# @functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
+@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
 def loss_weighted_RTE_pi(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param=True):
     n = len(pi)
     P = comp_P_param(Q, A, use_abs_param)
@@ -780,7 +761,7 @@ def loss_weighted_RTE_pi(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param=
     return h_ret_w - alpha*penalty
 
 _comp_weighted_RTE_pi_grad = jacrev(loss_weighted_RTE_pi)
-# @functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
+@functools.partial(jit, static_argnames=['w_max', 'pi', 'N_eta', 'alpha', 'use_abs_param'])
 def comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param=True):
     grad = _comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_param) 
     return grad

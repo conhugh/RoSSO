@@ -462,10 +462,10 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
         elif obj_fun_flag == 'ER_pi':
             grad = -1*strat_comp.comp_ER_pi_grad(Q, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
             loss = strat_comp.loss_ER_pi(Q, A, pi, opt_params["alpha"], opt_params["use_abs_param"])
-        # elif obj_fun_flag == 'RTE_pi':
-        #     grad = -1*strat_comp.comp_RTE_pi_grad(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
-        # elif obj_fun_flag == 'weighted_RTE_pi':
-        #     grad = -1*strat_comp.comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'RTE_pi':
+            grad = -1*strat_comp.comp_RTE_pi_grad(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'weighted_RTE_pi':
+            grad = -1*strat_comp.comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
         
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
@@ -489,30 +489,7 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
     while not converged:
         num_LCPs = int(num_LCPs_schedule(iter))
         # apply update to P matrix, and parametrization Q:
-        if 'RTE' in obj_fun_flag:
-            P_old = P
-            loss_old = loss
-            if obj_fun_flag == 'RTE_pi':
-                grad = -1*strat_comp.comp_RTE_pi_grad(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
-                loss = strat_comp.loss_RTE_pi(Q, A, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
-            elif obj_fun_flag == 'weighted_RTE_pi':
-                grad = -1*strat_comp.comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
-                loss = strat_comp.loss_weighted_RTE_pi(Q, A, D_idx, W, w_max, pi, N_eta, opt_params["alpha"], opt_params["use_abs_param"])
-            updates, opt_state = optimizer.update(grad, opt_state)
-            Q = optax.apply_updates(Q, updates)
-            P = strat_comp.comp_P_param(Q, A)
-            P_diff = P - P_old
-            abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
-            loss_diff = jnp.abs((loss - loss_old)/loss_old)
-
-            if opt_params["cnvg_test_mode"] == "MCP_diff":
-                MCP_old = MCP
-                MCP = strat_comp.compute_LCPs(P, F0, tau)
-                MCP_diff = MCP - MCP_old
-            elif opt_params["cnvg_test_mode"] == "P_update":
-                MCP = MCP_diff = jnp.nan
-        else:
-            Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, loss, loss_diff, opt_state = step(Q, P, MCP, loss, opt_state, num_LCPs)
+        Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, loss, loss_diff, opt_state = step(Q, P, MCP, loss, opt_state, num_LCPs)
         # track metrics of interest:
         if iter % opt_params["iters_per_trackvals"] == 0:
             tracked_vals["iters"].append(iter)
@@ -565,6 +542,7 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
     tracked_vals["final_iters"].append(iter)
     tracked_vals["final_loss"].append(loss)
     print("*************************")
+    print("FINAL ITER = " + str(iter))
     print("FINAL LOSS = " + str(loss))
     print("FINAL PENALTY = " + str(penalty))
     if "weighted_Stackelberg_co_opt" in obj_fun_flag:
