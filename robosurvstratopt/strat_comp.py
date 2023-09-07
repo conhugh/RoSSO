@@ -767,6 +767,29 @@ def comp_weighted_RTE_pi_grad(Q, A, D_idx, W, w_max, pi, N_eta, alpha, use_abs_p
     return grad
 
 ############################################################
+# Fastest Mixing Markov Chain formulation
+############################################################
+@jit
+def compute_SLEM(P):
+    eigs = jnp.linalg.eigvals(P)
+    sorted_eigs = eigs[jnp.argsort(jnp.abs(eigs))]
+    mu = jnp.squeeze(jnp.max(jnp.abs(sorted_eigs[:-1])))
+    return jnp.real(mu)
+
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def loss_FMMC(Q, A, use_abs_param=True):
+    P = comp_P_param(Q, A, use_abs_param)
+    mu = compute_SLEM(P)
+    return mu
+
+# Autodiff parametrized loss function
+_comp_FMMC_grad = jacrev(loss_FMMC)
+@functools.partial(jit, static_argnames=['use_abs_param'])
+def comp_FMMC_grad(Q, A, use_abs_param=True):
+    grad = _comp_FMMC_grad(Q, A, use_abs_param) 
+    return grad
+
+############################################################
 # Auxiliary strategy analysis methods below
 ############################################################
 # @jit
