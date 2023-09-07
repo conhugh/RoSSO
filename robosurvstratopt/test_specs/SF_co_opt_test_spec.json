@@ -4,7 +4,7 @@
     "optimizer_params": {
         "varying_optimizer_params": false,
         "params": {
-            "num_init_Ps": 1,
+            "num_init_Ps": 100,
             "num_init_LCPs": 1,
             "num_LCPs_schedule": {
                 "0": 1
@@ -22,7 +22,7 @@
             "use_nesterov": false,
             "cnvg_test_mode": "loss_diff", 
             "cnvg_radius": 0.01,
-            "cnvg_window_size": 10,
+            "cnvg_window_size": 20,
             "iters_per_printout": 500,
             "iters_per_trackvals": 10
         }

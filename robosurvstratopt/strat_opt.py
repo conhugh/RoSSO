@@ -665,11 +665,11 @@ if __name__ == '__main__':
     # test_set_name = "SF_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
-    test_set_name = "SF_Comparison_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
+    # test_set_name = "SF_Comparison_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
 
-    # test_set_name = "SF_Co_Opt_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
+    test_set_name = "SF_Co_Opt_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
