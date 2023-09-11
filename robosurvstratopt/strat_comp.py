@@ -62,6 +62,10 @@ def weighted_FHTs_loop_body(k, loop_vals):
     F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
     return (F_mats, P, D_idx, W, w_max)
 
+def precompute_multi(n, N):
+    combs = jnp.array(list(itertools.product(range(n), repeat=N+1)))
+    return combs
+
 ############################################################
 # Stackelberg formulation
 ############################################################
@@ -424,10 +428,6 @@ def comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, B, pi, al
 ############################################################
 # Multi-Agent Stackelberg formulation
 ############################################################
-def precompute_multi_cap_probs(n, N):
-    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
-    return jnp.array(combinations)
-
 @functools.partial(jit, static_argnames=['tau'])
 def compute_multi_cap_probs(Ps, F0s, combs, tau):
     n = jnp.shape(Ps)[0]
@@ -477,53 +477,42 @@ def comp_avg_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs=1, use_abs_param=True):
 ############################################################
 # Weighted Multi-Agent Stackelberg formulation
 ############################################################
-def precompute_weighted_multi_cap_probs(n, N, tau, W):
-    indic_mat = jnp.zeros((n, n, n))
-    for k in range(tau):
-        indic_mat = indic_mat.at[k].set((k + 1)*jnp.ones((n, n)) == W)
+def weighted_multi_comb_loop_body(i, loop_vals):
+    cap_probs, combs, indiv_cap_probs = loop_vals
+    N = jnp.shape(indiv_cap_probs)[0]
+    idx_vec = combs[i]
+    not_cap_prob = jnp.prod(1 - indiv_cap_probs[jnp.arange(N), idx_vec[:-1], idx_vec[-1]])
+    cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
+    return (cap_probs, combs, indiv_cap_probs)
 
-    I = jnp.identity(n)
-    E_ij = jnp.zeros((n, n, n**2, n**2))
-    for i in range(n):
-        for j in range(n):
-            E_j = jnp.diag(jnp.ones(n) - I[:, j])
-            E_ij = E_ij.at[i, j].set(jnp.kron(E_j, (jnp.outer(I[:, i], I[:, j]))))
-    
-    combs = jnp.array(list(itertools.product(range(1, n+1), repeat=N+1)))
-    return indic_mat, E_ij, combs
-
-@functools.partial(jit, static_argnames=['w_max', 'tau'])
-def compute_weighted_multi_cap_probs(Ps, indic_mat, E_ij, combs, W, w_max, tau):
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'tau'])
+def compute_weighted_multi_cap_probs(Ps, D_idx, combs, N, combs_len, W, w_max, tau):
     n = jnp.shape(Ps)[0]
-    N = Ps.shape[2]
-    F_vecs = jnp.zeros((n**2, tau + w_max, N))
-    I = jnp.identity(n)
+    def loop_body(r, F_mats_multi):
+        F_mats = F_mats_multi[r, :, :, :]
+        init_vals = (F_mats, Ps[:, :, r], D_idx, W, w_max)
+        F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
+        F_mats_multi = F_mats_multi.at[r, :, :, :].set(F_mats)
+        return F_mats_multi
 
-    for r in range(N):
-        for k in range(tau):
-            P_direct = Ps[:, :, r]*indic_mat[k]
-            P_direct_vec = jnp.reshape(P_direct, n**2, order='F')
+    F_mats_multi = jnp.zeros((N, tau + w_max, n, n))
+    F_mats_multi = jax.lax.fori_loop(0, N, loop_body, F_mats_multi)
+    # for r in range(N):
+    #     F_mats = F_mats_multi[r, :, :, :]
+    #     init_vals = (F_mats, Ps[:, :, r], D_idx, W, w_max)
+    #     F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
+    #     F_mats_multi = F_mats_multi.at[r, :, :, :].set(F_mats)
+    F_mats_multi = F_mats_multi[:, w_max:, :, :]
+    indiv_cap_probs = jnp.sum(F_mats_multi, axis=1)
 
-            multi_step_probs = jnp.zeros(n**2)
-            for i in range(n):
-                for j in range(n):
-                    multi_step_probs = multi_step_probs + Ps[i, j, r]*jnp.matmul(E_ij[i, j], F_vecs[:, k + w_max - W[i, j].astype(int), r])
-                    
-            F_vecs = F_vecs.at[:, k + w_max, r].set(P_direct_vec + multi_step_probs)
-    F_vecs = F_vecs[:, w_max:, :]
-    indiv_cap_probs = jnp.reshape(jnp.sum(F_vecs, axis=1), (n, n, N), order='F')
+    cap_probs = jnp.zeros(combs_len)
+    init_vals = (cap_probs, combs, indiv_cap_probs)
+    cap_probs, _, _ = jax.lax.fori_loop(0, combs_len, weighted_multi_comb_loop_body, init_vals)
+    return jnp.reshape(cap_probs, (n**N, n))
 
-    cap_probs = jnp.zeros(len(combs))
-    for i in range(len(combs)):
-        idx_vec = combs[i]
-        not_cap_prob = jnp.prod(1 - indiv_cap_probs[idx_vec[:-1], idx_vec[-1], jnp.arange(N)])
-        cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
-
-    return jnp.reshape(cap_probs, (n**N, n), order='F')
-
-@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs'])
-def compute_weighted_multi_LCPs(Ps, W, w_max, tau, num_LCPs=1):
-    cap_probs = compute_weighted_multi_cap_probs(Ps, W, w_max, tau)
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'tau', 'num_LCPs'])
+def compute_weighted_multi_LCPs(Ps, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs=1):
+    cap_probs = compute_weighted_multi_cap_probs(Ps, D_idx, combs, N, combs_len, W, w_max, tau)
     if num_LCPs == 1:
         lcps = jnp.min(cap_probs)
     elif num_LCPs > 1:
@@ -533,20 +522,20 @@ def compute_weighted_multi_LCPs(Ps, W, w_max, tau, num_LCPs=1):
     return lcps
 
 # Loss function with constraints included in parametrization
-@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
-def loss_weighted_multi_LCP(Qs, As, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+def loss_weighted_multi_LCP(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs=1, use_abs_param=True):
     N = Qs.shape[2]
     Ps = jnp.zeros_like(Qs)
     for i in range(N):
         P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
         Ps = Ps.at[:, :, i].set(P)
-    return jnp.mean(compute_weighted_multi_LCPs(Ps, W, w_max, tau, num_LCPs))
+    return jnp.mean(compute_weighted_multi_LCPs(Ps, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs))
 
 # Autodiff parametrized loss function
 _comp_weighted_multi_LCP_grad = jacrev(loss_weighted_multi_LCP)
-@functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs', 'use_abs_param'])
-def comp_avg_weighted_multi_LCP_grad(Qs, As, W, w_max, tau, num_LCPs=1, use_abs_param=True):
-    grad = _comp_weighted_multi_LCP_grad(Qs, As, W, w_max, tau, num_LCPs, use_abs_param)
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
+def comp_avg_weighted_multi_LCP_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs=1, use_abs_param=True):
+    grad = _comp_weighted_multi_LCP_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs, use_abs_param)
     return grad
 
 ############################################################
@@ -635,10 +624,6 @@ def comp_weighted_MHT_pi_grad(Q, A, W, pi, alpha, use_abs_param=True):
 ############################################################
 # Multi-Agent Mean Hitting Time formulation
 ############################################################
-def precompute_multi_MHT(n, N):
-    combinations = list(itertools.product(range(1, n+1), repeat=N+1))
-    return jnp.array(combinations)
-
 @jit
 def compute_multi_MHT(Ps, combs):
     n = Ps.shape[0]
@@ -671,6 +656,59 @@ _comp_multi_MHT_grad = jacrev(loss_multi_MHT)
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_multi_MHT_grad(Qs, As, use_abs_param=True):
     grad = _comp_multi_MHT_grad(Qs, As, use_abs_param) 
+    return grad
+
+############################################################
+# Weighted Multi-Agent Mean Hitting Time formulation
+############################################################
+# def weighted_multi_comb_loop_body(i, loop_vals):
+#     cap_probs, combs, indiv_cap_probs = loop_vals
+#     N = jnp.shape(indiv_cap_probs)[0]
+#     idx_vec = combs[i]
+#     not_cap_prob = jnp.prod(1 - indiv_cap_probs[jnp.arange(N), idx_vec[:-1], idx_vec[-1]])
+#     cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
+#     return (cap_probs, combs, indiv_cap_probs)
+
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max'])
+def compute_weighted_multi_MHT(Ps, D_idx, combs, N, combs_len, W, w_max):
+    n = jnp.shape(Ps)[0]
+    def loop_body(r, F_mats_multi):
+        F_mats = F_mats_multi[r, :, :, :]
+        init_vals = (F_mats, Ps[:, :, r], D_idx, W, w_max)
+        F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
+        F_mats_multi = F_mats_multi.at[r, :, :, :].set(F_mats)
+        return F_mats_multi
+
+    F_mats_multi = jnp.zeros((N, tau + w_max, n, n))
+    F_mats_multi = jax.lax.fori_loop(0, N, loop_body, F_mats_multi)
+    # for r in range(N):
+    #     F_mats = F_mats_multi[r, :, :, :]
+    #     init_vals = (F_mats, Ps[:, :, r], D_idx, W, w_max)
+    #     F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
+    #     F_mats_multi = F_mats_multi.at[r, :, :, :].set(F_mats)
+    F_mats_multi = F_mats_multi[:, w_max:, :, :]
+    indiv_cap_probs = jnp.sum(F_mats_multi, axis=1)
+
+    cap_probs = jnp.zeros(combs_len)
+    init_vals = (cap_probs, combs, indiv_cap_probs)
+    cap_probs, _, _ = jax.lax.fori_loop(0, combs_len, weighted_multi_comb_loop_body, init_vals)
+    return jnp.reshape(cap_probs, (n**N, n))
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'use_abs_param'])
+def loss_weighted_multi_MHT(Qs, As, D_idx, combs, N, combs_len, W, w_max, use_abs_param=True):
+    N = Qs.shape[2]
+    Ps = jnp.zeros_like(Qs)
+    for i in range(N):
+        P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
+        Ps = Ps.at[:, :, i].set(P)
+    return jnp.mean(compute_weighted_multi_MHT(Ps, D_idx, combs, N, combs_len, W, w_max))
+
+# Autodiff parametrized loss function
+_comp_weighted_multi_MHT_grad = jacrev(loss_weighted_multi_MHT)
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'use_abs_param'])
+def comp_avg_weighted_multi_MHT_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, use_abs_param=True):
+    grad = _comp_weighted_multi_MHT_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, use_abs_param)
     return grad
 
 ############################################################

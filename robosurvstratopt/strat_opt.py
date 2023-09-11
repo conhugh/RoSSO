@@ -373,6 +373,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
         info.write("Final loss achieved = " + str(np.asarray(opt_metrics["final_loss"])) + "\n")
         info.write("Final penalty achieved = " + str(np.asarray(opt_metrics["final_penalty"])) + "\n")
         info.write("Final MCPs achieved = " + str(np.asarray(opt_metrics["final_MCP"])) + "\n")
+        info.write("Final attack duration vector = " + str(np.asarray(opt_metrics["final_tauvec"])) + "\n")
         info.write("Number of iterations required = " + str(opt_metrics["final_iters"]) + "\n")
         info.write("Optimization Times Required (seconds) = " + str(cnvg_times) + "\n")
     info.close()
@@ -500,7 +501,7 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
             tracked_vals["loss"].append(loss)
             tracked_vals["loss_diff"].append(loss_diff)
             if "weighted_Stackelberg_co_opt" in obj_fun_flag:
-                tauvec, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
+                _, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
                 # tracked_vals["diam_pair_CP_variance"].append(jnp.nan)
                 F = cap_probs.reshape((n**2), order='F')
                 tracked_vals["MCP_inds"].append(jnp.argmin(F))
@@ -549,6 +550,7 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
     print("FINAL PENALTY = " + str(penalty))
     if "weighted_Stackelberg_co_opt" in obj_fun_flag:
         tauvec, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
+        tracked_vals["final_tauvec"].append(tauvec)
         final_MCP = jnp.min(cap_probs)
         tracked_vals["final_MCP"].append(final_MCP)
         print("Minimum Capture Probability at iteration " + str(iter) + ":")
@@ -560,14 +562,17 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
         tracked_vals["final_MCP"].append(final_MCP)
         print("Minimum Capture Probability at iteration " + str(iter) + ":")
         print(final_MCP)
+        tracked_vals["final_tauvec"].append(jnp.nan)
     elif "Stackelberg" in obj_fun_flag:
         F = strat_comp.compute_cap_probs(P, F0, tau)
         final_MCP = jnp.min(F)
         tracked_vals["final_MCP"].append(final_MCP)
         print("Minimum Capture Probability at iteration " + str(iter) + ":")
         print(final_MCP)
+        tracked_vals["final_tauvec"].append(jnp.nan)
     else:
         tracked_vals["final_MCP"].append(jnp.nan)
+        tracked_vals["final_tauvec"].append(jnp.nan)
 
     return P, tracked_vals
 
@@ -665,11 +670,11 @@ if __name__ == '__main__':
     # test_set_name = "SF_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
-    # test_set_name = "SF_Comparison_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
+    test_set_name = "SF_Comparison_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
 
-    test_set_name = "SF_Co_Opt_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
+    # test_set_name = "SF_Co_Opt_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)

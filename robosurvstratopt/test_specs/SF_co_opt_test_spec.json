@@ -4,7 +4,7 @@
     "optimizer_params": {
         "varying_optimizer_params": false,
         "params": {
-            "num_init_Ps": 100,
+            "num_init_Ps": 2,
             "num_init_LCPs": 1,
             "num_LCPs_schedule": {
                 "0": 1
@@ -38,7 +38,8 @@
         "loss",
         "loss_diff",
         "final_loss",
-        "final_penalty"
+        "final_penalty",
+        "final_tauvec"
     ],
     "graph_names": {
         "test1": "complete_N12"
