@@ -10,13 +10,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import csv
 
 import graph_comp
 import strat_comp
 import strat_viz
 from test_spec import TestSpec
 
-def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps, max_iters):
+def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, N, alpha, num_init_Ps, max_iters):
     """
     Test and time various Optax optimizers for a fixed number of iterations.
 
@@ -37,32 +38,37 @@ def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps
     numpy.ndarray
         Capture Probability matrix corresponding to optimized strategy.
     """
-    init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
+    # init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
+    As = jnp.tile(A, (N, 1, 1))
+    init_Ps = strat_comp.multi_init_rand_Ps(As, N, 1)
     # grad_func = strat_comp.comp_avg_LCP_grad
     # grad_func = strat_comp.comp_avg_LCP_pi_grad
     # grad_func = strat_comp.comp_avg_weighted_LCP_pi_grad
     # grad_func = strat_comp.comp_avg_hetero_tau_LCP_pi_grad
     # grad_func = strat_comp.comp_avg_greedy_co_opt_weighted_LCP_pi_grad
     # grad_func = strat_comp.comp_MHT_grad
-    grad_func = strat_comp.comp_MHT_pi_grad
+    # grad_func = strat_comp.comp_MHT_pi_grad
     # grad_func = strat_comp.comp_weighted_MHT_pi_grad
     # grad_func = strat_comp.comp_ER_pi_grad
     # grad_func = strat_comp.comp_RTE_pi_grad
     # grad_func = strat_comp.comp_weighted_RTE_pi_grad
+    grad_func = strat_comp.comp_avg_weighted_multi_LCP_grad
     num_LCPs = 1
     nominal_learning_rate = 0.001
-    n = A.shape[0]
+    n = A.shape[-1]
     W = jnp.ones((n, n))
     w_max = int(jnp.max(W))
     # F0 = jnp.zeros((n, n, tau))
     # F0 = jnp.zeros((n, n, jnp.max(jnp.array(tau_vec))))
-    F0 = jnp.zeros((n, n, B-n+1))
-    # D_idx = strat_comp.precompute_weighted_cap_probs(W, w_max, tau)
+    # F0 = jnp.zeros((n, n, B-n+1))
+    D_idx = strat_comp.precompute_weighted_Stackelberg(W, w_max, tau)
     # D_idx = strat_comp.precompute_weighted_Stackelberg_co_opt(W, w_max, B)
     # D_idx = strat_comp.precompute_weighted_RTE_pi(W, w_max, N_eta)
+    combs, combs_len = strat_comp.precompute_multi(n, N)
     time_avgs = []
     for k in range(num_init_Ps):
-        Q = init_Ps[:, :, k]
+        # Q = init_Ps[:, :, k]
+        Q = init_Ps[k, :, :, :]
         # init_grad = grad_func(Q, A, F0, tau, num_LCPs)
         # init_grad = grad_func(Q, A, F0, tau, pi, alpha)
         # init_grad = grad_func(Q, A, indic_mat, E_ij, W, w_max, tau, pi, alpha)
@@ -71,9 +77,10 @@ def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps
         # init_grad = grad_func(Q, A, F0, B, pi, alpha)
         # init_grad = grad_func(Q, A)
         # init_grad = grad_func(Q, A, W, pi, alpha)
-        init_grad = grad_func(Q, A, pi, alpha)
+        # init_grad = grad_func(Q, A, pi, alpha)
         # init_grad = grad_func(Q, A, pi, N_eta, alpha)
         # init_grad = grad_func(Q, A, D_idx, W, w_max, pi, N_eta, alpha)
+        init_grad = strat_comp.comp_avg_weighted_multi_LCP_grad(Q, As, D_idx, combs, N, combs_len, W, w_max, tau)
         init_grad_max = jnp.max(jnp.abs(init_grad))
         scaled_learning_rate = nominal_learning_rate/init_grad_max
         schedule = optax.constant_schedule(scaled_learning_rate)
@@ -91,11 +98,12 @@ def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps
             # grad = -1*grad_func(Q, A, D_idx, W, w_max, B, pi, alpha)
             # grad = -1*grad_func(Q, A, F0, tau_vec, pi, alpha)
             # grad = -1*grad_func(Q, A, F0, B, pi, alpha)
-            grad = grad_func(Q, A, pi, alpha)
+            # grad = grad_func(Q, A, pi, alpha)
             # grad = grad_func(Q, A, W, pi, alpha)
             # grad = -1*grad_func(Q, A, pi, alpha)
             # grad = -1*grad_func(Q, A, pi, N_eta, alpha)
             # grad = -1*grad_func(Q, A, D_idx, W, w_max, pi, N_eta, alpha)
+            grad = -1*grad_func(Q, As, D_idx, combs, N, combs_len, W, w_max, tau)
             updates, opt_state = optimizer.update(grad, opt_state)
             Q = optax.apply_updates(Q, updates)
             return Q, opt_state
@@ -111,8 +119,13 @@ def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps
             # # start_time = time.time()
             # Q = optax.apply_updates(Q, updates)
             # # print("--- Applying update took: %s seconds ---" % (time.time() - start_time))
-        P = strat_comp.comp_P_param(Q, A)
-        print(P)
+        # P = strat_comp.comp_P_param(Q, A)
+        Ps = jnp.zeros_like(Q)
+        for i in range(N):
+            P = strat_comp.comp_P_param(Q[i, :, :], As[i, :, :])
+            Ps = Ps.at[i, :, :].set(P)
+        # print(P)
+        print(Ps)
         opt_time = time.time() - check_time
         time_avgs.append(opt_time)
         print("Optimizing P matrix number " + str(k + 1) + " over " + str(max_iters) + " iterations took: " + str(opt_time)[:7] + " seconds")
@@ -125,10 +138,11 @@ def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps
         # print("Final MCP: " + str(strat_comp.loss_hetero_tau_LCP_pi(Q, A, F0, tau_vec, pi, alpha)))
         # print("Final MCP: " + str(strat_comp.loss_greedy_co_opt_LCP_pi(Q, A, F0, B, pi, alpha)))
         # print("Final loss: " + str(strat_comp.loss_MHT_pi(Q, A, pi, alpha)))
-        print("Final loss: " + str(strat_comp.loss_weighted_MHT_pi(Q, A, W, pi, alpha)))
+        # print("Final loss: " + str(strat_comp.loss_weighted_MHT_pi(Q, A, W, pi, alpha)))
         # print("Final loss: " + str(strat_comp.loss_ER_pi(Q, A, pi, alpha)))
         # print("Final loss: " + str(strat_comp.loss_RTE_pi(Q, A, pi, N_eta, alpha)))
         # print("Final loss: " + str(strat_comp.loss_weighted_RTE_pi(Q, A, W, w_max, pi, N_eta, alpha)))
+        print("Final loss: " + str(strat_comp.loss_weighted_multi_LCP(Q, As, D_idx, combs, N, combs_len, W, w_max, tau)))
     return P
 
 def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
@@ -182,6 +196,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
         tau = test_spec.taus[test_name]
         B = test_spec.defense_budgets[test_name]
         eta = test_spec.etas[test_name]
+        N = test_spec.num_robots[test_name]
         trackers = test_spec.trackers
         if test_spec.optimizer_params["varying_optimizer_params"]:
             opt_params = test_spec.optimizer_params[test_name].copy()
@@ -195,7 +210,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
             w_max = jnp.nan
         print("-------- Working on Graph " + graph_name + " with tau = " + str(tau) + " ----------")
         test_start_time = time.time()
-        times, iters, MCPs = run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num, graph_name, opt_params, trackers)
+        times, iters, MCPs = run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, N, test_set_dir, test_num, graph_name, opt_params, trackers)
         print("Running test number " + str(test_num) + " took " + str(time.time() - test_start_time) + " seconds to complete.")
         run_times.append(times)
         final_iters.append(iters)
@@ -205,7 +220,7 @@ def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
     if(opt_comparison):
         strat_viz.plot_optimizer_comparison(test_set_dir, test_spec, run_times, final_iters, final_MCPs)
 
-def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num, graph_name, opt_params, trackers):
+def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, N, test_set_dir, test_num, graph_name, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and number of initial strategies.
 
@@ -259,6 +274,12 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
     D_idx = jnp.nan
     num_init_Ps = opt_params["num_init_Ps"]
     init_Ps = strat_comp.init_rand_Ps(A, num_init_Ps)
+    if 'multi' in obj_fun_flag:
+        As = jnp.tile(A, (N, 1, 1))
+        init_Ps = strat_comp.multi_init_rand_Ps(As, N, num_init_Ps)
+        combs, combs_len = strat_comp.precompute_multi(n, N)
+    else:
+        As = combs = combs_len = jnp.nan
     learning_rates = []
     lr_scales = []
     cnvg_times = []
@@ -290,6 +311,9 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
             init_grad = strat_comp.comp_avg_greedy_co_opt_weighted_LCP_grad(P0, A, D_idx, W, w_max, B, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg_co_opt_pi':
             init_grad = strat_comp.comp_avg_greedy_co_opt_weighted_LCP_pi_grad(P0, A, D_idx, W, w_max, B, pi, opt_params["alpha"], opt_params["num_init_LCPs"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'multi_weighted_Stackelberg':
+            P0 = init_Ps[k, :, :, :]
+            init_grad = strat_comp.comp_avg_weighted_multi_LCP_grad(P0, As, D_idx, combs, N, combs_len, W, w_max, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'MHT':
             init_grad = strat_comp.comp_MHT_grad(P0, A, opt_params["use_abs_param"])
         elif obj_fun_flag == 'MHT_pi':
@@ -312,15 +336,20 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
         opt_params["scaled_learning_rate"] = lr
 
         start_time = time.time()
-        P, tracked_vals = run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, opt_params, trackers)
+        P, tracked_vals = run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, As, combs, combs_len, opt_params, trackers)
         cnvg_time = time.time() - start_time
         cnvg_times.append(cnvg_time)
         print("--- Optimization took: %s seconds ---" % (cnvg_time))
 
         # Save initial and optimized P matrices:
-        np.savetxt(test_results_dir + "/init_P_" + str(k + 1) + ".csv", P0, delimiter=',')
-        np.savetxt(test_results_dir + "/opt_P_" + str(k + 1) + ".csv", P, delimiter=',')
-        strat_viz.visualize_strategy(P, test_dir, k)
+        # np.savetxt(test_results_dir + "/init_P_" + str(k + 1) + ".csv", P0, delimiter=',')
+        # np.savetxt(test_results_dir + "/opt_P_" + str(k + 1) + ".csv", P, delimiter=',')
+        np.save(test_results_dir + "/init_P_" + str(k + 1) + ".npy", P0)
+        np.save(test_results_dir + "/opt_P_" + str(k + 1) + ".npy", P)
+        if 'multi' in obj_fun_flag:
+            strat_viz.visualize_strategies(P, test_dir, k)
+        else:
+            strat_viz.visualize_strategy(P, test_dir, k)
 
         # Save metrics tracked during the optimization process:
         for track in trackers:
@@ -355,6 +384,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
         info.write("Weight Matrix = " + str(W) + "\n")
         info.write("\n---------- Formulation Information ----------\n")
         info.write("Objective Function = " + obj_fun_flag + "\n")
+        info.write("Number of robots (N) = " + str(N) + "\n")
         info.write("Stationary Distribution (pi) = " + str(pi) + "\n")
         info.write("Attack Duration (tau) = " + str(tau) + "\n")
         info.write("Defense Budget (B) = " + str(B) + "\n")
@@ -379,7 +409,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, test_set_dir, test_num,
     info.close()
     return cnvg_times, opt_metrics["final_iters"], opt_metrics["final_MCP"]
 
-def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, opt_params, trackers):
+def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, As, combs, combs_len, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and initial strategy.
 
@@ -414,12 +444,14 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
     test_spec
     """
     check_time = time.time()
-    n = P0.shape[0]
+    n = P0.shape[-1]
+    if 'multi' in obj_fun_flag:
+        N = P0.shape[0]
     P = P0 
     Q = P0
     MCP = 0
     loss = 1e-3
-    diam_pairs = graph_comp.get_diametric_pairs(A)
+    # diam_pairs = graph_comp.get_diametric_pairs(A)
     optimizer = setup_optimizer(opt_params)
     opt_state = optimizer.init(P0)
     cnvg_test_vals = deque()  # queue storing recent values of desired metric, for checking convergence
@@ -451,6 +483,9 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
         elif obj_fun_flag == 'weighted_Stackelberg_co_opt_pi':
             grad = -1*strat_comp.comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, B, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
             loss = strat_comp.loss_greedy_co_opt_weighted_LCP_pi(Q, A, D_idx, W, w_max, B, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
+        elif obj_fun_flag == 'multi_weighted_Stackelberg':
+            grad = -1*strat_comp.comp_avg_weighted_multi_LCP_grad(Q, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs, opt_params["use_abs_param"])
+            loss = strat_comp.loss_weighted_multi_LCP(Q, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'MHT':
             grad = strat_comp.comp_MHT_grad(Q, A, opt_params["use_abs_param"])
             loss = strat_comp.loss_MHT(Q, A, opt_params["use_abs_param"])
@@ -472,7 +507,12 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
         
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
-        P = strat_comp.comp_P_param(Q, A)
+        if 'multi' in obj_fun_flag:
+            for i in range(N):
+                P_i = strat_comp.comp_P_param(Q[i, :, :], As[i, :, :], opt_params["use_abs_param"])
+                P = P.at[i, :, :].set(P_i)
+        else:
+            P = strat_comp.comp_P_param(Q, A, opt_params["use_abs_param"])
         P_diff = P - P_old
         abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
         loss_diff = jnp.abs((loss - loss_old)/loss_old)
@@ -504,6 +544,11 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
                 _, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
                 # tracked_vals["diam_pair_CP_variance"].append(jnp.nan)
                 F = cap_probs.reshape((n**2), order='F')
+                tracked_vals["MCP_inds"].append(jnp.argmin(F))
+                tracked_vals["MCPs"].append(jnp.min(F))
+            elif "multi_weighted_Stackelberg" in obj_fun_flag:
+                F = strat_comp.compute_weighted_multi_cap_probs(P, D_idx, combs, N, combs_len, W, w_max, tau)
+                F = jnp.ravel(F, order='F')
                 tracked_vals["MCP_inds"].append(jnp.argmin(F))
                 tracked_vals["MCPs"].append(jnp.min(F))
             elif "weighted_Stackelberg" in obj_fun_flag:
@@ -539,15 +584,17 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
             converged, cnvg_test_vals = cnvg_check(iter, loss_diff, cnvg_test_vals, opt_params)
         iter = iter + 1
 
-    # convergence or max iteration count has been reached...
-    penalty = strat_comp.comp_pi_penalty(P, pi, opt_params["alpha"])
-    tracked_vals["final_penalty"].append(penalty)
-    tracked_vals["final_iters"].append(iter)
-    tracked_vals["final_loss"].append(loss)
+    
     print("*************************")
     print("FINAL ITER = " + str(iter))
     print("FINAL LOSS = " + str(loss))
-    print("FINAL PENALTY = " + str(penalty))
+    # convergence or max iteration count has been reached...
+    if 'multi' not in obj_fun_flag:
+        penalty = strat_comp.comp_pi_penalty(P, pi, opt_params["alpha"])
+        print("FINAL PENALTY = " + str(penalty))
+        tracked_vals["final_penalty"].append(penalty)
+    tracked_vals["final_iters"].append(iter)
+    tracked_vals["final_loss"].append(loss)
     if "weighted_Stackelberg_co_opt" in obj_fun_flag:
         tauvec, cap_probs = strat_comp.greedy_co_opt_weighted_cap_probs(P, D_idx, W, w_max, B)
         tracked_vals["final_tauvec"].append(tauvec)
@@ -556,6 +603,14 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, o
         print("Minimum Capture Probability at iteration " + str(iter) + ":")
         print(final_MCP)
         print("Final tauvec:" + str(tauvec))
+    elif "multi_weighted_Stackelberg" in obj_fun_flag:
+        F = strat_comp.compute_weighted_multi_cap_probs(P, D_idx, combs, N, combs_len, W, w_max, tau)
+        F = jnp.ravel(F, order='F')
+        final_MCP = jnp.min(F)
+        tracked_vals["final_MCP"].append(final_MCP)
+        print("Minimum Capture Probability at iteration " + str(iter) + ":")
+        print(final_MCP)
+        tracked_vals["final_tauvec"].append(jnp.nan)
     elif "weighted_Stackelberg" in obj_fun_flag:
         F = strat_comp.compute_weighted_cap_probs(P, D_idx, W, w_max, tau)
         final_MCP = jnp.min(F)
@@ -670,11 +725,14 @@ if __name__ == '__main__':
     # test_set_name = "SF_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
-    test_set_name = "SF_Comparison_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
+    # test_set_name = "SF_Comparison_Test_CPU"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
 
     # test_set_name = "SF_Co_Opt_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
+
+    test_set_name = "SF_Multi_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
@@ -682,21 +740,71 @@ if __name__ == '__main__':
     
     # # config.update("jax_debug_nans", True)
     # n = 4
-    # A = jnp.array([[1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 1, 1], [1, 1, 1, 0]])
-    # # A = jnp.ones((n, n))
-    # W = jnp.array([[1, 0, 2, 3], [3, 1, 0, 1], [0, 2, 1, 1], [1, 1, 2, 0]])
-    # pi = (0.4, 0.2, 0.25, 0.15)
-    # alpha = 1000
-    # tau = jnp.nan
+    # N = 2
+    # # A = jnp.array([[1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 1, 1], [1, 1, 1, 0]])
+    # A = jnp.ones((n, n))
+    # # W = jnp.array([[1, 0, 2, 3], [3, 1, 0, 1], [0, 2, 1, 1], [1, 1, 2, 0]])
+    # W = A
+    # # pi = (0.4, 0.2, 0.25, 0.15)
+    # pi = jnp.nan
+    # alpha = jnp.nan
+    # tau = 1
     # tau_vec = jnp.nan
     # # tau_vec = (2, 2, 2, 2)
     # N_eta = jnp.nan
     # # eta = 0.25
     # # N_eta = int(jnp.ceil(jnp.max(W)/(eta*jnp.min(jnp.array(pi)))) - 1)
     # # print(N_eta)
-    # B = 8
+    # B = jnp.nan
     # num_init_Ps = 1
     # max_iters = 1000
-    # P = test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, alpha, num_init_Ps, max_iters)
+    # P = test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, N, alpha, num_init_Ps, max_iters)
+    # # print(P)
+    # # print(jnp.dot(jnp.array(pi), P))
+
+    # n = 12
+    # W = jnp.array([[1, 3, 3, 5, 4, 6, 3, 5, 7, 4, 6, 6],
+    #             [3, 1, 5, 4, 2, 4, 4, 5, 5, 3, 5, 5],
+    #             [3, 5, 1, 7, 6, 8, 3, 4, 9, 4, 8, 7],
+    #             [6, 4, 7, 1, 5, 6, 4, 7, 5, 6, 6, 7],
+    #             [4, 3, 6, 5, 1, 3, 5, 5, 6, 3, 4, 4],
+    #             [6, 4, 8, 5, 3, 1, 6, 7, 3, 6, 2, 3],
+    #             [2, 5, 3, 5, 6, 7, 1, 5, 7, 5, 7, 8],
+    #             [3, 5, 2, 7, 6, 7, 3, 1, 9, 3, 7, 5],
+    #             [8, 6, 9, 4, 6, 4, 6, 9, 1, 8, 5, 7],
+    #             [4, 3, 4, 6, 3, 5, 5, 3, 7, 1, 5, 3],
+    #             [6, 4, 8, 6, 4, 2, 6, 6, 4, 5, 1, 3],
+    #             [6, 4, 6, 6, 3, 3, 6, 4, 5, 3, 2, 1]])
+    # w_max = int(jnp.max(W))
+    # tau = 9
+    # pi = (0.1536, 0.1039, 0.1028, 0.1005, 0.0958, 0.0958, 0.0855, 0.0739, 0.0554, 0.0497, 0.0439, 0.0392)
+    # B = 108
+
+    # # fn = './results/local/test_set_SF_Comparison_Test/test1_weighted_MHT_pi/results/opt_P_7.csv'
+    # # fn = './cloud/local/test_set_SF_Comparison_Test/test3_weighted_RTE_pi/results/opt_P_81.csv'
+    # # fn = './cloud/local/test_set_SF_Comparison_Test/test2_weighted_Stackelberg_pi/results/opt_P_28.csv'
+    # fn = './cloud/local/test_set_SF_Co_Opt_Test/test1_weighted_Stackelberg_co_opt_pi/results/opt_P_10.csv'
+    # data = []
+    # # Read the CSV file
+    # with open(fn, 'r') as file:
+    #     reader = csv.reader(file)
+    #     for row in reader:
+    #         data.append([float(item) for item in row])
+    # P = jnp.array(data) 
     # print(P)
-    # print(jnp.dot(jnp.array(pi), P))
+    # print(1000*jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))))
+
+    # # MHT
+    # print(strat_comp.compute_weighted_MHT_pi(P, W, pi))
+
+    # # RTE
+    # eta = 0.1
+    # N_eta = int(jnp.ceil(w_max/(eta*jnp.min(jnp.array(pi)))) - 1)
+    # D_idx = strat_comp.precompute_weighted_RTE_pi(W, w_max, N_eta)
+    # print(strat_comp.compute_weighted_RTE_pi(P, D_idx, W, w_max, pi, N_eta))
+
+    # # Stackelberg
+    # # D_idx = strat_comp.precompute_weighted_Stackelberg(W, w_max, tau)
+    # # print(strat_comp.compute_weighted_LCPs(P, D_idx, W, w_max, tau))
+    # D_idx = strat_comp.precompute_weighted_Stackelberg_co_opt(W, w_max, B)
+    # print(strat_comp.compute_greedy_co_opt_weighted_LCPs(P, D_idx, W, w_max, B))

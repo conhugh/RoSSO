@@ -253,13 +253,13 @@ if __name__ == '__main__':
     A = jnp.ones((n, n))
     # A = A.at[0, 1].set(0)
     # A = A.at[1, 0].set(0)
-    As = jnp.ones((n, n, N))
+    As = jnp.ones((N, n, n))
     # pi = (0.4, 0.2, 0.25, 0.15)
     tau = 1
     # B = 108
     pi = (0.3, 0.3, 0.4)
     alpha = 0
-    Ps = scj.init_rand_Ps(A, 2, 0)
+    # Ps = scj.init_rand_Ps(A, 2, 0)
     # Q = jnp.reshape(P, (n, n))
     # Q = (1/3)*jnp.ones((n, n))
     # print(Q)
@@ -286,13 +286,22 @@ if __name__ == '__main__':
     #         [6, 4, 8, 6, 4, 2, 6, 6, 4, 5, 1, 3],
     #         [6, 4, 6, 6, 3, 3, 6, 4, 5, 3, 2, 1]])
     w_max = int(jnp.max(W))
+    init_Ps = scj.multi_init_rand_Ps(As, N, 1)
+    P0 = init_Ps[0, :, :, :]
+    print(P0)
     # eta = 0.5
     # N_eta = int(jnp.ceil(w_max/(eta*jnp.min(jnp.array(pi)))) - 1)
     # print(N_eta)
     D_idx = scj.precompute_weighted_Stackelberg(W, w_max, tau)
-    combs = scj.precompute_weighted_multi_cap_probs(n, N)
+    combs, combs_len = scj.precompute_multi(n, N)
+    # print(scj.compute_weighted_multi_cap_probs(P0, D_idx, combs, N, combs_len, W, w_max, tau))
+    # print(scj.compute_weighted_multi_LCPs(P0, D_idx, combs, N, combs_len, W, w_max, tau))
+    # print(scj.loss_weighted_multi_LCP(P0, As, D_idx, combs, N, combs_len, W, w_max, tau))
+    print(scj.comp_avg_weighted_multi_LCP_grad(P0, As, D_idx, combs, N, combs_len, W, w_max, tau))
+
+    # combs = scj.precompute_weighted_multi_cap_probs(n, N)
     # print(combs)
-    combs_len = len(combs)
-    print(combs_len)
+    # combs_len = len(combs)
+    # print(combs_len)
     # print(scj.compute_weighted_multi_cap_probs(Ps, D_idx, combs, N, combs_len, W, w_max, tau))
-    print(scj.comp_avg_weighted_multi_LCP_grad(Ps, As, D_idx, combs, N, combs_len, W, w_max, tau))
+    # print(scj.comp_avg_weighted_multi_LCP_grad(Ps, As, D_idx, combs, N, combs_len, W, w_max, tau))

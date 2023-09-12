@@ -34,6 +34,20 @@ def init_rand_Ps(A, num, seed=0):
         initPs = initPs.at[:, : , k].set(P0)
     return initPs
 
+def multi_init_rand_Ps(As, N, num, seed=0):
+    A_shape = jnp.shape(As[0, :, :])
+    key = jax.random.PRNGKey(seed)
+    # initPs = jnp.zeros((A_shape[0], A_shape[1], N, num),  dtype='float32')
+    initPs = jnp.zeros((num, N, A_shape[0], A_shape[1]),  dtype='float32')
+    for k in range(num):
+        for i in range(N):
+            key, subkey = jax.random.split(key)
+            P0 = As[i, :, :]*jax.random.uniform(subkey, A_shape)
+            P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0) 
+            # initPs = initPs.at[:, :, i, k].set(P0)
+            initPs = initPs.at[k, i, :, :].set(P0)
+    return initPs
+
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_P_param(Q, A, use_abs_param=True):
     P = Q*A
@@ -64,7 +78,8 @@ def weighted_FHTs_loop_body(k, loop_vals):
 
 def precompute_multi(n, N):
     combs = jnp.array(list(itertools.product(range(n), repeat=N+1)))
-    return combs
+    combs_len = len(combs)
+    return combs, combs_len
 
 ############################################################
 # Stackelberg formulation
@@ -487,10 +502,10 @@ def weighted_multi_comb_loop_body(i, loop_vals):
 
 @functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'tau'])
 def compute_weighted_multi_cap_probs(Ps, D_idx, combs, N, combs_len, W, w_max, tau):
-    n = jnp.shape(Ps)[0]
+    n = jnp.shape(Ps)[-1]
     def loop_body(r, F_mats_multi):
         F_mats = F_mats_multi[r, :, :, :]
-        init_vals = (F_mats, Ps[:, :, r], D_idx, W, w_max)
+        init_vals = (F_mats, Ps[r, :, :], D_idx, W, w_max)
         F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
         F_mats_multi = F_mats_multi.at[r, :, :, :].set(F_mats)
         return F_mats_multi
@@ -524,11 +539,11 @@ def compute_weighted_multi_LCPs(Ps, D_idx, combs, N, combs_len, W, w_max, tau, n
 # Loss function with constraints included in parametrization
 @functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
 def loss_weighted_multi_LCP(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs=1, use_abs_param=True):
-    N = Qs.shape[2]
+    N = Qs.shape[0]
     Ps = jnp.zeros_like(Qs)
     for i in range(N):
-        P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
-        Ps = Ps.at[:, :, i].set(P)
+        P = comp_P_param(Qs[i, :, :], As[i, :, :], use_abs_param)
+        Ps = Ps.at[i, :, :].set(P)
     return jnp.mean(compute_weighted_multi_LCPs(Ps, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs))
 
 # Autodiff parametrized loss function
@@ -602,7 +617,8 @@ def comp_MHT_pi_grad(Q, A, pi, alpha, use_abs_param=True):
 @functools.partial(jit, static_argnames=['pi'])
 def compute_weighted_MHT_pi(P, W, pi):
     n = P.shape[0]
-    m = compute_MHT_GPU(P, pi)
+    # m = compute_MHT_GPU(P, pi)
+    m = compute_MHT(P)
     sclr = jnp.dot(jnp.array(pi),jnp.dot(P*jnp.array(W),jnp.ones((n,))))
     return jnp.squeeze(sclr*m)
 

@@ -539,6 +539,19 @@ def visualize_strategy(P, test_dir, k):
     plt.savefig(os.path.join(res_vis_dir, "opt_P_" + str(k+1) + ".pdf"), bbox_inches = "tight")
     plt.close()
 
+def visualize_strategies(Ps, test_dir, k):
+    res_vis_dir = test_dir + "/results_visualization"
+    if not os.path.isdir(res_vis_dir):
+        os.mkdir(res_vis_dir)
+    N = Ps.shape[0]
+    for i in range(N):
+        plt.figure()
+        heatmap = sns.heatmap(Ps[i, :, :], annot=False, linewidths=0.5, cmap="rocket_r", cbar=True, vmin=0.0, vmax=1.0, square=False)
+        heatmap.xaxis.tick_top()
+        # plt.title("Optimized Patrol Strategy")
+        plt.savefig(os.path.join(res_vis_dir, "opt_P_" + str(k+1) + "_" + str(i) + "_.pdf"), bbox_inches = "tight")
+        plt.close()
+
 # Visualize MCPs from multiple tests
 def visualize_MCPs(test_set_name, tau_study=True, num_top_MCPs=None, plot_best_fit=False):
     test_set_dir = "../results/local/test_set_" + test_set_name
