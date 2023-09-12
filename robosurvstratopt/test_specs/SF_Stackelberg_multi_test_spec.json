@@ -1,5 +1,5 @@
 {
-    "test_spec_name": "San_Francisco_Comparison_Test_Specification",
+    "test_spec_name": "San_Francisco_Multi_Robot_Test_Specification",
     "num_tests": 2,
     "optimizer_params": {
         "varying_optimizer_params": false,
