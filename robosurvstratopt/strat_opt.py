@@ -314,6 +314,9 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, N, test_set_dir, test_n
         elif obj_fun_flag == 'multi_weighted_Stackelberg':
             P0 = init_Ps[k, :, :, :]
             init_grad = strat_comp.comp_avg_weighted_multi_LCP_grad(P0, As, D_idx, combs, N, combs_len, W, w_max, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
+        elif obj_fun_flag == 'multi_weighted_Stackelberg_pi':
+            P0 = init_Ps[k, :, :, :]
+            init_grad = strat_comp.comp_avg_weighted_multi_LCP_pi_grad(P0, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, opt_params["alpha"], opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'MHT':
             init_grad = strat_comp.comp_MHT_grad(P0, A, opt_params["use_abs_param"])
         elif obj_fun_flag == 'MHT_pi':
@@ -464,7 +467,7 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, A
     def step(Q, P, MCP, loss, opt_state, num_LCPs):
         P_old = P
         loss_old = loss
-        # gradient computation
+        # gradient computation (should we be using value_and_grad here?)
         if obj_fun_flag == 'Stackelberg':
             grad = -1*strat_comp.comp_avg_LCP_grad(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"])
             loss = strat_comp.loss_LCP(Q, A, F0, tau, num_LCPs, opt_params["use_abs_param"])
@@ -486,6 +489,9 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, A
         elif obj_fun_flag == 'multi_weighted_Stackelberg':
             grad = -1*strat_comp.comp_avg_weighted_multi_LCP_grad(Q, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs, opt_params["use_abs_param"])
             loss = strat_comp.loss_weighted_multi_LCP(Q, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs, opt_params["use_abs_param"])
+        elif obj_fun_flag == 'multi_weighted_Stackelberg_pi':
+            grad = -1*strat_comp.comp_avg_weighted_multi_LCP_pi_grad(Q, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
+            loss = strat_comp.loss_weighted_multi_LCP_pi(Q, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'MHT':
             grad = strat_comp.comp_MHT_grad(Q, A, opt_params["use_abs_param"])
             loss = strat_comp.loss_MHT(Q, A, opt_params["use_abs_param"])
@@ -589,7 +595,11 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, A
     print("FINAL ITER = " + str(iter))
     print("FINAL LOSS = " + str(loss))
     # convergence or max iteration count has been reached...
-    if 'multi' not in obj_fun_flag:
+    if 'multi' in obj_fun_flag:
+        penalty = strat_comp.comp_multi_pi_penalty(P, pi, opt_params["alpha"])
+        print("FINAL PENALTY = " + str(penalty))
+        tracked_vals["final_penalty"].append(penalty)
+    else:
         penalty = strat_comp.comp_pi_penalty(P, pi, opt_params["alpha"])
         print("FINAL PENALTY = " + str(penalty))
         tracked_vals["final_penalty"].append(penalty)

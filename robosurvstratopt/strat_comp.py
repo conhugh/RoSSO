@@ -63,6 +63,15 @@ def comp_pi_penalty(P, pi, alpha):
     penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi)))
     return alpha*penalty
 
+def comp_multi_pi_penalty(Ps, pi, alpha):
+    N = Ps.shape[0]
+    n = Ps.shape[-1]
+    pi_Ps = (1/n)*jnp.ones((N, n))
+    init_vals = (Ps, pi_Ps)
+    (_, pi_Ps) = jax.lax.fori_loop(0, 10, power_iteration, init_vals)
+    pi_Ps_avg = jnp.mean(pi_Ps, axis=0)
+    return alpha*jnp.linalg.norm(jnp.array(pi) - pi_Ps_avg)
+
 def weighted_FHTs_loop_body(k, loop_vals):
     F_mats, P, D_idx, W, w_max = loop_vals
     n = jnp.shape(P)[0]
@@ -512,11 +521,6 @@ def compute_weighted_multi_cap_probs(Ps, D_idx, combs, N, combs_len, W, w_max, t
 
     F_mats_multi = jnp.zeros((N, tau + w_max, n, n))
     F_mats_multi = jax.lax.fori_loop(0, N, loop_body, F_mats_multi)
-    # for r in range(N):
-    #     F_mats = F_mats_multi[r, :, :, :]
-    #     init_vals = (F_mats, Ps[:, :, r], D_idx, W, w_max)
-    #     F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
-    #     F_mats_multi = F_mats_multi.at[r, :, :, :].set(F_mats)
     F_mats_multi = F_mats_multi[:, w_max:, :, :]
     indiv_cap_probs = jnp.sum(F_mats_multi, axis=1)
 
@@ -551,6 +555,38 @@ _comp_weighted_multi_LCP_grad = jacrev(loss_weighted_multi_LCP)
 @functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'tau', 'num_LCPs', 'use_abs_param'])
 def comp_avg_weighted_multi_LCP_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs=1, use_abs_param=True):
     grad = _comp_weighted_multi_LCP_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs, use_abs_param)
+    return grad
+
+def power_iteration(_, loop_vals):
+    (Ps, pi_Ps) = loop_vals
+    pi_Ps_new = jnp.dot(pi_Ps, Ps)[0]
+    row_sums = jnp.sum(pi_Ps_new, axis=1, keepdims=True)
+    pi_Ps = pi_Ps_new / row_sums
+    return (Ps, pi_Ps)
+
+# Loss function with constraints included in parametrization
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'tau', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def loss_weighted_multi_LCP_pi(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
+    N = Qs.shape[0]
+    n = Qs.shape[-1]
+    Ps = jnp.zeros_like(Qs)
+    for i in range(N):
+        P = comp_P_param(Qs[i, :, :], As[i, :, :], use_abs_param)
+        Ps = Ps.at[i, :, :].set(P)
+    mu = jnp.mean(compute_weighted_multi_LCPs(Ps, D_idx, combs, N, combs_len, W, w_max, tau, num_LCPs))
+
+    pi_Ps = (1/n)*jnp.ones((N, n))
+    init_vals = (Ps, pi_Ps)
+    (_, pi_Ps) = jax.lax.fori_loop(0, 10, power_iteration, init_vals)
+    pi_Ps_avg = jnp.mean(pi_Ps, axis=0)
+
+    return mu - alpha*jnp.linalg.norm(jnp.array(pi) - pi_Ps_avg)
+
+# Autodiff parametrized loss function
+_comp_weighted_multi_LCP_pi_grad = jacrev(loss_weighted_multi_LCP_pi)
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'tau', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
+def comp_avg_weighted_multi_LCP_pi_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
+    grad = _comp_weighted_multi_LCP_pi_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha, num_LCPs, use_abs_param)
     return grad
 
 ############################################################
@@ -672,59 +708,6 @@ _comp_multi_MHT_grad = jacrev(loss_multi_MHT)
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_multi_MHT_grad(Qs, As, use_abs_param=True):
     grad = _comp_multi_MHT_grad(Qs, As, use_abs_param) 
-    return grad
-
-############################################################
-# Weighted Multi-Agent Mean Hitting Time formulation
-############################################################
-# def weighted_multi_comb_loop_body(i, loop_vals):
-#     cap_probs, combs, indiv_cap_probs = loop_vals
-#     N = jnp.shape(indiv_cap_probs)[0]
-#     idx_vec = combs[i]
-#     not_cap_prob = jnp.prod(1 - indiv_cap_probs[jnp.arange(N), idx_vec[:-1], idx_vec[-1]])
-#     cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
-#     return (cap_probs, combs, indiv_cap_probs)
-
-@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max'])
-def compute_weighted_multi_MHT(Ps, D_idx, combs, N, combs_len, W, w_max):
-    n = jnp.shape(Ps)[0]
-    def loop_body(r, F_mats_multi):
-        F_mats = F_mats_multi[r, :, :, :]
-        init_vals = (F_mats, Ps[:, :, r], D_idx, W, w_max)
-        F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
-        F_mats_multi = F_mats_multi.at[r, :, :, :].set(F_mats)
-        return F_mats_multi
-
-    F_mats_multi = jnp.zeros((N, tau + w_max, n, n))
-    F_mats_multi = jax.lax.fori_loop(0, N, loop_body, F_mats_multi)
-    # for r in range(N):
-    #     F_mats = F_mats_multi[r, :, :, :]
-    #     init_vals = (F_mats, Ps[:, :, r], D_idx, W, w_max)
-    #     F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
-    #     F_mats_multi = F_mats_multi.at[r, :, :, :].set(F_mats)
-    F_mats_multi = F_mats_multi[:, w_max:, :, :]
-    indiv_cap_probs = jnp.sum(F_mats_multi, axis=1)
-
-    cap_probs = jnp.zeros(combs_len)
-    init_vals = (cap_probs, combs, indiv_cap_probs)
-    cap_probs, _, _ = jax.lax.fori_loop(0, combs_len, weighted_multi_comb_loop_body, init_vals)
-    return jnp.reshape(cap_probs, (n**N, n))
-
-# Loss function with constraints included in parametrization
-@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'use_abs_param'])
-def loss_weighted_multi_MHT(Qs, As, D_idx, combs, N, combs_len, W, w_max, use_abs_param=True):
-    N = Qs.shape[2]
-    Ps = jnp.zeros_like(Qs)
-    for i in range(N):
-        P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
-        Ps = Ps.at[:, :, i].set(P)
-    return jnp.mean(compute_weighted_multi_MHT(Ps, D_idx, combs, N, combs_len, W, w_max))
-
-# Autodiff parametrized loss function
-_comp_weighted_multi_MHT_grad = jacrev(loss_weighted_multi_MHT)
-@functools.partial(jit, static_argnames=['N', 'combs_len', 'w_max', 'use_abs_param'])
-def comp_avg_weighted_multi_MHT_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, use_abs_param=True):
-    grad = _comp_weighted_multi_MHT_grad(Qs, As, D_idx, combs, N, combs_len, W, w_max, use_abs_param)
     return grad
 
 ############################################################

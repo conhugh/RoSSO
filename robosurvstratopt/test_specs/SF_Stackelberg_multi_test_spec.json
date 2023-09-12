@@ -4,7 +4,7 @@
     "optimizer_params": {
         "varying_optimizer_params": false,
         "params": {
-            "num_init_Ps": 1,
+            "num_init_Ps": 10,
             "num_init_LCPs": 1,
             "num_LCPs_schedule": {
                 "0": 1
@@ -46,8 +46,8 @@
         "test2": "complete_N12"
     },
     "objective_functions": {
-        "test1": "multi_weighted_Stackelberg",
-        "test2": "multi_weighted_Stackelberg"
+        "test1": "multi_weighted_Stackelberg_pi",
+        "test2": "multi_weighted_Stackelberg_pi"
     },
     "stationary_distributions": {
         "test1": [0.1536, 0.1039, 0.1028, 0.1005, 0.0958, 0.0958, 0.0855, 0.0739, 0.0554, 0.0497, 0.0439, 0.0392],
