@@ -52,7 +52,8 @@ def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, N, alpha, num_init
     # grad_func = strat_comp.comp_ER_pi_grad
     # grad_func = strat_comp.comp_RTE_pi_grad
     # grad_func = strat_comp.comp_weighted_RTE_pi_grad
-    grad_func = strat_comp.comp_avg_weighted_multi_LCP_grad
+    # grad_func = strat_comp.comp_avg_weighted_multi_LCP_grad
+    grad_func = strat_comp.comp_avg_weighted_multi_LCP_pi_grad
     num_LCPs = 1
     nominal_learning_rate = 0.001
     n = A.shape[-1]
@@ -80,7 +81,9 @@ def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, N, alpha, num_init
         # init_grad = grad_func(Q, A, pi, alpha)
         # init_grad = grad_func(Q, A, pi, N_eta, alpha)
         # init_grad = grad_func(Q, A, D_idx, W, w_max, pi, N_eta, alpha)
-        init_grad = strat_comp.comp_avg_weighted_multi_LCP_grad(Q, As, D_idx, combs, N, combs_len, W, w_max, tau)
+        # init_grad = strat_comp.comp_avg_weighted_multi_LCP_grad(Q, As, D_idx, combs, N, combs_len, W, w_max, tau)
+        init_grad = strat_comp.comp_avg_weighted_multi_LCP_pi_grad(Q, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha)
+
         init_grad_max = jnp.max(jnp.abs(init_grad))
         scaled_learning_rate = nominal_learning_rate/init_grad_max
         schedule = optax.constant_schedule(scaled_learning_rate)
@@ -103,7 +106,9 @@ def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, N, alpha, num_init
             # grad = -1*grad_func(Q, A, pi, alpha)
             # grad = -1*grad_func(Q, A, pi, N_eta, alpha)
             # grad = -1*grad_func(Q, A, D_idx, W, w_max, pi, N_eta, alpha)
-            grad = -1*grad_func(Q, As, D_idx, combs, N, combs_len, W, w_max, tau)
+            # grad = -1*grad_func(Q, As, D_idx, combs, N, combs_len, W, w_max, tau)
+            grad = -1*grad_func(Q, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha)
+
             updates, opt_state = optimizer.update(grad, opt_state)
             Q = optax.apply_updates(Q, updates)
             return Q, opt_state
@@ -142,8 +147,9 @@ def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, N, alpha, num_init
         # print("Final loss: " + str(strat_comp.loss_ER_pi(Q, A, pi, alpha)))
         # print("Final loss: " + str(strat_comp.loss_RTE_pi(Q, A, pi, N_eta, alpha)))
         # print("Final loss: " + str(strat_comp.loss_weighted_RTE_pi(Q, A, W, w_max, pi, N_eta, alpha)))
-        print("Final loss: " + str(strat_comp.loss_weighted_multi_LCP(Q, As, D_idx, combs, N, combs_len, W, w_max, tau)))
-    return P
+        # print("Final loss: " + str(strat_comp.loss_weighted_multi_LCP(Q, As, D_idx, combs, N, combs_len, W, w_max, tau)))
+        print("Final loss: " + str(strat_comp.loss_weighted_multi_LCP_pi(Q, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha)))
+    return Ps
 
 def run_test_set(test_set_name, test_spec=None, opt_comparison=False):
     """
@@ -741,8 +747,11 @@ if __name__ == '__main__':
     # test_set_name = "SF_Co_Opt_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
 
-    test_set_name = "SF_Multi_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_test_spec.json")
+    # test_set_name = "SF_Multi_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_test_spec.json")
+
+    test_set_name = "SF_pi_Multi_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
@@ -755,9 +764,9 @@ if __name__ == '__main__':
     # A = jnp.ones((n, n))
     # # W = jnp.array([[1, 0, 2, 3], [3, 1, 0, 1], [0, 2, 1, 1], [1, 1, 2, 0]])
     # W = A
-    # # pi = (0.4, 0.2, 0.25, 0.15)
-    # pi = jnp.nan
-    # alpha = jnp.nan
+    # pi = (0.4, 0.2, 0.25, 0.15)
+    # # pi = jnp.nan
+    # alpha = 100
     # tau = 1
     # tau_vec = jnp.nan
     # # tau_vec = (2, 2, 2, 2)
@@ -770,7 +779,7 @@ if __name__ == '__main__':
     # max_iters = 1000
     # P = test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, N, alpha, num_init_Ps, max_iters)
     # # print(P)
-    # # print(jnp.dot(jnp.array(pi), P))
+    # print(jnp.dot(jnp.array(pi), P))
 
     # n = 12
     # W = jnp.array([[1, 3, 3, 5, 4, 6, 3, 5, 7, 4, 6, 6],
