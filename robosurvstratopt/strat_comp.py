@@ -580,7 +580,7 @@ def loss_weighted_multi_LCP_pi(Qs, As, D_idx, combs, N, combs_len, W, w_max, tau
     (_, pi_Ps) = jax.lax.fori_loop(0, 10, power_iteration, init_vals)
     pi_Ps_avg = jnp.mean(pi_Ps, axis=0)
 
-    return mu - alpha*jnp.linalg.norm(jnp.array(pi) - pi_Ps_avg)
+    return mu - alpha*jnp.sum((jnp.array(pi) - pi_Ps_avg)**2)
 
 # Autodiff parametrized loss function
 _comp_weighted_multi_LCP_pi_grad = jacrev(loss_weighted_multi_LCP_pi)

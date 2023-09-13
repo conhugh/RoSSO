@@ -294,6 +294,7 @@ if __name__ == '__main__':
     combs, combs_len = scj.precompute_multi(n, N)
     # print(scj.loss_weighted_multi_LCP_pi(P, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha))
     print(scj.comp_avg_weighted_multi_LCP_pi_grad(P, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha))
+    print(gc.gen_graph_code(jnp.ones((4, 4))))
     # w, vl, _ = scipy.linalg.eig(P[0], left=True)
     # pi_0 = ( vl[:,0] / jnp.sum(vl[:,0]) ).T
     # print(pi_0)

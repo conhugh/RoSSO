@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-import csv
+# import csv
 
 import graph_comp
 import strat_comp
@@ -605,10 +605,12 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, A
         penalty = strat_comp.comp_multi_pi_penalty(P, pi, opt_params["alpha"])
         print("FINAL PENALTY = " + str(penalty))
         tracked_vals["final_penalty"].append(penalty)
-    else:
+    elif 'pi' in obj_fun_flag:
         penalty = strat_comp.comp_pi_penalty(P, pi, opt_params["alpha"])
         print("FINAL PENALTY = " + str(penalty))
         tracked_vals["final_penalty"].append(penalty)
+    else:
+        tracked_vals["final_penalty"].append(jnp.nan)
     tracked_vals["final_iters"].append(iter)
     tracked_vals["final_loss"].append(loss)
     if "weighted_Stackelberg_co_opt" in obj_fun_flag:
@@ -750,8 +752,14 @@ if __name__ == '__main__':
     # test_set_name = "SF_Multi_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_test_spec.json")
 
-    test_set_name = "SF_pi_Multi_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_test_spec.json")
+    # test_set_name = "SF_Multi_Partition_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_partition_test_spec.json")
+
+    # test_set_name = "SF_pi_Multi_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_test_spec.json")
+
+    test_set_name = "SF_pi_Multi_Partition_Test"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_partition_test_spec.json")
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)
@@ -766,7 +774,7 @@ if __name__ == '__main__':
     # W = A
     # pi = (0.4, 0.2, 0.25, 0.15)
     # # pi = jnp.nan
-    # alpha = 100
+    # alpha = 1000
     # tau = 1
     # tau_vec = jnp.nan
     # # tau_vec = (2, 2, 2, 2)
@@ -779,7 +787,7 @@ if __name__ == '__main__':
     # max_iters = 1000
     # P = test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, N, alpha, num_init_Ps, max_iters)
     # # print(P)
-    # print(jnp.dot(jnp.array(pi), P))
+    # print(jnp.mean(jnp.dot(jnp.array(pi), P), axis=0))
 
     # n = 12
     # W = jnp.array([[1, 3, 3, 5, 4, 6, 3, 5, 7, 4, 6, 6],
