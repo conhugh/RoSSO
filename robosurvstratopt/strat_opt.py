@@ -749,21 +749,15 @@ if __name__ == '__main__':
     # test_set_name = "SF_Co_Opt_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
 
-    # test_set_name = "SF_Multi_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_test_spec.json")
-
-    # test_set_name = "SF_Multi_Partition_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_partition_test_spec.json")
-
-    test_set_name = "SF_pi_Multi_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_test_spec.json")
+    # test_set_name = "SF_pi_Multi_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_test_spec.json")
 
     # test_set_name = "SF_pi_Multi_Partition_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_partition_test_spec.json")
 
-    test_set_start_time = time.time()
-    run_test_set(test_set_name, test_spec)
-    print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
+    # test_set_start_time = time.time()
+    # run_test_set(test_set_name, test_spec)
+    # print("Running test_set_" + test_set_name + " took " + str(time.time() - test_set_start_time) + " seconds to complete.")
     
     # # config.update("jax_debug_nans", True)
     # n = 4
