@@ -546,8 +546,9 @@ def run_optimizer(P0, A, F_mats, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, 
     iter = 0 
     converged = False
     while not converged:
-        # with jax.profiler.trace("./tmp/jax-trace", create_perfetto_link=True):
-        jax.profiler.start_trace("./tmp/jax-trace", create_perfetto_link=True)
+        # with jax.profiler.trace("./tmp/jax-trace-new", create_perfetto_link=True):
+        if iter == 0:
+            jax.profiler.start_trace("./tmp/jax-trace-tmp", create_perfetto_link=True)
         num_LCPs = int(num_LCPs_schedule(iter))
         # apply update to P matrix, and parametrization Q:
         Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, loss, loss_diff, opt_state = step(Q, P, MCP, loss, opt_state, num_LCPs)
@@ -601,7 +602,8 @@ def run_optimizer(P0, A, F_mats, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, 
         elif opt_params["cnvg_test_mode"] == "loss_diff":
             converged, cnvg_test_vals = cnvg_check(iter, loss_diff, cnvg_test_vals, opt_params)
         iter = iter + 1
-        jax.profiler.stop_trace()
+        if iter == 10:
+            jax.profiler.stop_trace()
     
     print("*************************")
     print("FINAL ITER = " + str(iter))
@@ -636,7 +638,7 @@ def run_optimizer(P0, A, F_mats, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, 
         print(final_MCP)
         tracked_vals["final_tauvec"].append(jnp.nan)
     elif "weighted_Stackelberg" in obj_fun_flag:
-        F = strat_comp.compute_weighted_cap_probs(P, D_idx, W, w_max, tau)
+        F = strat_comp.compute_weighted_cap_probs(P, F_mats, D_idx, W, w_max, tau)
         final_MCP = jnp.min(F)
         tracked_vals["final_MCP"].append(final_MCP)
         print("Minimum Capture Probability at iteration " + str(iter) + ":")
