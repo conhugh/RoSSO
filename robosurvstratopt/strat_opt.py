@@ -7,6 +7,7 @@ import time
 
 import functools
 import jax
+import jaxlib
 import jax.numpy as jnp
 import numpy as np
 import optax
@@ -16,6 +17,8 @@ import graph_comp
 import strat_comp
 import strat_viz
 from test_spec import TestSpec
+
+
 
 def test_optimizer_fixed_iters(A, pi, tau, tau_vec, B, N_eta, N, alpha, num_init_Ps, max_iters):
     """
@@ -276,6 +279,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, N, test_set_dir, test_n
     # Run the optimization algorithm for the specified number of initial strategies:
     n = A.shape[0]
     F0 = jnp.nan
+    F_mats = jnp.zeros((tau + w_max, n, n))
     N_eta = jnp.nan
     D_idx = jnp.nan
     num_init_Ps = opt_params["num_init_Ps"]
@@ -312,7 +316,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, N, test_set_dir, test_n
         elif obj_fun_flag == 'weighted_Stackelberg':
             init_grad = strat_comp.comp_avg_weighted_LCP_grad(P0, A, D_idx, W, w_max, tau, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg_pi':
-            init_grad = strat_comp.comp_avg_weighted_LCP_pi_grad(P0, A, D_idx, W, w_max, tau, pi, opt_params["alpha"], opt_params["num_init_LCPs"], opt_params["use_abs_param"])
+            init_grad = strat_comp.comp_avg_weighted_LCP_pi_grad(P0, A, F_mats, D_idx, W, w_max, tau, pi, opt_params["alpha"], opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg_co_opt':
             init_grad = strat_comp.comp_avg_greedy_co_opt_weighted_LCP_grad(P0, A, D_idx, W, w_max, B, opt_params["num_init_LCPs"], opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg_co_opt_pi':
@@ -345,7 +349,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, N, test_set_dir, test_n
         opt_params["scaled_learning_rate"] = lr
 
         start_time = time.time()
-        P, tracked_vals = run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, As, combs, combs_len, opt_params, trackers)
+        P, tracked_vals = run_optimizer(P0, A, F_mats, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, As, combs, combs_len, opt_params, trackers)
         cnvg_time = time.time() - start_time
         cnvg_times.append(cnvg_time)
         print("--- Optimization took: %s seconds ---" % (cnvg_time))
@@ -418,7 +422,7 @@ def run_test(A, W, w_max, obj_fun_flag, tau, B, pi, eta, N, test_set_dir, test_n
     info.close()
     return cnvg_times, opt_metrics["final_iters"], opt_metrics["final_MCP"]
 
-def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, As, combs, combs_len, opt_params, trackers):
+def run_optimizer(P0, A, F_mats, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, As, combs, combs_len, opt_params, trackers):
     """
     Run optimizer for the given graph, attack duration, and initial strategy.
 
@@ -484,8 +488,8 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, A
             grad = -1*strat_comp.comp_avg_weighted_LCP_grad(Q, A, D_idx, W, w_max, tau, num_LCPs, opt_params["use_abs_param"])
             loss = strat_comp.loss_weighted_LCP(Q, A, D_idx, W, w_max, tau, num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg_pi':
-            grad = -1*strat_comp.comp_avg_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
-            loss = strat_comp.loss_weighted_LCP_pi(Q, A, D_idx, W, w_max, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
+            grad = -1*strat_comp.comp_avg_weighted_LCP_pi_grad(Q, A, F_mats, D_idx, W, w_max, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
+            loss = strat_comp.loss_weighted_LCP_pi(Q, A, F_mats, D_idx, W, w_max, tau, pi, opt_params["alpha"], num_LCPs, opt_params["use_abs_param"])
         elif obj_fun_flag == 'weighted_Stackelberg_co_opt':
             grad = -1*strat_comp.comp_avg_greedy_co_opt_weighted_LCP_grad(Q, A, D_idx, W, w_max, B, num_LCPs, opt_params["use_abs_param"])
             loss = strat_comp.loss_greedy_co_opt_weighted_LCP(Q, A, D_idx, W, w_max, B, num_LCPs, opt_params["use_abs_param"])
@@ -542,6 +546,8 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, A
     iter = 0 
     converged = False
     while not converged:
+        # with jax.profiler.trace("./tmp/jax-trace", create_perfetto_link=True):
+        jax.profiler.start_trace("./tmp/jax-trace", create_perfetto_link=True)
         num_LCPs = int(num_LCPs_schedule(iter))
         # apply update to P matrix, and parametrization Q:
         Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, loss, loss_diff, opt_state = step(Q, P, MCP, loss, opt_state, num_LCPs)
@@ -564,7 +570,7 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, A
                 tracked_vals["MCP_inds"].append(jnp.argmin(F))
                 tracked_vals["MCPs"].append(jnp.min(F))
             elif "weighted_Stackelberg" in obj_fun_flag:
-                F = strat_comp.compute_weighted_cap_probs(P, D_idx, W, w_max, tau)
+                F = strat_comp.compute_weighted_cap_probs(P, F_mats, D_idx, W, w_max, tau)
                 # tracked_vals["diam_pair_CP_variance"].append(strat_comp.compute_diam_pair_CP_variance(F, diam_pairs))
                 F = F.reshape((n**2), order='F')
                 tracked_vals["MCP_inds"].append(jnp.argmin(F))
@@ -595,7 +601,7 @@ def run_optimizer(P0, A, D_idx, W, w_max, F0, tau, obj_fun_flag, B, pi, N_eta, A
         elif opt_params["cnvg_test_mode"] == "loss_diff":
             converged, cnvg_test_vals = cnvg_check(iter, loss_diff, cnvg_test_vals, opt_params)
         iter = iter + 1
-
+        jax.profiler.stop_trace()
     
     print("*************************")
     print("FINAL ITER = " + str(iter))
@@ -743,9 +749,12 @@ if __name__ == '__main__':
     # test_set_name = "SF_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_test_spec.json")
 
-    # test_set_name = "SF_Comparison_Test_CPU"
+    # test_set_name = "SF_Comparison_Test_XPS15"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_comparison_test_spec.json")
 
+    test_set_name = "SF_Stackleberg_Single_Agent_Test_XPS15"
+    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_single_agent.json")
+    
     # test_set_name = "SF_Co_Opt_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
 
@@ -755,11 +764,26 @@ if __name__ == '__main__':
     # test_set_name = "SF_Multi_Partition_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_partition_test_spec.json")
 
-    test_set_name = "SF_pi_Multi_Test"
-    test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_test_spec.json")
+    # test_set_name = "SF_pi_Multi_Test"
+    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_test_spec.json")
 
     # test_set_name = "SF_pi_Multi_Partition_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_partition_test_spec.json")
+
+    # devices = jax.devices()
+    # print(devices)
+
+    # print(jax.devices('cpu'))
+    # print(jax.devices('gpu'))
+
+
+    # print(jax.device_count('cpu'))
+    # print(jax.device_count('gpu'))
+
+    # cpu_device= jax.devices('cpu')[0]
+    # print(cpu_device)
+    # jax.device_put(cpu_device)
+
 
     test_set_start_time = time.time()
     run_test_set(test_set_name, test_spec)

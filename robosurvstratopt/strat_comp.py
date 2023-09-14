@@ -320,19 +320,32 @@ def precompute_weighted_Stackelberg(W, w_max, tau):
             D_idx = D_idx.at[k, i].set(vec)
     return D_idx
 
-@functools.partial(jit, static_argnames=['w_max', 'tau'])
-def compute_weighted_cap_probs(P, D_idx, W, w_max, tau):
+# cpu_device = jax.devices('cpu')[0]
+
+@functools.partial(jit, static_argnames=['w_max', 'tau'], device=jax.devices('cpu')[0])
+def compute_weighted_cap_probs(P, F_mats, D_idx, W, w_max, tau):
     n = jnp.shape(P)[0]
-    F_mats = jnp.zeros((tau + w_max, n, n))
+    # F_mats = jnp.zeros((tau + w_max, n, n))
     init_vals = (F_mats, P, D_idx, W, w_max)
     F_mats, _, _, _, _ = jax.lax.fori_loop(0, tau, weighted_FHTs_loop_body, init_vals)
+
+    # for k in range(tau):
+    #     P_direct = P*(W == k+1)
+    #     idx = (D_idx[k] + w_max).astype(int)
+    #     D_k = F_mats[jnp.ravel(idx), jnp.tile(jnp.arange(n), n), :]
+    #     D_k = jnp.reshape(D_k, (n, n, n))
+    #     D_k = D_k.at[:, jnp.arange(n), jnp.arange(n)].set(0)
+    #     multi_step_probs = jnp.matmul(P, D_k)
+    #     multi_step_probs = multi_step_probs[jnp.arange(n), jnp.arange(n), :]
+    #     F_mats = F_mats.at[k + w_max, :, :].set(P_direct + multi_step_probs)
+
     F_mats = F_mats[w_max:, :, :]
     cap_probs = jnp.sum(F_mats, axis=0)
     return jnp.ravel(cap_probs, order='F')
 
 @functools.partial(jit, static_argnames=['w_max', 'tau', 'num_LCPs'])
-def compute_weighted_LCPs(P, D_idx, W, w_max, tau, num_LCPs=1):
-    cap_probs = compute_weighted_cap_probs(P, D_idx, W, w_max, tau)
+def compute_weighted_LCPs(P, F_mats, D_idx, W, w_max, tau, num_LCPs=1):
+    cap_probs = compute_weighted_cap_probs(P, F_mats, D_idx, W, w_max, tau)
     if num_LCPs == 1:
         lcps = jnp.min(cap_probs)
     elif num_LCPs > 1:
@@ -357,17 +370,17 @@ def comp_avg_weighted_LCP_grad(Q, A, D_idx, W, w_max, tau, num_LCPs=1, use_abs_p
 
 # pi must be a tuple
 @functools.partial(jit, static_argnames=['w_max', 'tau', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
-def loss_weighted_LCP_pi(Q, A, D_idx, W, w_max, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
+def loss_weighted_LCP_pi(Q, A, F_mats, D_idx, W, w_max, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
     P = comp_P_param(Q, A, use_abs_param)
-    lcps = compute_weighted_LCPs(P, D_idx, W, w_max, tau, num_LCPs)
+    lcps = compute_weighted_LCPs(P, F_mats, D_idx, W, w_max, tau, num_LCPs)
     n = len(pi)
     penalty = jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))) # stationary distribution constraint
     return jnp.mean(lcps) - alpha*penalty
 
 _comp_avg_weighted_LCP_pi_grad = jacrev(loss_weighted_LCP_pi)
 @functools.partial(jit, static_argnames=['w_max', 'tau', 'pi', 'alpha', 'num_LCPs', 'use_abs_param'])
-def comp_avg_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
-    grad = _comp_avg_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, tau, pi, alpha, num_LCPs, use_abs_param)
+def comp_avg_weighted_LCP_pi_grad(Q, A, F_mats, D_idx, W, w_max, tau, pi, alpha, num_LCPs=1, use_abs_param=True):
+    grad = _comp_avg_weighted_LCP_pi_grad(Q, A, F_mats, D_idx, W, w_max, tau, pi, alpha, num_LCPs, use_abs_param)
     return grad
 
 ############################################################
@@ -653,8 +666,8 @@ def comp_MHT_pi_grad(Q, A, pi, alpha, use_abs_param=True):
 @functools.partial(jit, static_argnames=['pi'])
 def compute_weighted_MHT_pi(P, W, pi):
     n = P.shape[0]
-    # m = compute_MHT_GPU(P, pi)
-    m = compute_MHT(P)
+    m = compute_MHT_GPU(P, pi)
+    # m = compute_MHT(P)
     sclr = jnp.dot(jnp.array(pi),jnp.dot(P*jnp.array(W),jnp.ones((n,))))
     return jnp.squeeze(sclr*m)
 
