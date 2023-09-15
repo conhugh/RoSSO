@@ -1,7 +1,5 @@
-# RoboSurvStratOpt
-This is a repository for research code related to strategy optimization in robotic surveillance problems. The strategies which are optimized are represented by Markov chains, and the primary focus is on the Stackelberg game formulation of the robotic surveillance problem described in:
-
-X. Duan, D. Paccagnan and F. Bullo, "Stochastic Strategies for Robotic Surveillance as Stackelberg Games," in *IEEE Transactions on Control of Network Systems*, vol. 8, no. 2, pp. 769-780, June 2021, [doi: 10.1109/TCNS.2021.3058932](https://ieeexplore.ieee.org/document/9353233)
+# RoSSO
+RoSSO is a library for robotic surveillance strategy optimization. The strategies are represented by Markov chains. RoSSO utilizes JAX and Optax to provide a gradient-based optimization framework with a modular architecture. 
 
 ## Installing Dependencies:
 It is recommended to use a virtual environment when installing dependencies. If unfamiliar, see https://docs.python.org/3/library/venv.html.
