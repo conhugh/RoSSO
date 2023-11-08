@@ -305,14 +305,22 @@ if __name__ == '__main__':
     # save_loc = './results/local/test_set_SF_pi_Multi_Partition_Test/test3_weighted_Stackelberg_pi/'
     # fn = './results/local/test_set_SF_pi_Multi_Partition_Test/test4_weighted_Stackelberg_pi/results/opt_P_9.npy'
     # save_loc = './results/local/test_set_SF_pi_Multi_Partition_Test/test4_weighted_Stackelberg_pi/'
-    fn = './results/local/test_set_SF_pi_Multi_Partition_Test/test5_weighted_Stackelberg_pi/results/opt_P_2.npy'
-    save_loc = './results/local/test_set_SF_pi_Multi_Partition_Test/test5_weighted_Stackelberg_pi/'
-    P = np.load(fn)
+    # fn = './results/local/test_set_SF_pi_Multi_Partition_Test/test5_weighted_Stackelberg_pi/results/opt_P_2.npy'
+    # save_loc = './results/local/test_set_SF_pi_Multi_Partition_Test/test5_weighted_Stackelberg_pi/'
 
-    plt.figure()
-    sns.set(font_scale=2)
-    heatmap = sns.heatmap(P, annot=False, linewidths=0.5, cmap="rocket_r", cbar=True, vmin=0.0, vmax=1.0, square=False, 
-                          xticklabels=[0, 2, 7, 9], yticklabels=[0, 2, 7, 9])
-    heatmap.xaxis.tick_top()
-    plt.savefig(os.path.join(save_loc, "opt_P.pdf"), bbox_inches = "tight")
-    plt.close()
+    # fn = './results/local/test_set_SF_Comparison_Test_CPU/test1_weighted_MHT_pi/results/opt_P_5.npy'
+    # fn = './results/local/test_set_SF_Comparison_Test_CPU/test3_weighted_RTE_pi/results/opt_P_8.npy'
+    # fn = './results/local/test_set_SF_Comparison_Test_CPU/test2_weighted_Stackelberg_pi/results/opt_P_5.npy'
+
+    fn = './results/local/test_set_SF_pi_Multi_Test_Old/test1_multi_weighted_Stackelberg_pi/results/opt_P_1.npy'
+
+    P = np.load(fn)
+    print(P)
+
+    # plt.figure()
+    # sns.set(font_scale=2)
+    # heatmap = sns.heatmap(P, annot=False, linewidths=0.5, cmap="rocket_r", cbar=True, vmin=0.0, vmax=1.0, square=False, 
+    #                       xticklabels=[0, 2, 7, 9], yticklabels=[0, 2, 7, 9])
+    # heatmap.xaxis.tick_top()
+    # plt.savefig(os.path.join(save_loc, "opt_P.pdf"), bbox_inches = "tight")
+    # plt.close()

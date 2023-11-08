@@ -4,7 +4,6 @@ import itertools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import scipy
 from jax import jacrev, jit
 import graph_comp
 
