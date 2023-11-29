@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import scipy
+import seaborn as sns
 
 import graph_gen as gg
 import graph_comp as gc
@@ -248,70 +249,78 @@ def COMPARE_SPD_SPCP_TAUCP():
 
 if __name__ == '__main__':
     np.set_printoptions(linewidth=np.inf)
-    n = 3
-    N = 2
-    A = jnp.ones((n, n))
-    # A = A.at[0, 1].set(0)
-    # A = A.at[1, 0].set(0)
-    As = jnp.ones((N, n, n))
-    # pi = (0.4, 0.2, 0.25, 0.15)
-    tau = 1
-    # B = 108
-    pi = (0.3, 0.3, 0.4)
-    alpha = 1000
-    # Ps = scj.init_rand_Ps(A, 2, 0)
-    # Q = jnp.reshape(P, (n, n))
-    # Q = (1/3)*jnp.ones((n, n))
-    # print(Q)
-    # w, vl, _ = scipy.linalg.eig(Q, left=True)
-    # pi = ( vl[:,0] / jnp.sum(vl[:,0]) ).T
-    # pi = tuple(float(jnp.real(x)) for x in pi)
-    # print(pi)
-    # print(jnp.dot(pi, Q))
-    # P = (1/n)*jnp.ones((n, n))
-    # Q = Q.at[0, 0].set(0)
-    W = jnp.ones((n, n))
-    # W = jnp.array([[1, 0, 2], [0, 1, 1], [2, 1, 1]])
-    # print(W)
-    # W = jnp.array([[1, 3, 3, 5, 4, 6, 3, 5, 7, 4, 6, 6],
-    #         [3, 1, 5, 4, 2, 4, 4, 5, 5, 3, 5, 5],
-    #         [3, 5, 1, 7, 6, 8, 3, 4, 9, 4, 8, 7],
-    #         [6, 4, 7, 1, 5, 6, 4, 7, 5, 6, 6, 7],
-    #         [4, 3, 6, 5, 1, 3, 5, 5, 6, 3, 4, 4],
-    #         [6, 4, 8, 5, 3, 1, 6, 7, 3, 6, 2, 3],
-    #         [2, 5, 3, 5, 6, 7, 1, 5, 7, 5, 7, 8],
-    #         [3, 5, 2, 7, 6, 7, 3, 1, 9, 3, 7, 5],
-    #         [8, 6, 9, 4, 6, 4, 6, 9, 1, 8, 5, 7],
-    #         [4, 3, 4, 6, 3, 5, 5, 3, 7, 1, 5, 3],
-    #         [6, 4, 8, 6, 4, 2, 6, 6, 4, 5, 1, 3],
-    #         [6, 4, 6, 6, 3, 3, 6, 4, 5, 3, 2, 1]])
-    w_max = int(jnp.max(W))
-    init_Ps = scj.multi_init_rand_Ps(As, N, 1)
-    P = init_Ps[0, :, :, :]
-    print(P[0])
-    print(P[1])
-    D_idx = scj.precompute_weighted_Stackelberg(W, w_max, tau)
-    combs, combs_len = scj.precompute_multi(n, N)
-    # print(scj.loss_weighted_multi_LCP_pi(P, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha))
-    print(scj.comp_avg_weighted_multi_LCP_pi_grad(P, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha))
-    print(gc.gen_graph_code(jnp.ones((4, 4))))
-    # w, vl, _ = scipy.linalg.eig(P[0], left=True)
-    # pi_0 = ( vl[:,0] / jnp.sum(vl[:,0]) ).T
-    # print(pi_0)
-    # w, vl, _ = scipy.linalg.eig(P[1], left=True)
-    # pi_1 = ( vl[:,0] / jnp.sum(vl[:,0]) ).T
-    # print(pi_1)
-    # eta = 0.5
-    # N_eta = int(jnp.ceil(w_max/(eta*jnp.min(jnp.array(pi)))) - 1)
-    # print(N_eta)
-    # print(scj.compute_weighted_multi_cap_probs(P0, D_idx, combs, N, combs_len, W, w_max, tau))
-    # print(scj.compute_weighted_multi_LCPs(P0, D_idx, combs, N, combs_len, W, w_max, tau))
-    # print(scj.loss_weighted_multi_LCP(P0, As, D_idx, combs, N, combs_len, W, w_max, tau))
-    # print(scj.comp_avg_weighted_multi_LCP_grad(P0, As, D_idx, combs, N, combs_len, W, w_max, tau))
+    # n = 3
+    # N = 2
+    # A = jnp.ones((n, n))
+    # # A = A.at[0, 1].set(0)
+    # # A = A.at[1, 0].set(0)
+    # As = jnp.ones((N, n, n))
+    # # pi = (0.4, 0.2, 0.25, 0.15)
+    # pi = (0.3, 0.3, 0.4)
+    # tau = 1
+    # # B = 108
+    # alpha = 1000
+    # # Ps = scj.init_rand_Ps(A, 2, 0)
+    # # Q = jnp.reshape(P, (n, n))
+    # # Q = (1/3)*jnp.ones((n, n))
+    # # print(Q)
+    # # w, vl, _ = scipy.linalg.eig(Q, left=True)
+    # # pi = ( vl[:,0] / jnp.sum(vl[:,0]) ).T
+    # # pi = tuple(float(jnp.real(x)) for x in pi)
+    # # print(pi)
+    # # print(jnp.dot(pi, Q))
+    # # P = (1/n)*jnp.ones((n, n))
+    # # Q = Q.at[0, 0].set(0)
+    # W = jnp.ones((n, n))
+    # # W = jnp.array([[1, 0, 2], [0, 1, 1], [2, 1, 1]])
+    # # print(W)
+    # # W = jnp.array([[1, 3, 3, 5, 4, 6, 3, 5, 7, 4, 6, 6],
+    # #         [3, 1, 5, 4, 2, 4, 4, 5, 5, 3, 5, 5],
+    # #         [3, 5, 1, 7, 6, 8, 3, 4, 9, 4, 8, 7],
+    # #         [6, 4, 7, 1, 5, 6, 4, 7, 5, 6, 6, 7],
+    # #         [4, 3, 6, 5, 1, 3, 5, 5, 6, 3, 4, 4],
+    # #         [6, 4, 8, 5, 3, 1, 6, 7, 3, 6, 2, 3],
+    # #         [2, 5, 3, 5, 6, 7, 1, 5, 7, 5, 7, 8],
+    # #         [3, 5, 2, 7, 6, 7, 3, 1, 9, 3, 7, 5],
+    # #         [8, 6, 9, 4, 6, 4, 6, 9, 1, 8, 5, 7],
+    # #         [4, 3, 4, 6, 3, 5, 5, 3, 7, 1, 5, 3],
+    # #         [6, 4, 8, 6, 4, 2, 6, 6, 4, 5, 1, 3],
+    # #         [6, 4, 6, 6, 3, 3, 6, 4, 5, 3, 2, 1]])
+    # w_max = int(jnp.max(W))
+    # init_Ps = scj.multi_init_rand_Ps(As, N, 1)
+    # P = init_Ps[0, :, :, :]
+    # print(P[0])
+    # print(P[1])
+    # D_idx = scj.precompute_weighted_Stackelberg(W, w_max, tau)
+    # combs, combs_len = scj.precompute_multi(n, N)
+    # # print(scj.loss_weighted_multi_LCP_pi(P, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha))
+    # print(scj.comp_avg_weighted_multi_LCP_pi_grad(P, As, D_idx, combs, N, combs_len, W, w_max, tau, pi, alpha))
+    # # print(gc.gen_graph_code(jnp.ones((4, 4))))
 
-    # combs = scj.precompute_weighted_multi_cap_probs(n, N)
-    # print(combs)
-    # combs_len = len(combs)
-    # print(combs_len)
-    # print(scj.compute_weighted_multi_cap_probs(Ps, D_idx, combs, N, combs_len, W, w_max, tau))
-    # print(scj.comp_avg_weighted_multi_LCP_grad(Ps, As, D_idx, combs, N, combs_len, W, w_max, tau))
+    # fn = './results/local/test_set_SF_pi_Multi_Partition_Test/test1_weighted_Stackelberg_pi/results/opt_P_10.npy'
+    # save_loc = './results/local/test_set_SF_pi_Multi_Partition_Test/test1_weighted_Stackelberg_pi/'
+    # fn = './results/local/test_set_SF_pi_Multi_Partition_Test/test2_weighted_Stackelberg_pi/results/opt_P_9.npy'
+    # save_loc = './results/local/test_set_SF_pi_Multi_Partition_Test/test2_weighted_Stackelberg_pi/'
+    # fn = './results/local/test_set_SF_pi_Multi_Partition_Test/test3_weighted_Stackelberg_pi/results/opt_P_10.npy'
+    # save_loc = './results/local/test_set_SF_pi_Multi_Partition_Test/test3_weighted_Stackelberg_pi/'
+    # fn = './results/local/test_set_SF_pi_Multi_Partition_Test/test4_weighted_Stackelberg_pi/results/opt_P_9.npy'
+    # save_loc = './results/local/test_set_SF_pi_Multi_Partition_Test/test4_weighted_Stackelberg_pi/'
+    # fn = './results/local/test_set_SF_pi_Multi_Partition_Test/test5_weighted_Stackelberg_pi/results/opt_P_2.npy'
+    # save_loc = './results/local/test_set_SF_pi_Multi_Partition_Test/test5_weighted_Stackelberg_pi/'
+
+    # fn = './results/local/test_set_SF_Comparison_Test_CPU/test1_weighted_MHT_pi/results/opt_P_5.npy'
+    # fn = './results/local/test_set_SF_Comparison_Test_CPU/test3_weighted_RTE_pi/results/opt_P_8.npy'
+    # fn = './results/local/test_set_SF_Comparison_Test_CPU/test2_weighted_Stackelberg_pi/results/opt_P_5.npy'
+
+    fn = './results/local/test_set_SF_pi_Multi_Test_Old/test1_multi_weighted_Stackelberg_pi/results/opt_P_1.npy'
+
+    P = np.load(fn)
+    print(P)
+
+    # plt.figure()
+    # sns.set(font_scale=2)
+    # heatmap = sns.heatmap(P, annot=False, linewidths=0.5, cmap="rocket_r", cbar=True, vmin=0.0, vmax=1.0, square=False, 
+    #                       xticklabels=[0, 2, 7, 9], yticklabels=[0, 2, 7, 9])
+    # heatmap.xaxis.tick_top()
+    # plt.savefig(os.path.join(save_loc, "opt_P.pdf"), bbox_inches = "tight")
+    # plt.close()

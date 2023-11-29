@@ -749,13 +749,7 @@ if __name__ == '__main__':
     # test_set_name = "SF_Co_Opt_Test"
     # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_co_opt_test_spec.json")
 
-    # test_set_name = "SF_Multi_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_test_spec.json")
-
-    # test_set_name = "SF_Multi_Partition_Test"
-    # test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_multi_partition_test_spec.json")
-
-    test_set_name = "SF_pi_Multi_Test"
+    test_set_name = "SF_pi_Multi_Test_Old"
     test_spec = TestSpec(test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/SF_Stackelberg_pi_multi_test_spec.json")
 
     # test_set_name = "SF_pi_Multi_Partition_Test"
@@ -789,6 +783,11 @@ if __name__ == '__main__':
     # # print(P)
     # print(jnp.mean(jnp.dot(jnp.array(pi), P), axis=0))
 
+    # # fn = './results/local/test_set_SF_Comparison_Test_CPU/test1_weighted_MHT_pi/results/opt_P_5.npy'
+    # # fn = './results/local/test_set_SF_Comparison_Test_CPU/test3_weighted_RTE_pi/results/opt_P_8.npy'
+    # # fn = './results/local/test_set_SF_Comparison_Test_CPU/test2_weighted_Stackelberg_pi/results/opt_P_5.npy'
+    # fn = './results/local/test_set_SF_Co_Opt_Test/test1_weighted_Stackelberg_co_opt_pi/results/opt_P_3.npy'
+    # P = jnp.load(fn)
     # n = 12
     # W = jnp.array([[1, 3, 3, 5, 4, 6, 3, 5, 7, 4, 6, 6],
     #             [3, 1, 5, 4, 2, 4, 4, 5, 5, 3, 5, 5],
@@ -806,20 +805,8 @@ if __name__ == '__main__':
     # tau = 9
     # pi = (0.1536, 0.1039, 0.1028, 0.1005, 0.0958, 0.0958, 0.0855, 0.0739, 0.0554, 0.0497, 0.0439, 0.0392)
     # B = 108
-
-    # # fn = './results/local/test_set_SF_Comparison_Test/test1_weighted_MHT_pi/results/opt_P_7.csv'
-    # # fn = './cloud/local/test_set_SF_Comparison_Test/test3_weighted_RTE_pi/results/opt_P_81.csv'
-    # # fn = './cloud/local/test_set_SF_Comparison_Test/test2_weighted_Stackelberg_pi/results/opt_P_28.csv'
-    # fn = './cloud/local/test_set_SF_Co_Opt_Test/test1_weighted_Stackelberg_co_opt_pi/results/opt_P_10.csv'
-    # data = []
-    # # Read the CSV file
-    # with open(fn, 'r') as file:
-    #     reader = csv.reader(file)
-    #     for row in reader:
-    #         data.append([float(item) for item in row])
-    # P = jnp.array(data) 
     # print(P)
-    # print(1000*jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))))
+    # print(jnp.dot(jnp.dot(jnp.array(pi), P - jnp.identity(n)), jnp.dot(P.T - jnp.identity(n), jnp.array(pi))))
 
     # # MHT
     # print(strat_comp.compute_weighted_MHT_pi(P, W, pi))
