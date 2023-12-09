@@ -15,7 +15,7 @@ import optax
 import graph_comp
 import strat_comp
 import strat_viz
-from test_spec import TestSpec
+from oop_demo import ProblemSpec
 
 def run_test_set(problem_set):
     # run all tests defined in test spec:
@@ -25,62 +25,51 @@ def run_test_set(problem_set):
         run_times.append(times)
 
 def run_test(problem):    
+    problem.initialize()
     cnvg_times = []
-    for k in range(problem.problem_params["num_init_Ps"]):
+    Qs = problem.init_rand_Ps()
+    for k in range(problem.opt_params["num_init_Ps"]):
         print("Optimizing with initial P matrix number " + str(k + 1) + "...")
         print("Using optimizer: " + problem.opt_params["optimizer_name"])
         # setup optimizer (set learning rate)
-        problem.set_learning_rate()
+        Q = Qs[:, :, k]
+        problem.set_learning_rate(Q)
 
         start_time = time.time()
-        run_optimizer(problem)
+        run_optimizer(problem, Q)
         cnvg_time = time.time() - start_time
         cnvg_times.append(cnvg_time)
         print("--- Optimization took: %s seconds ---" % (cnvg_time))
     return cnvg_times
 
-def run_optimizer(problem):
-    check_time = time.time()
-    P0 = problem.init_rand_P()
+def run_optimizer(problem, Q):
     optimizer = setup_optimizer(problem.opt_params)
-    opt_state = optimizer.init(P0)
-    cnvg_test_vals = deque()  # queue storing recent values of desired metric, for checking convergence
-    # convert keys of map from string to int
-    num_LCPs_schedule = {int(key): value for key, value in problem.opt_params["num_LCPs_schedule"].items()}
-    num_LCPs_schedule = optax.piecewise_constant_schedule(problem.opt_params["num_init_LCPs"], num_LCPs_schedule)
+    opt_state = optimizer.init(Q)
 
-    @functools.partial(jax.jit, static_argnames=['num_LCPs'])
-    def step(Q, P, MCP, loss, opt_state, num_LCPs):
+    @jax.jit
+    def step(Q, P, loss, opt_state):
         P_old = P
         loss_old = loss
         # gradient computation (should we be using value_and_grad here?)
-        grad = problem.compute_gradient()
-        loss = problem.compute_loss()
+        grad = problem.compute_gradient(Q)
+        loss = problem.compute_loss(Q)
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
         P = problem.apply_parametrization(Q)
-        P_diff = P - P_old
-        abs_P_diff_sum = jnp.sum(jnp.abs(P_diff))
+        abs_P_diff_sum = jnp.sum(jnp.abs(P - P_old))
         loss_diff = jnp.abs((loss - loss_old)/loss_old)
-
-        if opt_params["cnvg_test_mode"] == "MCP_diff":
-            MCP_old = MCP
-            MCP = strat_comp.compute_LCPs(P, F0, tau)
-            MCP_diff = MCP - MCP_old
-        else:
-            MCP = MCP_diff = jnp.nan
-
-        return Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, loss, loss_diff, opt_state
+        return Q, P, abs_P_diff_sum, loss, loss_diff, opt_state
     
     # Run gradient-based optimization process:
     iter = 0 
+    P = Q
+    loss = 1
     converged = False
     while not converged:
-        num_LCPs = int(num_LCPs_schedule(iter))
         # apply update to P matrix, and parametrization Q:
-        Q, P, P_diff, abs_P_diff_sum, MCP, MCP_diff, loss, loss_diff, opt_state = step(Q, P, MCP, loss, opt_state, num_LCPs)
+        Q, P, abs_P_diff_sum, loss, loss_diff, opt_state = step(Q, P, loss, opt_state)
         # check for convergence:
-        converged = problem.cnvg_check(iter, abs_P_diff_sum, MCP_diff, loss_diff)
+        converged = problem.cnvg_check(iter, abs_P_diff_sum, loss_diff)
         iter = iter + 1
 
     print("*************************")
@@ -121,3 +110,12 @@ def setup_optimizer(opt_params):
     return optimizer
 
 if __name__ == '__main__':
+    fn = test_spec_filepath=os.getcwd() + "/robosurvstratopt/test_specs/oop_demo_test_spec.json"
+    with open(fn, "r") as problem_spec_file:
+        json_string = problem_spec_file.read()
+        problem_spec_dict = json.loads(json_string)
+        name = problem_spec_dict["problem_spec_name"]
+        problem_params = problem_spec_dict["problem_params"]
+        opt_params = problem_spec_dict["optimizer_params"]
+        problem_spec = ProblemSpec(name, problem_params, opt_params)
+        run_test(problem_spec)
