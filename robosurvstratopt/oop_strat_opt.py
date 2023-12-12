@@ -1,5 +1,4 @@
 # Optimization of the performance of stochastic surveillance strategies
-from collections import deque
 import json
 import os
 import shutil
@@ -31,10 +30,8 @@ def run_test(problem):
     for k in range(problem.opt_params["num_init_Ps"]):
         print("Optimizing with initial P matrix number " + str(k + 1) + "...")
         print("Using optimizer: " + problem.opt_params["optimizer_name"])
-        # setup optimizer (set learning rate)
-        Q = Qs[:, :, k]
+        Q = Qs[k]
         problem.set_learning_rate(Q)
-
         start_time = time.time()
         run_optimizer(problem, Q)
         cnvg_time = time.time() - start_time
@@ -63,7 +60,7 @@ def run_optimizer(problem, Q):
     # Run gradient-based optimization process:
     iter = 0 
     P = Q
-    loss = 1
+    loss = 1000
     converged = False
     while not converged:
         # apply update to P matrix, and parametrization Q:

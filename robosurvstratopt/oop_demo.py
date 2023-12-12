@@ -1,4 +1,5 @@
 from collections import deque
+import jax
 import jax.numpy as jnp
 import numpy as np
 import strat_comp
@@ -11,6 +12,7 @@ class ProblemSpec:
         self.opt_params = opt_params
 
     def initialize(self):
+        self.key = jax.random.PRNGKey(self.opt_params["rng_seed"])
         self.cnvg_test_vals = deque()
         self.problem_params["adjacency_matrix"] = graph_comp.graph_decode(self.problem_params["graph_code"])
         self.n = self.problem_params["adjacency_matrix"].shape[0]
@@ -19,6 +21,8 @@ class ProblemSpec:
         if 'weighted' in self.problem_params["objective_function"]:
             self.problem_params["weight_matrix"] = jnp.array(self.problem_params["weight_matrix"])
             self.w_max = int(jnp.max(self.problem_params["weight_matrix"]))
+            if self.problem_params["tau"] < self.w_max:
+                raise ValueError("tau is less than the maximum travel time!")
         if 'multi' in self.problem_params["objective_function"]:
             self.combs, self.combs_len = strat_comp.precompute_multi(self.n, self.problem_params["num_robots"])
         if 'Stackelberg' in self.problem_params["objective_function"]:
@@ -135,10 +139,9 @@ class ProblemSpec:
         return loss
 
     def init_rand_Ps(self):
+        # current implementation assumes same adjacency matrix for each robot
         if 'multi' in self.problem_params["objective_function"]:
             self.problem_params["adjacency_matrix"] = jnp.tile(self.problem_params["adjacency_matrix"], (self.problem_params["num_robots"], 1, 1))
-            P = strat_comp.multi_init_rand_Ps(self.problem_params["adjacency_matrix"], self.problem_params["num_robots"], self.opt_params["num_init_Ps"])
-        else:
-            P = strat_comp.init_rand_Ps(self.problem_params["adjacency_matrix"], self.opt_params["num_init_Ps"])
+        P = strat_comp.oop_init_rand_Ps(self.problem_params["adjacency_matrix"], self.problem_params["num_robots"], self.opt_params["num_init_Ps"], self.key)
         return P
     

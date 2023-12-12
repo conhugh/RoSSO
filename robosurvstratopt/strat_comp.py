@@ -47,6 +47,22 @@ def multi_init_rand_Ps(As, N, num, seed=0):
             initPs = initPs.at[k, i, :, :].set(P0)
     return initPs
 
+def oop_init_rand_Ps(A, N, num, key):
+    # current implementation assumes same adjacency matrix for each robot
+    if N > 1:
+        A = A[0, :, :]
+    A_shape = jnp.shape(A)
+    initPs = []
+    for _ in range(num):
+        initP = jnp.zeros((N, A_shape[0], A_shape[1]),  dtype='float32')
+        for i in range(N):
+            key, subkey = jax.random.split(key)
+            P0 = A*jax.random.uniform(subkey, A_shape)
+            P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)
+            initP = initP.at[i, :, :].set(P0)
+        initPs.append(initP)
+    return initPs
+
 @functools.partial(jit, static_argnames=['use_abs_param'])
 def comp_P_param(Q, A, use_abs_param=True):
     P = Q*A
