@@ -47,9 +47,9 @@ def run_optimizer(problem, Q):
     def step(Q, P, loss, opt_state):
         P_old = P
         loss_old = loss
-        # gradient computation (should we be using value_and_grad here?)
-        grad = problem.compute_gradient(Q)
-        loss = problem.compute_loss(Q)
+        # loss = problem.compute_loss(Q)
+        # grad = problem.compute_gradient(Q)
+        (loss, grad) = problem.compute_loss_and_gradient(Q)
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
         P = problem.apply_parametrization(Q)
