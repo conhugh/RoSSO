@@ -1,5 +1,6 @@
 # Computation of quantities relevant to optimization of stochastic surveillance strategies
 import functools
+from icecream import ic
 import itertools
 import jax
 import jax.numpy as jnp
@@ -47,19 +48,25 @@ def multi_init_rand_Ps(As, N, num, seed=0):
             initPs = initPs.at[k, i, :, :].set(P0)
     return initPs
 
-def oop_init_rand_Ps(A, N, num, key):
-    # current implementation assumes same adjacency matrix for each robot
+def oop_init_rand_Ps(A, N, num_init_Ps, key):
+    # A: binary adjacency matrix for environment graph
+    # (current implementation assumes same adjacency matrix for each robot)
+    # N: number of robots
+    # num_init_Ps: number of random initial strategies
+    # key: jax PRNG key
     if N > 1:
         A = A[0, :, :]
     A_shape = jnp.shape(A)
+    # ic(A_shape)
     initPs = []
-    for _ in range(num):
+    for _ in range(num_init_Ps):
         initP = jnp.zeros((N, A_shape[0], A_shape[1]),  dtype='float32')
         for i in range(N):
             key, subkey = jax.random.split(key)
             P0 = A*jax.random.uniform(subkey, A_shape)
             P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)
             initP = initP.at[i, :, :].set(P0)
+        initP = jnp.squeeze(initP)  # avoids issue w gradient computation when N=1
         initPs.append(initP)
     return initPs
 

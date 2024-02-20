@@ -1,22 +1,42 @@
 from collections import deque
+import json
+
 import jax
 import jax.numpy as jnp
 import numpy as np
-import strat_comp
+
 import graph_comp
+from metric_tracker import MetricTracker
+import strat_comp
 
 class ProblemSpec:
-    def __init__(self, name, problem_params, opt_params):
-        self.name = name
-        self.problem_params = problem_params
-        self.opt_params = opt_params
-        
+    def __init__(self, problem_spec_path):
+    # def __init__(self, name, problem_params, opt_params):
+        with open(problem_spec_path, "r") as problem_spec_file:
+            json_string = problem_spec_file.read()
+            problem_spec_dict = json.loads(json_string)
+        self.name = problem_spec_dict["problem_spec_name"]
+        self.problem_params = problem_spec_dict["problem_params"]
+        self.opt_params = problem_spec_dict["optimizer_params"]
+        self.metrics = [MetricTracker(metric_name) for metric_name in self.opt_params["metrics"]]
+        # self.name = name
+        # self.problem_params = problem_params
+        # self.strat_params = problem_params
+        # self.opt_params = opt_params
+        # _metric_trackers = [MetricTracker(metric_name) for metric_name in self.opt_params["metrics"]]
+        # self.opt_metrics = dict(zip(self.opt_params["metrics"], _metric_trackers))
+
 
     def initialize(self):
         self.key = jax.random.PRNGKey(self.opt_params["rng_seed"])
         self.cnvg_test_vals = deque()
-        self.problem_params["adjacency_matrix"] = graph_comp.graph_decode(self.problem_params["graph_code"])
-        self.n = self.problem_params["adjacency_matrix"].shape[0]
+        # self.metrics = []
+        # for metric_name in self.opt_params["metrics"]:
+        #     self.metrics.append(MetricTracker(metric_name))  
+        # self.problem_params["adjacency_matrix"] = graph_comp.graph_decode(self.problem_params["graph_code"])
+        self.problem_params["A"] = graph_comp.graph_decode(self.problem_params["graph_code"])
+        # self.n = self.problem_params["adjacency_matrix"].shape[0]
+        self.n = self.problem_params["A"].shape[0]
         if 'pi' in self.problem_params["objective_function"]:
             self.pi = tuple(self.problem_params["stationary_distribution"])
         if 'weighted' in self.problem_params["objective_function"]:
@@ -27,7 +47,8 @@ class ProblemSpec:
         if 'multi' in self.problem_params["objective_function"]:
             self.combs, self.combs_len = strat_comp.precompute_multi(self.n, self.problem_params["num_robots"])
         if 'Stackelberg' in self.problem_params["objective_function"]:
-            self.F0 = jnp.full((self.n, self.n, self.problem_params["tau"]), jnp.nan)
+            # self.F0 = jnp.full((self.n, self.n, self.problem_params["tau"]), jnp.nan)
+            self.problem_params["F0"] = jnp.full((self.n, self.n, self.problem_params["tau"]), jnp.nan)
         if 'RTE' in self.problem_params["objective_function"]:
             if 'weighted' in self.problem_params["objective_function"]:
                 self.problem_params["N_eta"] = int(jnp.ceil(self.w_max/(self.problem_params["eta"]*jnp.min(jnp.array(self.pi)))) - 1)
@@ -76,6 +97,11 @@ class ProblemSpec:
         elif self.opt_params["cnvg_test_mode"] == "loss_diff":
             converged = cnvg_check_inner(iter, loss_diff)
         return converged
+
+    def update_metrics(self, Q, P, loss, Q_old, P_old, loss_old):
+        for metric in self.metrics:
+            metric.update_history(Q, P, loss, Q_old, P_old, loss_old, self.problem_params)
+            # ^^ TODO: update metric evaluation functions to expect these standard params
 
     def compute_gradient(self, Q):
         if self.problem_params["objective_function"] == 'Stackelberg':
@@ -138,15 +164,20 @@ class ProblemSpec:
         elif self.problem_params["objective_function"] == 'weighted_RTE_pi':
             loss = strat_comp.loss_weighted_RTE_pi(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.pi, self.problem_params["N_eta"], self.opt_params["alpha"], self.opt_params["use_abs_param"])
         return loss
+    
+    # def compute_metrics(self, Q):
+    #     for metric in self.metrics:
+    #         if metric.metric_name == "my_metric":
+    #             metric.update_history(my_arg1, my_arg2)
+    #         else:
+    #             pass
+    #         pass
+    #     pass
 
     def init_rand_Ps(self):
         # current implementation assumes same adjacency matrix for each robot
-        if self.problem_params["num_robots"] > 1:
-        # if 'multi' in self.problem_params["objective_function"]:
+        if 'multi' in self.problem_params["objective_function"]:
             self.problem_params["adjacency_matrix"] = jnp.tile(self.problem_params["adjacency_matrix"], (self.problem_params["num_robots"], 1, 1))
-        
         P = strat_comp.oop_init_rand_Ps(self.problem_params["adjacency_matrix"], self.problem_params["num_robots"], self.opt_params["num_init_Ps"], self.key)
-        
-
         return P
     
