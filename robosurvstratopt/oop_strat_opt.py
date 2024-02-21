@@ -14,7 +14,7 @@ import optax
 import graph_comp
 import strat_comp
 import strat_viz
-from oop_class_code import ProblemSpec
+from problem_spec import ProblemSpec
 
 def run_test_set(problem_set):
     # run all tests defined in test spec:
