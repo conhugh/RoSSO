@@ -1,8 +1,8 @@
 {
     "problem_spec_name": "OOP_Demo3",
     "problem_params": {
-        "graph_name": "complete_N12",
-        "graph_code": "N12_147573952589676412927",
+        "graph_name": "randomtree_D3_N12",
+        "graph_code": "N12_117617714310483574784",
         "num_robots": 1,
         "objective_function": "Stackelberg",
         "tau": 10
@@ -26,8 +26,9 @@
         "cnvg_radius": 0.01,
         "cnvg_window_size": 10,
         "iters_per_printout": 500,
-        "metrics": ["MCP_Stackelberg",
-                    "abs_P_diff_sum",
-                    "abs_P_diff_max"]
+        "metrics": ["LCPs_range_Stackelberg",
+                    "MCP_attacker_location",
+                    "MCP_robot_location",
+                    "DP_SPCPs_Stackelberg"]
     }
 }

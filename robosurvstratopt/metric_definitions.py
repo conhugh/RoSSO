@@ -31,7 +31,7 @@ def MCP_attack_node_index_Stackelberg(P, problem_params):
     tau = problem_params["tau"]
     F = strat_comp.compute_cap_probs(P, F0, tau)
     return jnp.argmin(F, axis=1)
-
+ 
 def MCP_robot_node_index_Stackelberg(P, problem_params):
     F0 = problem_params["F0"]
     tau = problem_params["tau"]

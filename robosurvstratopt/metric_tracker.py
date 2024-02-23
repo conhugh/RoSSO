@@ -1,7 +1,7 @@
 # Class for defining metrics to be tracked during/after optimization process:
-from functools import wraps
-from inspect import signature
 import os
+# from inspect import signature
+# from functools import wraps
 
 import metric_definitions
 
@@ -11,30 +11,14 @@ class MetricTracker:
         self.metric_history = []
         self.evaluate_function = self._get_evaluate_function(metric_name)
 
-    # def param_unpack(f):
-    #     @wraps(f)
-    #     def wrap(problem_params: dict):
-    #         f_arg_names = list(signature(f).parameters.keys())
-    #         metric_params = []
-    #         for arg_name in f_arg_names:
-    #             if arg_name not in problem_params.keys():
-    #                 raise RuntimeError("MetricTracker evaluate function '" + f.__name__ + "' failed to find parameter '" + arg_name + "' in problem_params.keys()")
-    #             else:
-    #                 metric_params.append(problem_params[arg_name])
-    #         result = f(*metric_params)
-    #         return result
-    #     return wrap
-
 
     def _get_evaluate_function(self, metric_name):
         if metric_name in metric_definitions.METRICS_REGISTRY:
             eval_func =  metric_definitions.METRICS_REGISTRY[metric_name]
             return eval_func
-            # wrap eval func w arg inspection, unpacking from problem_params, and missing param handling?
-            # eval_func_wrapped = MetricTracker.param_unpack(eval_func)
-            # return eval_func_wrapped
         else:
-            raise ValueError(f"Unknown metric name: {metric_name}. Ensure your metric has been defined in the 'METRIC_DEFINITIONS' dict in metric_evaluations.py")
+            raise ValueError(f"Unknown metric name: {metric_name}. \
+                               Ensure your metric has been defined in the 'METRIC_DEFINITIONS' dict in metric_evaluations.py")
 
 
     def evaluate(self, *args, **kwargs):

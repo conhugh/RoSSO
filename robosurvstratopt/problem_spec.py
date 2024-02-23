@@ -2,6 +2,8 @@ from collections import deque
 import jax
 import jax.numpy as jnp
 import numpy as np
+
+from metric_tracker import MetricTracker
 import strat_comp
 import graph_comp
 
@@ -10,6 +12,8 @@ class ProblemSpec:
         self.name = name
         self.problem_params = problem_params
         self.opt_params = opt_params
+        self.metrics = [MetricTracker(m_name) for m_name in opt_params["metrics"]]
+        
 
     def initialize(self):
         self.key = jax.random.PRNGKey(self.opt_params["rng_seed"])
@@ -43,6 +47,10 @@ class ProblemSpec:
             self.D_idx = strat_comp.precompute_weighted_Stackelberg(self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"])
         elif 'weighted_RTE_pi' in self.problem_params["objective_function"]:
             self.D_idx = strat_comp.precompute_weighted_RTE_pi(self.problem_params["weight_matrix"], self.w_max, self.problem_params["N_eta"])
+
+    def update_metrics(self, P):
+        for metric in self.metrics:
+            metric.update_history(P, self.problem_params)
 
     def set_learning_rate(self, Q):
         (_, init_grad) = self.compute_loss_and_gradient(Q)
