@@ -26,9 +26,7 @@
         "cnvg_radius": 0.01,
         "cnvg_window_size": 10,
         "iters_per_printout": 500,
-        "metrics": ["LCPs_range_Stackelberg",
-                    "MCP_attacker_location",
-                    "MCP_robot_location",
-                    "DP_SPCPs_Stackelberg"]
+        "metrics": ["MCP_attacker_location",
+                    "MCP_robot_location"]
     }
 }

@@ -76,8 +76,8 @@ def run_optimizer(problem : ProblemSpec, Q):
     P = Q
     loss = 1000
     converged = False
-    for i in range(10):
-    # while not converged:
+    # for i in range(10):
+    while not converged:
         # apply update to P matrix, and parametrization Q:
         Q, P, abs_P_diff_sum, loss, loss_diff, opt_state = step(Q, P, loss, opt_state)
         # track metrics:
@@ -85,6 +85,7 @@ def run_optimizer(problem : ProblemSpec, Q):
         # check for convergence:
         converged = problem.cnvg_check(iter, abs_P_diff_sum, loss_diff)
         iter = iter + 1
+    problem.save_tracked_metrics()
 
     print("*************************")
     print("FINAL ITER = " + str(iter))
@@ -126,13 +127,14 @@ def setup_optimizer(opt_params):
 if __name__ == '__main__':
     # fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/test_specs/oop_demo_test_spec.json"
     fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/test_specs/oop_demo_test_spec_3.json"
+    results_directory = os.getcwd() + "/results/local/oop_demo_3"
     with open(fn, "r") as problem_spec_file:
         json_string = problem_spec_file.read()
         problem_spec_dict = json.loads(json_string)
         name = problem_spec_dict["problem_spec_name"]
         problem_params = problem_spec_dict["problem_params"]
         opt_params = problem_spec_dict["optimizer_params"]
-        problem_spec = ProblemSpec(name, problem_params, opt_params)
+        problem_spec = ProblemSpec(name, problem_params, opt_params, results_directory)
         run_test(problem_spec)
 
 

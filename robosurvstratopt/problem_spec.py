@@ -1,15 +1,18 @@
 from collections import deque
+import os
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+import graph_comp
 from metric_tracker import MetricTracker
 import strat_comp
-import graph_comp
 
 class ProblemSpec:
-    def __init__(self, name, problem_params, opt_params):
+    def __init__(self, name, problem_params, opt_params, results_directory):
         self.name = name
+        self.results_dir = results_directory
         self.problem_params = problem_params
         self.opt_params = opt_params
         self.metrics = [MetricTracker(m_name) for m_name in opt_params["metrics"]]
@@ -51,6 +54,12 @@ class ProblemSpec:
     def update_metrics_tracking(self, P):
         for metric in self.metrics:
             metric.update_history(P, self.problem_params)
+
+    def save_tracked_metrics(self, save_directory=None):
+        if save_directory is None:
+            save_directory = os.path.join(self.results_dir, "metrics")
+        for metric in self.metrics:
+            metric.print_history(save_directory)
 
     def set_learning_rate(self, Q):
         (_, init_grad) = self.compute_loss_and_gradient(Q)

@@ -23,7 +23,7 @@ def abs_P_diff_max(P, problem_params):
 def lowest_cap_probs_range_Stackelberg(P, problem_params):
     F0 = problem_params["F0"]
     tau = problem_params["tau"]
-    LCPs = strat_comp.compute_LCPs(P, F0, tau, num_LCPs=1)
+    LCPs = strat_comp.compute_LCPs(P, F0, tau, num_LCPs=problem_params["num_LCPs"])
     return jnp.ptp(LCPs)
 
 def MCP_attack_node_index_Stackelberg(P, problem_params):
@@ -38,10 +38,10 @@ def MCP_robot_node_index_Stackelberg(P, problem_params):
     F = strat_comp.compute_cap_probs(P, F0, tau)
     return jnp.argmin(F, axis=0)
 
-def diam_pair_shortest_path_cap_probs_Stackelberg(A, P, F0, tau, my_arg=None, your_arg=True, our_arg=1.0):
-    diam_pairs = graph_comp.get_diametric_pairs(A)
-    FHT_mats = strat_comp.compute_FHT_probs(P, F0, tau)
-    return strat_comp.compute_SPCPs(A, FHT_mats, diam_pairs)
+def diam_pair_shortest_path_cap_probs_Stackelberg(P, problem_params):
+    diam_pairs = graph_comp.get_diametric_pairs(problem_params["adjacency_matrix"])
+    FHT_mats = strat_comp.compute_FHT_probs(P, problem_params["F0"], problem_params["tau"])
+    return strat_comp.compute_SPCPs(problem_params["adjacency_matrix"], FHT_mats, diam_pairs)
 
 
 METRICS_REGISTRY = {
