@@ -11,14 +11,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-# import csv
 
 import graph_comp
 import strat_comp
 import strat_viz
 from problem_spec import ProblemSpec
-
-# StratParams = namedtuple("StratParams", "Q, P, Q_old, P_old")
 
 def run_test_set(problem_set):
     # run all tests defined in test spec:
@@ -35,12 +32,6 @@ def run_test(problem: ProblemSpec):
         print("Optimizing with initial P matrix number " + str(k + 1) + "...")
         print("Using optimizer: " + problem.opt_params["optimizer_name"])
         Q = Qs[k]
-
-        ic(jnp.shape(problem.problem_params["adjacency_matrix"]))
-        # ic(Q)
-        ic(jnp.shape(Qs))
-        ic(jnp.shape(Q))
-        # break
         problem.set_learning_rate(Q)
         start_time = time.time()
         run_optimizer(problem, Q)
@@ -52,24 +43,19 @@ def run_test(problem: ProblemSpec):
 def run_optimizer(problem : ProblemSpec, Q):
     optimizer = setup_optimizer(problem.opt_params)
     opt_state = optimizer.init(Q)
-    # opt_metrics = metrics.init(Q)
-
 
     @jax.jit
     def step(Q, P, loss, opt_state):
         Q_old = Q
         P_old = P
         loss_old = loss
-        # loss = problem.compute_loss(Q)
-        # grad = problem.compute_gradient(Q)
         (loss, grad) = problem.compute_loss_and_gradient(Q)
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
         P = problem.apply_parametrization(Q)
         abs_P_diff_sum = jnp.sum(jnp.abs(P - P_old))
         loss_diff = jnp.abs((loss - loss_old)/loss_old)
-        return Q, P, loss, Q_old, P_old, loss_old, opt_state
-        # return Q, P, abs_P_diff_sum, loss, loss_diff, opt_state
+        return Q, P, abs_P_diff_sum, loss, loss_diff, opt_state
     
     # Run gradient-based optimization process:
     iter = 0 
