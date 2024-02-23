@@ -1,42 +1,22 @@
 from collections import deque
-import json
-
 import jax
 import jax.numpy as jnp
 import numpy as np
-
-import graph_comp
-from metric_tracker import MetricTracker
 import strat_comp
+import graph_comp
 
 class ProblemSpec:
-    def __init__(self, problem_spec_path):
-    # def __init__(self, name, problem_params, opt_params):
-        with open(problem_spec_path, "r") as problem_spec_file:
-            json_string = problem_spec_file.read()
-            problem_spec_dict = json.loads(json_string)
-        self.name = problem_spec_dict["problem_spec_name"]
-        self.problem_params = problem_spec_dict["problem_params"]
-        self.opt_params = problem_spec_dict["optimizer_params"]
-        self.metrics = [MetricTracker(metric_name) for metric_name in self.opt_params["metrics"]]
-        # self.name = name
-        # self.problem_params = problem_params
-        # self.strat_params = problem_params
-        # self.opt_params = opt_params
-        # _metric_trackers = [MetricTracker(metric_name) for metric_name in self.opt_params["metrics"]]
-        # self.opt_metrics = dict(zip(self.opt_params["metrics"], _metric_trackers))
-
+    def __init__(self, name, problem_params, opt_params):
+        self.name = name
+        self.problem_params = problem_params
+        self.opt_params = opt_params
 
     def initialize(self):
         self.key = jax.random.PRNGKey(self.opt_params["rng_seed"])
         self.cnvg_test_vals = deque()
-        # self.metrics = []
-        # for metric_name in self.opt_params["metrics"]:
-        #     self.metrics.append(MetricTracker(metric_name))  
-        # self.problem_params["adjacency_matrix"] = graph_comp.graph_decode(self.problem_params["graph_code"])
-        self.problem_params["A"] = graph_comp.graph_decode(self.problem_params["graph_code"])
-        # self.n = self.problem_params["adjacency_matrix"].shape[0]
-        self.n = self.problem_params["A"].shape[0]
+        self.cnvg_MA_val = 0
+        self.problem_params["adjacency_matrix"] = graph_comp.graph_decode(self.problem_params["graph_code"])
+        self.n = self.problem_params["adjacency_matrix"].shape[0]
         if 'pi' in self.problem_params["objective_function"]:
             self.pi = tuple(self.problem_params["stationary_distribution"])
         if 'weighted' in self.problem_params["objective_function"]:
@@ -46,9 +26,12 @@ class ProblemSpec:
                 raise ValueError("tau is less than the maximum travel time!")
         if 'multi' in self.problem_params["objective_function"]:
             self.combs, self.combs_len = strat_comp.precompute_multi(self.n, self.problem_params["num_robots"])
-        if 'Stackelberg' in self.problem_params["objective_function"]:
-            # self.F0 = jnp.full((self.n, self.n, self.problem_params["tau"]), jnp.nan)
-            self.problem_params["F0"] = jnp.full((self.n, self.n, self.problem_params["tau"]), jnp.nan)
+        if 'multi_Stackelberg' in self.problem_params["objective_function"]:
+            self.F0 = jnp.full((self.problem_params["num_robots"], self.n, self.n, self.problem_params["tau"]), jnp.nan)
+        if self.problem_params["num_robots"] > 1 and 'multi' not in self.problem_params["objective_function"]:
+            raise ValueError("num_robots is greater than 1 and the objective function is not a multi-robot objective!")
+        elif 'Stackelberg' in self.problem_params["objective_function"]:
+            self.F0 = jnp.full((self.n, self.n, self.problem_params["tau"]), jnp.nan)
         if 'RTE' in self.problem_params["objective_function"]:
             if 'weighted' in self.problem_params["objective_function"]:
                 self.problem_params["N_eta"] = int(jnp.ceil(self.w_max/(self.problem_params["eta"]*jnp.min(jnp.array(self.pi)))) - 1)
@@ -62,7 +45,7 @@ class ProblemSpec:
             self.D_idx = strat_comp.precompute_weighted_RTE_pi(self.problem_params["weight_matrix"], self.w_max, self.problem_params["N_eta"])
 
     def set_learning_rate(self, Q):
-        init_grad = self.compute_gradient(Q)
+        (_, init_grad) = self.compute_loss_and_gradient(Q)
         lr_scale = jnp.max(jnp.abs(init_grad))
         lr = self.opt_params["nominal_learning_rate"]/lr_scale
         self.opt_params["scaled_learning_rate"] = lr
@@ -73,17 +56,21 @@ class ProblemSpec:
                 P_i = strat_comp.comp_P_param(Q[i, :, :], self.problem_params["adjacency_matrix"][i, :, :], self.opt_params["use_abs_param"])
                 P = Q.at[i, :, :].set(P_i)
         else:
-            P = strat_comp.comp_P_param(Q, self.problem_params["adjacency_matrix"], self.opt_params["use_abs_param"])
+            P = strat_comp.comp_P_param(Q[0], self.problem_params["adjacency_matrix"], self.opt_params["use_abs_param"])
         return P
     
     def cnvg_check(self, iter, abs_P_diff_sum, loss_diff):
         def cnvg_check_inner(iter, new_val):
             self.cnvg_test_vals.append(new_val)
-            if iter > self.opt_params["cnvg_window_size"]:
+            # if iter >= self.opt_params["cnvg_window_size"]:
+            #     self.cnvg_MA_val = self.cnvg_MA_val + ((new_val - self.cnvg_test_vals.popleft())/self.opt_params["cnvg_window_size"])
+            # else:
+            #     self.cnvg_MA_val = np.mean(self.cnvg_test_vals)
+            if iter >= self.opt_params["cnvg_window_size"]:
                 self.cnvg_test_vals.popleft()
-            MA_val = np.mean(self.cnvg_test_vals)
+            self.cnvg_MA_val = np.mean(self.cnvg_test_vals)
             if iter > self.opt_params["cnvg_window_size"]:
-                converged = MA_val < self.opt_params["cnvg_radius"]
+                converged = self.cnvg_MA_val < self.opt_params["cnvg_radius"]
             else:
                 converged = False
             if iter + 1 == self.opt_params["max_iters"]:
@@ -97,86 +84,43 @@ class ProblemSpec:
         elif self.opt_params["cnvg_test_mode"] == "loss_diff":
             converged = cnvg_check_inner(iter, loss_diff)
         return converged
-
-    def update_metrics(self, Q, P, loss, Q_old, P_old, loss_old):
-        for metric in self.metrics:
-            metric.update_history(Q, P, loss, Q_old, P_old, loss_old, self.problem_params)
-            # ^^ TODO: update metric evaluation functions to expect these standard params
-
-    def compute_gradient(self, Q):
-        if self.problem_params["objective_function"] == 'Stackelberg':
-            grad = strat_comp.comp_avg_LCP_grad(Q, self.problem_params["adjacency_matrix"], self.F0, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'Stackelberg_pi':
-            grad = strat_comp.comp_avg_LCP_pi_grad(Q, self.problem_params["adjacency_matrix"], self.F0, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"]) 
-        elif self.problem_params["objective_function"] == 'weighted_Stackelberg':
-            grad = strat_comp.comp_avg_weighted_LCP_grad(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'weighted_Stackelberg_pi':
-            grad = strat_comp.comp_avg_weighted_LCP_pi_grad(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'weighted_Stackelberg_co_opt':
-            grad = strat_comp.comp_avg_greedy_co_opt_weighted_LCP_grad(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["B"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'weighted_Stackelberg_co_opt_pi':
-            grad = strat_comp.comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["B"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'multi_weighted_Stackelberg':
-            grad = strat_comp.comp_avg_weighted_multi_LCP_grad(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'multi_weighted_Stackelberg_pi':
-            grad = strat_comp.comp_avg_weighted_multi_LCP_pi_grad(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'MHT':
-            grad = strat_comp.comp_MHT_grad(Q, self.problem_params["adjacency_matrix"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'MHT_pi':
-            grad = strat_comp.comp_MHT_pi_grad(Q, self.problem_params["adjacency_matrix"], self.pi, self.opt_params["alpha"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'weighted_MHT_pi':
-            grad = strat_comp.comp_weighted_MHT_pi_grad(Q, self.problem_params["adjacency_matrix"], self.problem_params["weight_matrix"], self.pi, self.opt_params["alpha"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'ER_pi':
-            grad = strat_comp.comp_ER_pi_grad(Q, self.problem_params["adjacency_matrix"], self.pi, self.opt_params["alpha"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'RTE_pi':
-            grad = strat_comp.comp_RTE_pi_grad(Q, self.problem_params["adjacency_matrix"], self.pi, self.problem_params["N_eta"], self.opt_params["alpha"], self.opt_params["use_abs_param"])
-        elif self.problem_params["objective_function"] == 'weighted_RTE_pi':
-            grad = strat_comp.comp_weighted_RTE_pi_grad(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.pi, self.problem_params["N_eta"], self.opt_params["alpha"], self.opt_params["use_abs_param"])
-        return grad
     
-    def compute_loss(self, Q):
+    def compute_loss_and_gradient(self, Q):
         if self.problem_params["objective_function"] == 'Stackelberg':
-            loss = strat_comp.loss_LCP(Q, self.problem_params["adjacency_matrix"], self.F0, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_LCP)(Q, self.problem_params["adjacency_matrix"], self.F0, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'Stackelberg_pi':
-            loss = strat_comp.loss_LCP_pi(Q, self.problem_params["adjacency_matrix"], self.F0, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_LCP_pi)(Q, self.problem_params["adjacency_matrix"], self.F0, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'weighted_Stackelberg':
-            loss = strat_comp.loss_weighted_LCP(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_weighted_LCP)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'weighted_Stackelberg_pi':
-            loss = strat_comp.loss_weighted_LCP_pi(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_weighted_LCP_pi)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'weighted_Stackelberg_co_opt':
-            loss = strat_comp.loss_greedy_co_opt_weighted_LCP(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["B"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_greedy_co_opt_weighted_LCP)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["B"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'weighted_Stackelberg_co_opt_pi':
-            loss = strat_comp.loss_greedy_co_opt_weighted_LCP_pi(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["B"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_greedy_co_opt_weighted_LCP_pi)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["B"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+        elif self.problem_params["objective_function"] == 'multi_Stackelberg':
+            out = jax.value_and_grad(strat_comp.loss_multi_LCP)(Q, self.problem_params["adjacency_matrix"], self.F0, self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'multi_weighted_Stackelberg':
-            loss = strat_comp.loss_weighted_multi_LCP(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_weighted_multi_LCP)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'multi_weighted_Stackelberg_pi':
-            loss = strat_comp.loss_weighted_multi_LCP_pi(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_weighted_multi_LCP_pi)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'MHT':
-            loss = strat_comp.loss_MHT(Q, self.problem_params["adjacency_matrix"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_MHT)(Q, self.problem_params["adjacency_matrix"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'MHT_pi':
-            loss = strat_comp.loss_MHT_pi(Q, self.problem_params["adjacency_matrix"], self.pi, self.opt_params["alpha"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_MHT_pi)(Q, self.problem_params["adjacency_matrix"], self.pi, self.opt_params["alpha"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'weighted_MHT_pi':
-            loss = strat_comp.loss_weighted_MHT_pi(Q, self.problem_params["adjacency_matrix"], self.problem_params["weight_matrix"], self.pi, self.opt_params["alpha"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_weighted_MHT_pi)(Q, self.problem_params["adjacency_matrix"], self.problem_params["weight_matrix"], self.pi, self.opt_params["alpha"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'ER_pi':
-            loss = strat_comp.loss_ER_pi(Q, self.problem_params["adjacency_matrix"], self.pi, self.opt_params["alpha"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_ER_pi)(Q, self.problem_params["adjacency_matrix"], self.pi, self.opt_params["alpha"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'RTE_pi':
-            loss = strat_comp.loss_RTE_pi(Q, self.problem_params["adjacency_matrix"], self.pi, self.problem_params["N_eta"], self.opt_params["alpha"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_RTE_pi)(Q, self.problem_params["adjacency_matrix"], self.pi, self.problem_params["N_eta"], self.opt_params["alpha"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'weighted_RTE_pi':
-            loss = strat_comp.loss_weighted_RTE_pi(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.pi, self.problem_params["N_eta"], self.opt_params["alpha"], self.opt_params["use_abs_param"])
-        return loss
-    
-    # def compute_metrics(self, Q):
-    #     for metric in self.metrics:
-    #         if metric.metric_name == "my_metric":
-    #             metric.update_history(my_arg1, my_arg2)
-    #         else:
-    #             pass
-    #         pass
-    #     pass
+            out = jax.value_and_grad(strat_comp.loss_weighted_RTE_pi)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.pi, self.problem_params["N_eta"], self.opt_params["alpha"], self.opt_params["use_abs_param"])
+        return out
 
     def init_rand_Ps(self):
         # current implementation assumes same adjacency matrix for each robot
-        if 'multi' in self.problem_params["objective_function"]:
+        if self.problem_params["num_robots"] > 1:
             self.problem_params["adjacency_matrix"] = jnp.tile(self.problem_params["adjacency_matrix"], (self.problem_params["num_robots"], 1, 1))
         P = strat_comp.oop_init_rand_Ps(self.problem_params["adjacency_matrix"], self.problem_params["num_robots"], self.opt_params["num_init_Ps"], self.key)
         return P

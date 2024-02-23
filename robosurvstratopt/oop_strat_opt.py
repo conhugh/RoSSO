@@ -16,7 +16,7 @@ import optax
 import graph_comp
 import strat_comp
 import strat_viz
-from oop_demo import ProblemSpec
+from problem_spec import ProblemSpec
 
 # StratParams = namedtuple("StratParams", "Q, P, Q_old, P_old")
 
@@ -60,9 +60,9 @@ def run_optimizer(problem : ProblemSpec, Q):
         Q_old = Q
         P_old = P
         loss_old = loss
-        # gradient computation (should we be using value_and_grad here?)
-        grad = problem.compute_gradient(Q)
-        loss = problem.compute_loss(Q)
+        # loss = problem.compute_loss(Q)
+        # grad = problem.compute_gradient(Q)
+        (loss, grad) = problem.compute_loss_and_gradient(Q)
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
         P = problem.apply_parametrization(Q)

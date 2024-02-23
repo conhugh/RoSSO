@@ -65,7 +65,7 @@ def oop_init_rand_Ps(A, N, num_init_Ps, key):
             P0 = A*jax.random.uniform(subkey, A_shape)
             P0 = jnp.matmul(jnp.diag(1/jnp.sum(P0, axis=1)), P0)
             initP = initP.at[i, :, :].set(P0)
-        initP = jnp.squeeze(initP)  # avoids issue w gradient computation when N=1
+        initP = jnp.squeeze(initP)
         initPs.append(initP)
     return initPs
 
@@ -114,6 +114,32 @@ def precompute_multi(n, N):
 ############################################################
 # Stackelberg formulation
 ############################################################
+@functools.partial(jit, static_argnames=['tau'])
+def compute_FHT_probs(P, F0, tau):
+    """
+    Compute First-Hitting-Time Probability Matrices.
+
+    Parameters
+    ----------
+    P : jaxlib.xla_extension.DeviceArray 
+        Transition probability matrix.
+    F0 : jaxlib.xla_extension.DeviceArray 
+        Placeholder to be populated with FHT Probability matrices. 
+    tau : int
+        Intruder's attack duration. 
+    
+    Returns
+    -------
+    jaxlib.xla_extension.DeviceArray
+        Tensor containing stack of First-Hitting-TimeProbability matrices. 
+    
+    """
+    F0 = F0.at[:, :, 0].set(P)
+    for i in range(1, tau):
+        F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))    
+    return F0
+
+
 @functools.partial(jit, static_argnames=['tau'])
 def compute_cap_probs(P, F0, tau):
     """
@@ -473,27 +499,26 @@ def comp_avg_greedy_co_opt_weighted_LCP_pi_grad(Q, A, D_idx, W, w_max, B, pi, al
 ############################################################
 # Multi-Agent Stackelberg formulation
 ############################################################
-@functools.partial(jit, static_argnames=['tau'])
-def compute_multi_cap_probs(Ps, F0s, combs, tau):
-    n = jnp.shape(Ps)[0]
-    N = Ps.shape[2]
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'tau'])
+def compute_multi_cap_probs(Ps, F0s, combs, N, combs_len, tau):
+    n = Ps.shape[1]
     for r in range(N):
-        F0s = F0s.at[:, :, 0, r].set(Ps[:, :, r])
+        F0s = F0s.at[r, :, :, 0].set(Ps[r, :, :])
         for i in range(1, tau):
-            F0s = F0s.at[:, :, i, r].set(jnp.matmul(Ps, (F0s[:, :, i - 1, r] - jnp.diag(jnp.diag(F0s[:, :, i - 1, r])))))
-        indiv_cap_probs = jnp.sum(F0s, axis=2)
+            F0s = F0s.at[r, :, :, i].set(jnp.matmul(Ps[r, :, :], (F0s[r, :, :, i - 1] - jnp.diag(jnp.diag(F0s[r, :, :, i - 1])))))
+        indiv_cap_probs = jnp.sum(F0s, axis=3)
 
-    cap_probs = jnp.zeros(len(combs))
-    for i in range(len(combs)):
+    cap_probs = jnp.zeros(combs_len)
+    for i in range(combs_len):
         idx_vec = combs[i]
-        not_cap_prob = jnp.prod(1 - indiv_cap_probs[idx_vec[:-1], idx_vec[-1], jnp.arange(N)])
+        not_cap_prob = jnp.prod(1 - indiv_cap_probs[jnp.arange(N), idx_vec[:-1], idx_vec[-1]])
         cap_probs = cap_probs.at[i].set(1 - not_cap_prob) 
 
     return jnp.reshape(cap_probs, (n**N, n), order='F')
 
-@functools.partial(jit, static_argnames=['tau', 'num_LCPs'])
-def compute_multi_LCPs(Ps, F0s, tau, num_LCPs=1):
-    cap_probs = compute_multi_cap_probs(Ps, F0s, tau)
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'tau', 'num_LCPs'])
+def compute_multi_LCPs(Ps, F0s, combs, N, combs_len, tau, num_LCPs=1):
+    cap_probs = compute_multi_cap_probs(Ps, F0s, combs, N, combs_len, tau)
     if num_LCPs == 1:
         lcps = jnp.min(cap_probs)
     elif num_LCPs > 1:
@@ -503,20 +528,19 @@ def compute_multi_LCPs(Ps, F0s, tau, num_LCPs=1):
     return lcps
 
 # Loss function with constraints included in parametrization
-@functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
-def loss_multi_LCP(Qs, As, F0s, tau, num_LCPs=1, use_abs_param=True):
-    N = Qs.shape[2]
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'tau', 'num_LCPs', 'use_abs_param'])
+def loss_multi_LCP(Qs, As, F0s, combs, N, combs_len, tau, num_LCPs=1, use_abs_param=True):
     Ps = jnp.zeros_like(Qs)
     for i in range(N):
-        P = comp_P_param(Qs[:, :, i], As[:, :, i], use_abs_param)
-        Ps = Ps.at[:, :, i].set(P)
-    return jnp.mean(compute_multi_LCPs(Ps, F0s, tau, num_LCPs))
+        P = comp_P_param(Qs[i, :, :], As[i, :, :], use_abs_param)
+        Ps = Ps.at[i, :, :].set(P)
+    return jnp.mean(compute_multi_LCPs(Ps, F0s, combs, N, combs_len, tau, num_LCPs))
 
 # Autodiff parametrized loss function
 _comp_multi_LCP_grad = jacrev(loss_multi_LCP)
-@functools.partial(jit, static_argnames=['tau', 'num_LCPs', 'use_abs_param'])
-def comp_avg_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs=1, use_abs_param=True):
-    grad = _comp_multi_LCP_grad(Qs, As, F0s, tau, num_LCPs, use_abs_param)
+@functools.partial(jit, static_argnames=['N', 'combs_len', 'tau', 'num_LCPs', 'use_abs_param'])
+def comp_avg_multi_LCP_grad(Qs, As, F0s, combs, N, combs_len, tau, num_LCPs=1, use_abs_param=True):
+    grad = _comp_multi_LCP_grad(Qs, As, F0s, combs, N, combs_len, tau, num_LCPs, use_abs_param)
     return grad
 
 ############################################################
