@@ -10,9 +10,6 @@ class MetricTracker:
         self.metric_name = metric_name
         self.metric_history = []
         self.evaluate_function = self._get_evaluate_function(metric_name)
-        # self.track_while_optimizing = True
-        # self.most_recent_value = None
-
 
     # def param_unpack(f):
     #     @wraps(f)
