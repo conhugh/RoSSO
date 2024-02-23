@@ -27,7 +27,7 @@ def run_test_set(problem_set):
         times = run_test(problem)
         run_times.append(times)
 
-def run_test(problem: ProblemSpec):   
+def run_test(problem: ProblemSpec):
     problem.initialize()
     cnvg_times = []
     Qs = problem.init_rand_Ps()
@@ -66,11 +66,10 @@ def run_optimizer(problem : ProblemSpec, Q):
         updates, opt_state = optimizer.update(grad, opt_state)
         Q = optax.apply_updates(Q, updates)
         P = problem.apply_parametrization(Q)
-        # 
         abs_P_diff_sum = jnp.sum(jnp.abs(P - P_old))
         loss_diff = jnp.abs((loss - loss_old)/loss_old)
-        # return Q, P, loss, Q_old, P_old, loss_old, opt_state
-        return Q, P, abs_P_diff_sum, loss, loss_diff, opt_state
+        return Q, P, loss, Q_old, P_old, loss_old, opt_state
+        # return Q, P, abs_P_diff_sum, loss, loss_diff, opt_state
     
     # Run gradient-based optimization process:
     iter = 0 
@@ -84,7 +83,6 @@ def run_optimizer(problem : ProblemSpec, Q):
         ic(opt_state)
         # Q, P, loss, Q_old, P_old, loss_old, opt_state = step(Q, P, loss, opt_state)
         # check for convergence:
-
         converged = problem.cnvg_check(iter, abs_P_diff_sum, loss_diff)
         iter = iter + 1
 

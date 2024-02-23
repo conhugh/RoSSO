@@ -27,6 +27,7 @@ def abs_P_diff_max(P, P_old):
 
 
 def min_cap_prob_idx_Stackelberg(P, problem_params):
+# def min_cap_prob_idx_Stackelberg(P, P_old, problem_params):
 
     F0 = problem_params["F0"]
     tau = problem_params["tau"]

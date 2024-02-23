@@ -57,7 +57,6 @@ def oop_init_rand_Ps(A, N, num_init_Ps, key):
     if N > 1:
         A = A[0, :, :]
     A_shape = jnp.shape(A)
-    # ic(A_shape)
     initPs = []
     for _ in range(num_init_Ps):
         initP = jnp.zeros((N, A_shape[0], A_shape[1]),  dtype='float32')

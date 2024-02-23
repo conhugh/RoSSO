@@ -141,8 +141,8 @@ class ProblemSpec:
 
     def init_rand_Ps(self):
         # current implementation assumes same adjacency matrix for each robot
-        if self.problem_params["num_robots"] > 1:
-        # if 'multi' in self.problem_params["objective_function"]:
+        # if self.problem_params["num_robots"] > 1:
+        if 'multi' in self.problem_params["objective_function"]:
             self.problem_params["adjacency_matrix"] = jnp.tile(self.problem_params["adjacency_matrix"], (self.problem_params["num_robots"], 1, 1))
         
         P = strat_comp.oop_init_rand_Ps(self.problem_params["adjacency_matrix"], self.problem_params["num_robots"], self.opt_params["num_init_Ps"], self.key)
