@@ -80,8 +80,8 @@ def run_optimizer(problem : ProblemSpec, Q):
     # while not converged:
         # apply update to P matrix, and parametrization Q:
         Q, P, abs_P_diff_sum, loss, loss_diff, opt_state = step(Q, P, loss, opt_state)
-        ic(opt_state)
-        # Q, P, loss, Q_old, P_old, loss_old, opt_state = step(Q, P, loss, opt_state)
+        # track metrics:
+        problem.update_metrics_tracking(P)
         # check for convergence:
         converged = problem.cnvg_check(iter, abs_P_diff_sum, loss_diff)
         iter = iter + 1

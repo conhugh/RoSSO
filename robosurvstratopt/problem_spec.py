@@ -48,7 +48,7 @@ class ProblemSpec:
         elif 'weighted_RTE_pi' in self.problem_params["objective_function"]:
             self.D_idx = strat_comp.precompute_weighted_RTE_pi(self.problem_params["weight_matrix"], self.w_max, self.problem_params["N_eta"])
 
-    def update_metrics(self, P):
+    def update_metrics_tracking(self, P):
         for metric in self.metrics:
             metric.update_history(P, self.problem_params)
 
