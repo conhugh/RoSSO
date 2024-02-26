@@ -1,10 +1,5 @@
-import inspect
-from inspect import signature
-
-from icecream import ic
-import jax
+# import jax
 import jax.numpy as jnp
-import numpy as np
 
 import graph_comp
 import strat_comp
@@ -30,19 +25,18 @@ def MCP_attack_node_index_Stackelberg(P, problem_params):
     F0 = problem_params["F0"]
     tau = problem_params["tau"]
     F = strat_comp.compute_cap_probs(P, F0, tau)
-    return jnp.argmin(F, axis=1)
+    return jnp.argmin(jnp.min(F, axis=1))
  
 def MCP_robot_node_index_Stackelberg(P, problem_params):
     F0 = problem_params["F0"]
     tau = problem_params["tau"]
     F = strat_comp.compute_cap_probs(P, F0, tau)
-    return jnp.argmin(F, axis=0)
+    return jnp.argmin(jnp.min(F, axis=0))
 
 def diam_pair_shortest_path_cap_probs_Stackelberg(P, problem_params):
     diam_pairs = graph_comp.get_diametric_pairs(problem_params["adjacency_matrix"])
     FHT_mats = strat_comp.compute_FHT_probs(P, problem_params["F0"], problem_params["tau"])
     return strat_comp.compute_SPCPs(problem_params["adjacency_matrix"], FHT_mats, diam_pairs)
-
 
 METRICS_REGISTRY = {
     "LCPs_range_Stackelberg" : lowest_cap_probs_range_Stackelberg,

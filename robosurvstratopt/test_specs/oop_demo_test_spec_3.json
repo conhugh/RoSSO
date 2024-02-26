@@ -1,20 +1,20 @@
 {
     "problem_spec_name": "OOP_Demo3",
     "problem_params": {
-        "graph_name": "randomtree_D3_N12",
-        "graph_code": "N12_117617714310483574784",
+        "graph_name": "complete_N12",
+        "graph_code": "N12_147573952589676412927",
         "num_robots": 1,
         "objective_function": "Stackelberg",
-        "tau": 10
+        "tau": 4
     },
     "optimizer_params": {
         "rng_seed": 0,
-        "num_init_Ps": 3,
+        "num_init_Ps": 1,
         "num_LCPs": 1,
         "use_edge_weights": false,
         "use_abs_param": true,
         "alpha": 1000,
-        "max_iters": 200,
+        "max_iters": 1000,
         "optimizer_name": "sgd",
         "nominal_learning_rate": 1,
         "lr_schedule_type": "constant",

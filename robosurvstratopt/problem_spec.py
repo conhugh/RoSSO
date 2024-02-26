@@ -1,6 +1,5 @@
 from collections import deque
 import os
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -34,11 +33,11 @@ class ProblemSpec:
         if 'multi' in self.problem_params["objective_function"]:
             self.combs, self.combs_len = strat_comp.precompute_multi(self.n, self.problem_params["num_robots"])
         if 'multi_Stackelberg' in self.problem_params["objective_function"]:
-            self.F0 = jnp.full((self.problem_params["num_robots"], self.n, self.n, self.problem_params["tau"]), jnp.nan)
+            self.problem_params["F0"] = jnp.full((self.problem_params["num_robots"], self.n, self.n, self.problem_params["tau"]), jnp.nan)
         if self.problem_params["num_robots"] > 1 and 'multi' not in self.problem_params["objective_function"]:
             raise ValueError("num_robots is greater than 1 and the objective function is not a multi-robot objective!")
         elif 'Stackelberg' in self.problem_params["objective_function"]:
-            self.F0 = jnp.full((self.n, self.n, self.problem_params["tau"]), jnp.nan)
+            self.problem_params["F0"] = jnp.full((self.n, self.n, self.problem_params["tau"]), jnp.nan)
         if 'RTE' in self.problem_params["objective_function"]:
             if 'weighted' in self.problem_params["objective_function"]:
                 self.problem_params["N_eta"] = int(jnp.ceil(self.w_max/(self.problem_params["eta"]*jnp.min(jnp.array(self.pi)))) - 1)
@@ -104,9 +103,9 @@ class ProblemSpec:
     
     def compute_loss_and_gradient(self, Q):
         if self.problem_params["objective_function"] == 'Stackelberg':
-            out = jax.value_and_grad(strat_comp.loss_LCP)(Q, self.problem_params["adjacency_matrix"], self.F0, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_LCP)(Q, self.problem_params["adjacency_matrix"], self.problem_params["F0"], self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'Stackelberg_pi':
-            out = jax.value_and_grad(strat_comp.loss_LCP_pi)(Q, self.problem_params["adjacency_matrix"], self.F0, self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_LCP_pi)(Q, self.problem_params["adjacency_matrix"], self.problem_params["F0"], self.problem_params["tau"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'weighted_Stackelberg':
             out = jax.value_and_grad(strat_comp.loss_weighted_LCP)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'weighted_Stackelberg_pi':
@@ -116,7 +115,7 @@ class ProblemSpec:
         elif self.problem_params["objective_function"] == 'weighted_Stackelberg_co_opt_pi':
             out = jax.value_and_grad(strat_comp.loss_greedy_co_opt_weighted_LCP_pi)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.problem_params["weight_matrix"], self.w_max, self.problem_params["B"], self.pi, self.opt_params["alpha"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'multi_Stackelberg':
-            out = jax.value_and_grad(strat_comp.loss_multi_LCP)(Q, self.problem_params["adjacency_matrix"], self.F0, self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
+            out = jax.value_and_grad(strat_comp.loss_multi_LCP)(Q, self.problem_params["adjacency_matrix"], self.problem_params["F0"], self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'multi_weighted_Stackelberg':
             out = jax.value_and_grad(strat_comp.loss_weighted_multi_LCP)(Q, self.problem_params["adjacency_matrix"], self.D_idx, self.combs, self.problem_params["num_robots"], self.combs_len, self.problem_params["weight_matrix"], self.w_max, self.problem_params["tau"], self.opt_params["num_LCPs"], self.opt_params["use_abs_param"])
         elif self.problem_params["objective_function"] == 'multi_weighted_Stackelberg_pi':

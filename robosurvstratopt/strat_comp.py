@@ -1,6 +1,5 @@
 # Computation of quantities relevant to optimization of stochastic surveillance strategies
 import functools
-from icecream import ic
 import itertools
 import jax
 import jax.numpy as jnp
