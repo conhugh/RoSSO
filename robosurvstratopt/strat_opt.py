@@ -104,8 +104,8 @@ def setup_optimizer(opt_params):
     return optimizer
 
 if __name__ == '__main__':
-    # fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/test_specs/oop_demo_test_spec.json"
-    fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/test_specs/oop_demo_test_spec_3.json"
+    fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/test_specs/oop_demo_test_spec.json"
+    # fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/test_specs/oop_demo_test_spec_3.json"
     results_directory = os.getcwd() + "/results/local/oop_demo_3"
     with open(fn, "r") as problem_spec_file:
         json_string = problem_spec_file.read()
