@@ -10,7 +10,7 @@ import seaborn as sns
 
 import graph_comp
 import strat_comp
-from test_spec import TestSpec
+from deprecated.test_spec import TestSpec
 
 def plot_trans_probs_2D(init_P_mats, opt_P_mats, init_run_nums, opt_run_nums, title, path):
     """
