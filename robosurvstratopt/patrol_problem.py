@@ -8,14 +8,13 @@ import graph_comp
 from metric_tracker import MetricTracker
 import strat_comp
 
-class ProblemSpec:
+class PatrolProblem:
     def __init__(self, name, problem_params, opt_params, results_directory):
         self.name = name
         self.results_dir = results_directory
         self.problem_params = problem_params
         self.opt_params = opt_params
         self.metrics = [MetricTracker(m_name) for m_name in opt_params["metrics"]]
-        
 
     def initialize(self):
         self.key = jax.random.PRNGKey(self.opt_params["rng_seed"])

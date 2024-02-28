@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from problem_spec import ProblemSpec
+from patrol_problem import PatrolProblem
 
 def run_test_set(problem_set):
     # run all tests defined in test spec:
@@ -17,7 +17,7 @@ def run_test_set(problem_set):
         times = run_test(problem)
         run_times.append(times)
 
-def run_test(problem: ProblemSpec):
+def run_test(problem: PatrolProblem):
     problem.initialize()
     cnvg_times = []
     Qs = problem.init_rand_Ps()
@@ -33,7 +33,7 @@ def run_test(problem: ProblemSpec):
         print("--- Optimization took: %s seconds ---" % (cnvg_time))
     return cnvg_times
 
-def run_optimizer(problem : ProblemSpec, Q):
+def run_optimizer(problem : PatrolProblem, Q):
     optimizer = setup_optimizer(problem.opt_params)
     opt_state = optimizer.init(Q)
 
@@ -104,8 +104,8 @@ def setup_optimizer(opt_params):
     return optimizer
 
 if __name__ == '__main__':
-    fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/test_specs/oop_demo_test_spec.json"
-    # fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/test_specs/oop_demo_test_spec_3.json"
+    fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/problem_specs/demo_problem_spec.json"
+    # fn = test_spec_filepath= os.getcwd() + "/robosurvstratopt/problem_specs/demo_problem_spec_3.json"
     results_directory = os.getcwd() + "/results/local/oop_demo_3"
     with open(fn, "r") as problem_spec_file:
         json_string = problem_spec_file.read()
@@ -113,5 +113,5 @@ if __name__ == '__main__':
         name = problem_spec_dict["problem_spec_name"]
         problem_params = problem_spec_dict["problem_params"]
         opt_params = problem_spec_dict["optimizer_params"]
-        problem_spec = ProblemSpec(name, problem_params, opt_params, results_directory)
+        problem_spec = PatrolProblem(name, problem_params, opt_params, results_directory)
         run_test(problem_spec)
