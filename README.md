@@ -1,7 +1,7 @@
 # RoSSO
 RoSSO is a library for robotic surveillance strategy optimization. The strategies are represented by Markov chains. RoSSO utilizes JAX and Optax to provide a gradient-based optimization framework with a modular architecture. 
 
-## Installing Dependencies:
+## Installation:
 It is recommended to use a virtual environment when installing dependencies. If unfamiliar, see https://docs.python.org/3/library/venv.html.
 
 If you only want to run computations locally and only on CPU, all required packages can be installed from the requirements.txt file after cloning the repo, as follows: 
@@ -17,37 +17,42 @@ For reference, on a Dell XPS 15 laptop with an Intel Core i7-10875H CPU (2.30 GH
 
 Note that **if you have a Windows machine**, installing these dependencies will be easier if you first set up WSL2 and install Ubuntu (see tutorial here: https://ubuntu.com/tutorials/install-ubuntu-on-wsl2-on-windows-11-with-gui-support#1-overview). As of January 2023, this is supposed to be possible on Windows 10, and Windows 11 is no longer required. Using WSL2 + Ubuntu makes the process simpler, both because Jax provides wheels for installation on Linux only (which you can use with WSL2) and because installing the CUDA toolkit is easier if you download and use the "WSL-Ubuntu" version.
 
-## Comments on Organization:
-Overall layout of the codebase is as follows:
-#### GraphGen.py: 
-      - generating, storing, and loading environment graphs, 
-      - extracting simple information about those graphs (e.g., graph diameter, set of leaf nodes, etc.) 
-#### StratCompJax.py:
-      - initializing surveillance strategies 
-      - computing capture probabilities 
-      - computing various gradients (including the MCP gradient) 
-      - projecting updated strategies onto the constraint set (no longer used) 
-      - parametrizing the constraints (see Docs/'Notes on Parametrization vs Projection.pdf')
-      - accounting for symmetries in comparing grid graph strategies 
-#### StratOptOptax.py: 
-      - testing the performance of various gradient-based optimization methods 
-      - loading parameters/settings for desired optimization method 
-      - running gradient-based optimization for provided graphs and initial strategies 
-      - checking for strategy convergence during the optimization process 
-      - tracking and saving various metrics used to visualize performance of desired optimization method 
-#### StratViz.py: 
-      - visualizing surveillance strategies by drawing and labeling graphs 
-      - visualizing metrics tracked during optimization processes 
-      - visualizing statistics about the results of strategy optimization processes 
-#### TestSpec.py:
-      - defines a "TestSpec", which stores information about computational studies including: 
-          - environment graphs, with encodings that speed up adjacency matrix generation 
-          - number of random initial strategies to use for each graph 
-          - settings to use for the optimization process 
-      - the TestSpec class enables saving and validates TestSpecs before running optimization processes 
-#### Testing.py: 
-      - Connor's scratch paper -- recently used for studying tree graph properties
-#### ModifyTestSpec.py:
-      - Not currently used
-#### StratOptColab.ipynb:
-      - Was used briefly to try running optimizations on GPU and TPU in Google Colab, not currently used
+## Quick Start Guide:
+
+## Repo Organization:
+
+### robosurvstratopt:
+#### graph_gen.py: 
+graph_gen.py provides methods for generating the adjacency and weight matrices corresponding to a variety of graph topologies including star graphs, complete graphs, grid graphs, etc. 
+
+#### graph_comp.py:
+graph_comp.py provides methods for analyzing, encoding, and decoding a given adjacency matrix. 
+
+#### strat_comp.py: 
+strat_comp.py contains methods defining a variety of objective functions for Markov chain optimization. Additionally, a few miscellaneous methods are provided at the top for purposes including generating random initial patrol strategies, pre-computing certain relevant quantities, and performing the parametrization that enforces a valid Markov chain transition matrix.
+ 
+#### patrol_problem.py:
+patrol_problem.py contains the definition of the PatrolProblem class. Notable methods contained within this class include initialize() which initializes various parameters based on the values provided in the .json file, compute_loss_and_gradient() which utilizes JAX's reverse-mode autodiff functionality to compute loss and gradient values for the various objective functions implemented in strat_comp.py, and cnvg_check() which keeps track of a moving average for determining convergence to the specified radius.
+
+#### metric_tracker.py:
+
+
+#### metric_definitions.py:
+
+
+#### strat_opt.py: 
+strat_opt.py is the main module that performs the gradient-based Markov chain optimization. run_test() takes a given PatrolProblem instance and optimizes each randomly initialized patrol strategy. run_optimizer() performs the first-order optimization of each patrol strategy using the Optax library. The step() function performs a single iteration of the desired optimization algorithm and is decorated with JAX's just-in-time compilation tag for improved performance. setup_optimizer() instantiates the appropriate Optax optimizer as specified in the .json file. 
+
+#### strat_viz.py: 
+strat_viz.py provides a host of useful methods for visualizing graphs, optimized patrol strategies, and the evolution of other metrics of interest during optimization. 
+      
+## Extending This Repo:
+
+### Adding a new objective function:
+1. Define the loss function in strat_comp.py. The first argument provided should always be Q, the arbitrary nxn matrix whose parametrization yields the Markov chain transition matrix P. Be sure to include the jit tag and specify the static arguments (see https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#python-control-flow-jit for more information).
+2. Create a short string identifier for the new objective function and specify it in your .json file. Also, define within the .json file any new parameters that will be needed. 
+3. Add a corresponding case to the if-elif structure in compute_loss_and_gradient() in patrol_problem.py. Also, ensure that any new parameters defined in your .json file are handled appropriately in initialize().
+
+### Adding a new metric:
+
+
