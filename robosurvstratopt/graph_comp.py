@@ -1,6 +1,7 @@
 # Functionality related to analyzing, encoding, and decoding binary adjacency matrices for a variety of environment graphs 
 import jax.numpy as jnp
 import numpy as np
+import graph_gen
 
 def gen_graph_code(A):
     """
@@ -443,3 +444,9 @@ def sq_grid_rot270(M, gridrows, gridcols):
     M = grid_row_reflect(M, gridrows, gridcols)
     M = sq_grid_transpose(M, gridrows, gridcols)
     return M
+
+if __name__ == '__main__':
+    # A = graph_gen.gen_star_G(8)
+    A = graph_gen.gen_line_G(10)
+    print(A[0])
+    print(gen_graph_code(A[0]))
