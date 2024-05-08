@@ -138,7 +138,6 @@ def compute_FHT_probs(P, F0, tau):
         F0 = F0.at[:, :, i].set(jnp.matmul(P, (F0[:, :, i - 1] - jnp.diag(jnp.diag(F0[:, :, i - 1])))))    
     return F0
 
-
 @functools.partial(jit, static_argnames=['tau'])
 def compute_cap_probs(P, F0, tau):
     """

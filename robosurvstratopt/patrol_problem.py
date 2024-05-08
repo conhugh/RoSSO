@@ -29,12 +29,12 @@ class PatrolProblem:
             self.w_max = int(jnp.max(self.problem_params["weight_matrix"]))
             if self.problem_params["tau"] < self.w_max:
                 raise ValueError("tau is less than the maximum travel time!")
+        if self.problem_params["num_robots"] > 1 and 'multi' not in self.problem_params["objective_function"]:
+            raise ValueError("num_robots is greater than 1 and the objective function is not a multi-robot objective!")
         if 'multi' in self.problem_params["objective_function"]:
             self.combs, self.combs_len = strat_comp.precompute_multi(self.n, self.problem_params["num_robots"])
         if 'multi_Stackelberg' in self.problem_params["objective_function"]:
             self.problem_params["F0"] = jnp.full((self.problem_params["num_robots"], self.n, self.n, self.problem_params["tau"]), jnp.nan)
-        if self.problem_params["num_robots"] > 1 and 'multi' not in self.problem_params["objective_function"]:
-            raise ValueError("num_robots is greater than 1 and the objective function is not a multi-robot objective!")
         elif 'Stackelberg' in self.problem_params["objective_function"]:
             self.problem_params["F0"] = jnp.full((self.n, self.n, self.problem_params["tau"]), jnp.nan)
         if 'RTE' in self.problem_params["objective_function"]:
