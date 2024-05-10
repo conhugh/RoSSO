@@ -20,6 +20,10 @@ Note that **if you have a Windows machine**, installing these dependencies will 
 ## Quick Start Guide:
 
 ## Repo Organization:
+Comment on:
+ - problem_specs
+ - PatrolProblem class
+ - 
 
 ### robosurvstratopt:
 #### graph_gen.py: 
@@ -35,10 +39,10 @@ strat_comp.py contains methods defining a variety of objective functions for Mar
 patrol_problem.py contains the definition of the PatrolProblem class. Notable methods contained within this class include initialize() which initializes various parameters based on the values provided in the .json file, compute_loss_and_gradient() which utilizes JAX's reverse-mode autodiff functionality to compute loss and gradient values for the various objective functions implemented in strat_comp.py, and cnvg_check() which keeps track of a moving average for determining convergence to the specified radius.
 
 #### metric_tracker.py:
-
+metric_tracker.py defines the MetricTracker class, which implements some common "overhead" infrastructure which is needed when tracking any metric throughout an optimization process. The functions defining each individual metric are implemented within metric_definitions.py. Using MetricTracker objects to track quantities of interest during optimization runs avoids cluttering the code within the main optimization loop, found in strat_opt.py. See the section "Adding a New Metric" below for additional details.
 
 #### metric_definitions.py:
-
+metric_definitions.py is a module which is used to define new functions that compute quantities of interest (i.e., "metrics") that can be tracked during the optimization process. These functions are given names via the keys in the "METRICS_REGISTRY". These names can then be listed within a problem specification JSON file to specify which metrics shall be tracked. 
 
 #### strat_opt.py: 
 strat_opt.py is the main module that performs the gradient-based Markov chain optimization. run_test() takes a given PatrolProblem instance and optimizes each randomly initialized patrol strategy. run_optimizer() performs the first-order optimization of each patrol strategy using the Optax library. The step() function performs a single iteration of the desired optimization algorithm and is decorated with JAX's just-in-time compilation tag for improved performance. setup_optimizer() instantiates the appropriate Optax optimizer as specified in the .json file. 
