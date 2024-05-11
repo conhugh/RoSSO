@@ -1,5 +1,21 @@
 # RoSSO
-RoSSO is a library for robotic surveillance strategy optimization. The strategies are represented by Markov chains. RoSSO utilizes JAX and Optax to provide a gradient-based optimization framework with a modular architecture. 
+RoSSO is a Python library for robotic surveillance strategy optimization. RoSSO utilizes JAX and Optax to provide a gradient-based optimization framework with a modular architecture. 
+
+## Intro:
+RoSSO is focused on a class of robotic surveillance problems with the following common structure:
+ - One or more mobile robots patrolling an environment to deter bad actors
+ - Environment modeled as a graph wherein: 
+      - nodes correspond to locations of interest to bad actors
+      - edges represent the paths that the robots can take between locations
+      - edge lengths represent the robots' required travel times between locations
+ - Robots and bad actors both take actions in discrete time
+ - Robots' navigation of the environment is described by a Markov Chain (representing a "surveillance strategy")
+
+ This structure allows for considerable variety in the details of the problem formulation. For example, explicit models for the capabilities of the robots and bad actors can be incorporated, patrol teams can be comprised of heterogeneous robot types, nodes can be given varying priority, etc. Recent literature also includes cases where no model for the bad actor is specified at all, and instead various heuristics are used to evaluate surveillance strategies for speed or unpredictability of coverage. 
+ 
+ Note that in using Markov Chains for surveillance strategies, this structure does allow for deterministic patrolling of the graph. However, deterministic patrols are typically less effective than stochastic patrol strategies, as they are easier to exploit in most problem formulations. The superiority of stochastic strategies can arise either implicitly (through choice of heuristic) or explicitly (through modeling of bad actors capabilities). 
+ 
+ As of ICRA 2024, RoSSO includes implementations of a few such problems, but the codebase is designed to be easily extended to study new ones. 
 
 ## Installation:
 It is recommended to use a virtual environment when installing dependencies. If unfamiliar, see https://docs.python.org/3/library/venv.html.
@@ -25,6 +41,13 @@ Comment on:
  - PatrolProblem class
  - 
 
+### problem_specs:
+To support researchers in running repeatable, traceable, and organized computational studies at scale, RoSSO's architecture is designed such that all the information specifying a surveillance problem and a corresponding strategy optimization method is expected to be centralized. 
+
+Any investigation involving one environment graph and one optimization approach can be fully specified by a single JSON file, which we refer to as a "problem spec". When running a computational study, a copy of the corresponding problem_spec JSON file will be saved together with the optimization results and any metrics which were tracked. This ensures that the parameters which led to each outcome can easily be determined retroactively.
+
+Each JSON file is restricted to representing a single graph and a single optimization method in order to prevent the contents of each JSON file from becoming quite complex and unwieldy. Of course, you can modify the code to change this, but we do not recommend doing so. When sweeping hyperparameters, for example, it is recommended to programatically generate the necessary JSON files for each parameter combination. This may seem inefficient, but in practice, it turns out to be extremely helpful to associate a concise, isolated, and easily-readable problem spec with each set of results. 
+
 ### robosurvstratopt:
 #### graph_gen.py: 
 graph_gen.py provides methods for generating the adjacency and weight matrices corresponding to a variety of graph topologies including star graphs, complete graphs, grid graphs, etc. 
@@ -39,7 +62,7 @@ strat_comp.py contains methods defining a variety of objective functions for Mar
 patrol_problem.py contains the definition of the PatrolProblem class. Notable methods contained within this class include initialize() which initializes various parameters based on the values provided in the .json file, compute_loss_and_gradient() which utilizes JAX's reverse-mode autodiff functionality to compute loss and gradient values for the various objective functions implemented in strat_comp.py, and cnvg_check() which keeps track of a moving average for determining convergence to the specified radius.
 
 #### metric_tracker.py:
-metric_tracker.py defines the MetricTracker class, which implements some common "overhead" infrastructure which is needed when tracking any metric throughout an optimization process. The functions defining each individual metric are implemented within metric_definitions.py. Using MetricTracker objects to track quantities of interest during optimization runs avoids cluttering the code within the main optimization loop, found in strat_opt.py. See the section "Adding a New Metric" below for additional details.
+metric_tracker.py defines the MetricTracker class, which provides infrastructure for handling typical "overhead" tasks involved in tracking any metric of interest throughout the iterative strategy optimization process. Using MetricTracker objects streamlines the process of defining new metrics and selecting metrics to track during a given computational study. This approach also allows for cleaner code in the main optimization loop (found in strat_opt.py). See the section "Adding a New Metric" below for additional details.
 
 #### metric_definitions.py:
 metric_definitions.py is a module which is used to define new functions that compute quantities of interest (i.e., "metrics") that can be tracked during the optimization process. These functions are given names via the keys in the "METRICS_REGISTRY". These names can then be listed within a problem specification JSON file to specify which metrics shall be tracked. 
