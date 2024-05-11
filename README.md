@@ -43,6 +43,8 @@ To support researchers in running repeatable, traceable, and organized computati
 
 Any study involving one environment graph and one optimization approach can be fully specified by a single JSON file, which we refer to as a "problem spec". When running a computational study, a copy of the corresponding problem_spec JSON file will be saved together with the optimized results and any tracked metrics. This ensures that the parameters which led to each outcome can easily be determined retroactively.
 
+The parameters contained in each problem_spec JSON file are split into two groups: parameters pertaining to the surveillance problem formulation ("problem_params") and those pertaining ot the optimization approach to be used ("optimizer_params"). See the examples in the `robosurvstratopt/problem_specs` directory for more details.
+
 Each JSON file is restricted to representing a single graph and a single optimization method in order to prevent the contents of each JSON file from becoming quite complex and unwieldy. Of course, you can modify the code to change this, but we do not recommend doing so. When sweeping hyperparameters, for example, it is recommended to programatically generate the necessary JSON files for each parameter combination. This may seem inefficient, but in practice, it turns out to be extremely helpful to associate a concise, isolated, and easily-readable problem spec with each set of results. 
 
 #### graph_gen.py: 
@@ -55,13 +57,13 @@ graph_comp.py provides methods for analyzing, encoding, and decoding a given adj
 strat_comp.py contains methods defining a variety of objective functions for Markov chain optimization. Additionally, a few miscellaneous methods are provided at the top for purposes including generating random initial patrol strategies, pre-computing certain relevant quantities, and performing the parametrization that enforces a valid Markov chain transition matrix.
  
 #### patrol_problem.py:
-patrol_problem.py contains the definition of the PatrolProblem class. Notable methods contained within this class include initialize() which initializes various parameters based on the values provided in the .json file, compute_loss_and_gradient() which utilizes JAX's reverse-mode autodiff functionality to compute loss and gradient values for the various objective functions implemented in strat_comp.py, and cnvg_check() which keeps track of a moving average for determining convergence to the specified radius.
+patrol_problem.py defines the PatrolProblem class, which manages the context associated with each optimization process. This includes loading various parameters from a problem_spec JSON file, generating random (but valid) initial surveillance strategies to be optimized, tracking and saving the desired metrics, and more. In particular, take note of the function `compute_loss_and_gradient()` which utilizes JAX's reverse-mode autodiff functionality to compute loss and gradient values for the chosen objective function (implemented in strat_comp.py). Notice also the `cnvg_check()` function which tracks of a moving average of some quantity (specified in the problem_spec) which is used for determining convergence to the specified radius.
 
 #### metric_tracker.py:
 metric_tracker.py defines the MetricTracker class, which provides infrastructure for handling typical "overhead" tasks involved in tracking any metric of interest throughout the iterative strategy optimization process. Using MetricTracker objects streamlines the process of defining new metrics and selecting metrics to track during a given computational study. This approach also allows for cleaner code in the main optimization loop (found in strat_opt.py). See the section "Adding a New Metric" below for additional details.
 
 #### metric_definitions.py:
-metric_definitions.py is a module which is used to define new functions that compute quantities of interest (i.e., "metrics") that can be tracked during the optimization process. These functions are given names via the keys in the "METRICS_REGISTRY". These names can then be listed within a problem specification JSON file to specify which metrics shall be tracked. 
+metric_definitions.py contains a collection of pure functions, each of which computes a quantity to be tracked during the strategy optimization process. These functions are given names via the keys in the "METRICS_REGISTRY". A metric name from the registry can then be listed within any problem_spec JSON file to ensure that that the metric is tracked when a study is run based on that problem_spec. 
 
 #### strat_opt.py: 
 strat_opt.py is the main module that performs the gradient-based Markov chain optimization. run_test() takes a given PatrolProblem instance and optimizes each randomly initialized patrol strategy. run_optimizer() performs the first-order optimization of each patrol strategy using the Optax library. The step() function performs a single iteration of the desired optimization algorithm and is decorated with JAX's just-in-time compilation tag for improved performance. setup_optimizer() instantiates the appropriate Optax optimizer as specified in the .json file. 
@@ -72,10 +74,10 @@ strat_viz.py provides a host of useful methods for visualizing graphs, optimized
 ## Extending This Repo:
 
 ### Adding a new objective function:
-1. Define the loss function in strat_comp.py. The first argument provided should always be Q, the arbitrary nxn matrix whose parametrization yields the Markov chain transition matrix P. Be sure to include the jit tag and specify the static arguments (see https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#python-control-flow-jit for more information).
+1. Define the loss function in strat_comp.py. The first argument provided should always be Q, the arbitrary nxn matrix whose parametrization yields the Markov chain transition matrix P. Be sure to apply Jax's jit decorator and specify the static arguments as appropriate (see https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#python-control-flow-jit for more information).
 2. Create a short string identifier for the new objective function and specify it in your .json file. Also, define within the .json file any new parameters that will be needed. 
 3. Add a corresponding case to the if-elif structure in compute_loss_and_gradient() in patrol_problem.py. Also, ensure that any new parameters defined in your .json file are handled appropriately in initialize().
 
-### Adding a new metric:
+### Tracking a new metric:
 
 
