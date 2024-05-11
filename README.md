@@ -36,11 +36,6 @@ Note that **if you have a Windows machine**, installing these dependencies will 
 ## Quick Start Guide:
 
 ## Repo Organization:
-Comment on:
- - problem_specs
- - PatrolProblem class
- - 
-
 ### problem_specs:
 To support researchers in running repeatable, traceable, and organized computational studies at scale, RoSSO's architecture is designed such that all the information specifying a surveillance problem and a corresponding strategy optimization method is expected to be centralized. 
 
