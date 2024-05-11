@@ -37,14 +37,14 @@ Note that **if you have a Windows machine**, installing these dependencies will 
 ## Quick Start Guide:
 
 ## Repo Organization:
-### problem_specs:
-To support researchers in running repeatable, traceable, and organized computational studies at scale, RoSSO's architecture is designed such that all the information specifying a surveillance problem and a corresponding strategy optimization method is expected to be centralized. 
+### robosurvstratopt:
+#### problem_specs:
+To support researchers in running repeatable, traceable, and organized computational studies at scale, RoSSO's architecture is designed such that all information specifying a surveillance problem and a corresponding strategy optimization method is centralized. 
 
-Any investigation involving one environment graph and one optimization approach can be fully specified by a single JSON file, which we refer to as a "problem spec". When running a computational study, a copy of the corresponding problem_spec JSON file will be saved together with the optimization results and any metrics which were tracked. This ensures that the parameters which led to each outcome can easily be determined retroactively.
+Any study involving one environment graph and one optimization approach can be fully specified by a single JSON file, which we refer to as a "problem spec". When running a computational study, a copy of the corresponding problem_spec JSON file will be saved together with the optimized results and any tracked metrics. This ensures that the parameters which led to each outcome can easily be determined retroactively.
 
 Each JSON file is restricted to representing a single graph and a single optimization method in order to prevent the contents of each JSON file from becoming quite complex and unwieldy. Of course, you can modify the code to change this, but we do not recommend doing so. When sweeping hyperparameters, for example, it is recommended to programatically generate the necessary JSON files for each parameter combination. This may seem inefficient, but in practice, it turns out to be extremely helpful to associate a concise, isolated, and easily-readable problem spec with each set of results. 
 
-### robosurvstratopt:
 #### graph_gen.py: 
 graph_gen.py provides methods for generating the adjacency and weight matrices corresponding to a variety of graph topologies including star graphs, complete graphs, grid graphs, etc. 
 
