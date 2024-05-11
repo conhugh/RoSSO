@@ -2,6 +2,7 @@
 RoSSO is a Python library for robotic surveillance strategy optimization. RoSSO utilizes JAX and Optax to provide a gradient-based optimization framework with a modular architecture. 
 
 ## Intro:
+![rosso_graph_eg](https://github.com/conhugh/RoSSO/assets/95050521/ae130d2c-d7f8-4c6d-824f-d7befe3eb05a)
 RoSSO is focused on a class of robotic surveillance problems with the following common structure:
  - One or more mobile robots patrolling an environment to deter bad actors
  - Environment modeled as a graph wherein: 
