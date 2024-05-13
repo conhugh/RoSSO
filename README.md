@@ -35,6 +35,10 @@ For reference, on a Dell XPS 15 laptop with an Intel Core i7-10875H CPU (2.30 GH
 Note that **if you have a Windows machine**, installing these dependencies will be easier if you first set up WSL2 and install Ubuntu (see tutorial here: https://ubuntu.com/tutorials/install-ubuntu-on-wsl2-on-windows-11-with-gui-support#1-overview). As of January 2023, this is supposed to be possible on Windows 10, and Windows 11 is no longer required. Using WSL2 + Ubuntu makes the process simpler, both because Jax provides wheels for installation on Linux only (which you can use with WSL2) and because installing the CUDA toolkit is easier if you download and use the "WSL-Ubuntu" version.
 
 ## Quick Start Guide:
+You can verify your installation and familiarize yourself with RoSSO's surveillance strategy optimization process by running one of the demos included under `robosurvstratopt/problem_specs`. These demo "problem specs" each contain information describing a surveillance scenario and optimization approach. 
+You can choose which demo to run by modifying the "test_spec_filepath" near the end of the strat_opt.py module. Then, you can run your selected demo by opening a terminal window at the top-level RoSSO directory (and activating your virtual environment, if applicable), then running the command: 
+`python3 robosurvstratopt/strat_opt.py`
+This will run the strategy optimization demo, and save the results to the `results/local` directory. 
 
 ## Repo Organization:
 ### robosurvstratopt:
@@ -79,5 +83,7 @@ strat_viz.py provides a host of useful methods for visualizing graphs, optimized
 3. Add a corresponding case to the if-elif structure in compute_loss_and_gradient() in patrol_problem.py. Also, ensure that any new parameters defined in your .json file are handled appropriately in initialize().
 
 ### Tracking a new metric:
-
-
+1. Within metric_definitions.py, define a pure python function which computes the new metric. This metric evaluation function should take two arguments. The first argument should always be P, the transition probability matrix for the Markov Chain representing the most-recent surveilance strategy. The second argument should be `problem_params`, the dictionary of parameters related to the environment graph and patrol scenario, managed within the PatrolProblem class. 
+2. Add any new parameters needed to compute the new metric to the corresponding problem_params dict in the problem spec JSON file. 
+3. Add the new evaluation function to the METRICS_REGISTRY dict within the metric_definitions.py module, by choosing a name for the new metric to serve as the key and using the evaluation function's handle as the corresponding value. 
+4. Add the name of the new metric to the "metrics" list in each problem spec JSON file for which this metric shall be tracked. 
