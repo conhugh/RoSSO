@@ -1,22 +1,22 @@
 # RoSSO
-RoSSO is a Python library for robotic surveillance strategy optimization. RoSSO utilizes JAX and Optax to provide a gradient-based optimization framework with a modular architecture. 
+RoSSO is a Python package for robotic surveillance strategy optimization. RoSSO utilizes JAX and Optax to provide a gradient-based optimization framework with a modular architecture. 
 
 ![rosso_graph_eg](https://github.com/conhugh/RoSSO/assets/95050521/ae130d2c-d7f8-4c6d-824f-d7befe3eb05a)
 ## Intro:
 RoSSO is focused on a class of robotic surveillance problems with the following common structure:
  - One or more mobile robots patrolling an environment to deter bad actors
- - Environment modeled as a graph wherein: 
+ - Environment modeled as a graph where: 
       - nodes correspond to locations of interest to bad actors
       - edges represent the paths that the robots can take between locations
       - edge lengths represent the robots' required travel times between locations
  - Robots and bad actors both take actions in discrete time
- - Robots' navigation of the environment is described by a Markov Chain (representing a "surveillance strategy")
+ - Robots' navigation of the environment is described by a Markov chain (referred to as a "surveillance strategy")
 
  This structure allows for considerable variety in the details of the problem formulation. For example, explicit models for the capabilities of the robots and bad actors can be incorporated, patrol teams can be comprised of heterogeneous robot types, nodes can be given varying priority, etc. Recent literature also includes cases where no model for the bad actor is specified at all, and instead various heuristics are used to evaluate surveillance strategies for speed or unpredictability of coverage. 
  
  Note that in using Markov Chains for surveillance strategies, this structure does allow for deterministic patrolling of the graph. However, deterministic patrols are typically less effective than stochastic patrol strategies, as they are easier to exploit in most problem formulations. The superiority of stochastic strategies can arise either implicitly (through choice of heuristic) or explicitly (through modeling of bad actors capabilities). 
  
- As of ICRA 2024, RoSSO includes implementations of a few such problems, but the codebase is designed to be easily extended to study new ones. 
+ As of ICRA 2024, RoSSO includes implementations of several such formulations, but the codebase is designed to be easily extended to study new ones. 
 
 ## Installation:
 It is recommended to use a virtual environment when installing dependencies. If unfamiliar, see https://docs.python.org/3/library/venv.html.
@@ -49,7 +49,7 @@ Any study involving one environment graph and one optimization approach can be f
 
 The parameters contained in each problem_spec JSON file are split into two groups: parameters pertaining to the surveillance problem formulation ("problem_params") and those pertaining ot the optimization approach to be used ("optimizer_params"). See the examples in the `robosurvstratopt/problem_specs` directory for more details.
 
-Each JSON file is restricted to representing a single graph and a single optimization method in order to prevent the contents of each JSON file from becoming quite complex and unwieldy. Of course, you can modify the code to change this, but we do not recommend doing so. When sweeping hyperparameters, for example, it is recommended to programatically generate the necessary JSON files for each parameter combination. This may seem inefficient, but in practice, it turns out to be extremely helpful to associate a concise, isolated, and easily-readable problem spec with each set of results. 
+Each JSON file is restricted to representing a single graph and a single optimization method in order to prevent the contents of each JSON file from becoming complex and unwieldy. Of course, you can modify the code to change this, but we do not recommend doing so. When sweeping hyperparameters, for example, it is recommended to programatically generate the necessary JSON files for each parameter combination. This may seem inefficient, but in practice, it turns out to be extremely helpful to associate a concise, isolated, and easily-readable problem spec with each set of results. 
 
 #### graph_gen.py: 
 graph_gen.py provides methods for generating the adjacency and weight matrices corresponding to a variety of graph topologies including star graphs, complete graphs, grid graphs, etc. 
@@ -70,7 +70,7 @@ metric_tracker.py defines the MetricTracker class, which provides infrastructure
 metric_definitions.py contains a collection of pure functions, each of which computes a quantity to be tracked during the strategy optimization process. These functions are given names via the keys in the "METRICS_REGISTRY". A metric name from the registry can then be listed within any problem_spec JSON file to ensure that that the metric is tracked when a study is run based on that problem_spec. 
 
 #### strat_opt.py: 
-strat_opt.py is the main module that performs the gradient-based Markov chain optimization. run_test() takes a given PatrolProblem instance and optimizes each randomly initialized patrol strategy. run_optimizer() performs the first-order optimization of each patrol strategy using the Optax library. The step() function performs a single iteration of the desired optimization algorithm and is decorated with JAX's just-in-time compilation tag for improved performance. setup_optimizer() instantiates the appropriate Optax optimizer as specified in the .json file. 
+strat_opt.py is the main module that performs the gradient-based Markov chain optimization. run_test() takes a given PatrolProblem instance and optimizes each randomly initialized patrol strategy. run_optimizer() performs the first-order optimization of each patrol strategy using the Optax library. The step() function performs a single iteration of the desired optimization algorithm and is decorated with JAX's just-in-time compilation tag for improved performance. setup_optimizer() instantiates the appropriate Optax optimizer as specified in the JSON file. 
 
 #### strat_viz.py: 
 strat_viz.py provides a host of useful methods for visualizing graphs, optimized patrol strategies, and the evolution of other metrics of interest during optimization. 
@@ -79,8 +79,8 @@ strat_viz.py provides a host of useful methods for visualizing graphs, optimized
 
 ### Adding a new objective function:
 1. Define the loss function in strat_comp.py. The first argument provided should always be Q, the arbitrary nxn matrix whose parametrization yields the Markov chain transition matrix P. Be sure to apply Jax's jit decorator and specify the static arguments as appropriate (see https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#python-control-flow-jit for more information).
-2. Create a short string identifier for the new objective function and specify it in your .json file. Also, define within the .json file any new parameters that will be needed. 
-3. Add a corresponding case to the if-elif structure in compute_loss_and_gradient() in patrol_problem.py. Also, ensure that any new parameters defined in your .json file are handled appropriately in initialize().
+2. Create a short string identifier for the new objective function and specify it in your JSON file. Also, define within the JSON file any new parameters that will be needed. 
+3. Add a corresponding case to the if-elif structure in compute_loss_and_gradient() in patrol_problem.py. Also, ensure that any new parameters defined in your JSON file are handled appropriately in initialize().
 
 ### Tracking a new metric:
 1. Within metric_definitions.py, define a pure python function which computes the new metric. This metric evaluation function should take two arguments. The first argument should always be P, the transition probability matrix for the Markov Chain representing the most-recent surveilance strategy. The second argument should be `problem_params`, the dictionary of parameters related to the environment graph and patrol scenario, managed within the PatrolProblem class. 
